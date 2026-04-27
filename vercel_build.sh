@@ -10,4 +10,4 @@ echo "Baixando dependências..."
 flutter pub get
 
 echo "Compilando o app para Web..."
-flutter build web --release --web-renderer canvaskit
+flutter build web --release

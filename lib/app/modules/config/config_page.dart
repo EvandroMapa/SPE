@@ -1,0 +1,89 @@
+import 'package:acoplan/app/core/components/app_scaffold.dart';
+import 'package:acoplan/app/core/components/divisor.dart';
+import 'package:acoplan/app/core/utils/app_colors.dart';
+import 'package:acoplan/app/core/utils/app_css.dart';
+import 'package:acoplan/app/core/utils/global_resource.dart';
+import 'package:acoplan/app/modules/usuario/ui/usuario_tipo_page.dart';
+import 'package:acoplan/app/modules/usuario/ui/usuarios_page.dart';
+import 'package:acoplan/app/modules/backup/ui/backups_page.dart';
+import 'package:flutter/material.dart';
+
+class ConfigPage extends StatelessWidget {
+  const ConfigPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return AppScaffold(
+      appBar: AppBar(
+        iconTheme: const IconThemeData(color: Colors.white, size: 20),
+        backgroundColor: AppColors.primaryMain,
+        title: Text(
+          'Configurações',
+          style: AppCss.mediumBold.setColor(Colors.white),
+        ),
+      ),
+      body: ListView(
+        children: [
+          _buildItem(
+            context,
+            Icons.people_outline_rounded,
+            'Usuários',
+            'Gerencie os usuários do sistema',
+            () => push(context, const UsuariosPage()),
+          ),
+          const Divisor(),
+          _buildItem(
+            context,
+            Icons.admin_panel_settings_outlined,
+            'Perfis de Acesso',
+            'Defina permissões para cada perfil',
+            () => push(context, const UsuarioTipoPage()),
+          ),
+          const Divisor(),
+          _buildItem(
+            context,
+            Icons.backup_outlined,
+            'Backup',
+            'Exportação e segurança dos dados',
+            () {
+              push(context, const BackupsPage());
+            },
+          ),
+          const Divisor(),
+          _buildItem(
+            context,
+            Icons.settings_suggest_outlined,
+            'Configurações Gerais',
+            'Parâmetros globais do sistema',
+            () {
+              // Placeholder
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildItem(
+    BuildContext context,
+    IconData icon,
+    String title,
+    String subtitle,
+    VoidCallback onTap,
+  ) {
+    return ListTile(
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: AppColors.primaryMain.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon, color: AppColors.primaryMain, size: 24),
+      ),
+      title: Text(title, style: AppCss.smallBold),
+      subtitle: Text(subtitle, style: AppCss.minimumRegular.setColor(AppColors.neutralDark)),
+      trailing: const Icon(Icons.chevron_right_rounded),
+      onTap: onTap,
+    );
+  }
+}

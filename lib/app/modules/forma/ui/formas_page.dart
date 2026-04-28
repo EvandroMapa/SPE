@@ -26,7 +26,7 @@ class _FormasPageState extends State<FormasPage> {
       appBar: AppBar(
         iconTheme: const IconThemeData(color: Colors.white, size: 20),
         backgroundColor: AppColors.primaryMain,
-        title: Text('Formas / Desenhos', style: AppCss.mediumBold.setColor(Colors.white)),
+        title: Text('Formas', style: AppCss.mediumBold.setColor(Colors.white)),
         actions: [
           IconButton(
             icon: const Icon(Icons.add, color: Colors.white),
@@ -65,6 +65,13 @@ class _FormasPageState extends State<FormasPage> {
                   return u.codigo.toLowerCase().contains(query) ||
                       u.descricao.toLowerCase().contains(query);
                 }).toList();
+
+                // Ordenação numérica: converte para int para comparar corretamente (ex: 1, 2, 10)
+                filtered.sort((a, b) {
+                  final n1 = int.tryParse(a.codigo) ?? 0;
+                  final n2 = int.tryParse(b.codigo) ?? 0;
+                  return n1.compareTo(n2);
+                });
 
                 if (filtered.isEmpty) {
                   return const EmptyData(message: 'Nenhuma forma encontrada');

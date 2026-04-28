@@ -5,6 +5,7 @@ import 'package:acoplan/app/core/client/supabase/produto_supabase_collection.dar
 import 'package:acoplan/app/core/client/supabase/usuario_supabase_collection.dart';
 import 'package:acoplan/app/core/client/supabase/usuario_tipo_supabase_collection.dart';
 import 'package:acoplan/app/core/client/supabase/forma_supabase_collection.dart';
+import 'package:acoplan/app/core/client/supabase/planilha_supabase_collection.dart';
 
 
 class AppSupabaseClient {
@@ -14,6 +15,7 @@ class AppSupabaseClient {
   static ProdutoSupabaseCollection produtos = ProdutoSupabaseCollection();
   static FabricanteSupabaseCollection fabricantes = FabricanteSupabaseCollection();
   static FormaSupabaseCollection formas = FormaSupabaseCollection();
+  static PlanilhaSupabaseCollection planilhas = PlanilhaSupabaseCollection();
 
 
   static Future<void> init() async {
@@ -25,6 +27,7 @@ class AppSupabaseClient {
       produtos.listen();
       fabricantes.listen();
       formas.listen();
+      planilhas.listen();
 
 
       // 2. Fetches sequenciais (dados iniciais)
@@ -34,6 +37,7 @@ class AppSupabaseClient {
       await produtos.start().catchError((e) => log('Error starting produtos: $e'));
       await fabricantes.start().catchError((e) => log('Error starting fabricantes: $e'));
       await formas.start().catchError((e) => log('Error starting formas: $e'));
+      await planilhas.start().catchError((e) => log('Error starting planilhas: $e'));
 
     } catch (e) {
       log('AppSupabaseClient: Critical error during init: $e');

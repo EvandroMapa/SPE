@@ -104,7 +104,7 @@ class _AppDrawerMenuState extends State<AppDrawerMenu> {
                   children: [
                     _buildItem(
                       icon: Icons.architecture_outlined,
-                      label: 'Projetos',
+                      label: 'Planilhamento',
                       module: AppModule.projetos,
                       current: current,
                     ),
@@ -127,12 +127,12 @@ class _AppDrawerMenuState extends State<AppDrawerMenu> {
                       children: [
                         _buildSubItem(AppModule.cliente, current,
                             Icons.group_outlined, 'Clientes'),
-                        _buildSubItem(AppModule.produtos, current,
-                            Icons.inventory_2_outlined, 'Produtos'),
+                        _buildSubItem(AppModule.bitolas, current,
+                            Icons.inventory_2_outlined, 'Bitolas'),
                         _buildSubItem(AppModule.fabricantes, current,
                             Icons.business_outlined, 'Fabricantes'),
                         _buildSubItem(AppModule.formas, current,
-                            Icons.architecture, 'Formas / Desenhos'),
+                            Icons.architecture, 'Formas'),
 
                       ],
                     ),

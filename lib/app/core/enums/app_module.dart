@@ -2,7 +2,7 @@ import 'package:acoplan/app/modules/cliente/ui/clientes_page.dart';
 import 'package:acoplan/app/modules/fabricante/ui/fabricantes_page.dart';
 import 'package:acoplan/app/modules/pedido_tecnico/ui/pedidos_tecnicos_page.dart';
 import 'package:acoplan/app/modules/produto/ui/produtos_page.dart';
-import 'package:acoplan/app/modules/projeto/ui/projetos_page.dart';
+import 'package:acoplan/app/modules/planilha/ui/planilhas_page.dart';
 import 'package:acoplan/app/modules/forma/ui/formas_page.dart';
 
 import 'package:acoplan/app/core/utils/app_colors.dart';
@@ -15,14 +15,14 @@ enum AppModule {
   cliente,
   fabricantes,
   formas,
-  produtos,
+  bitolas,
 }
 
 extension AppModuleExt on AppModule {
   Widget get widget {
     switch (this) {
       case AppModule.projetos:
-        return const ProjetosPage();
+        return const PlanilhasPage();
       case AppModule.pedidosTecnicos:
         return const PedidosTecnicosPage();
       case AppModule.cliente:
@@ -31,7 +31,7 @@ extension AppModuleExt on AppModule {
         return const FabricantesPage();
       case AppModule.formas:
         return const FormasPage();
-      case AppModule.produtos:
+      case AppModule.bitolas:
         return const ProdutosPage();
 
     }
@@ -63,7 +63,7 @@ extension AppModuleExt on AppModule {
         return Icons.business_outlined;
       case AppModule.formas:
         return Icons.architecture;
-      case AppModule.produtos:
+      case AppModule.bitolas:
         return Icons.inventory_2_outlined;
 
     }
@@ -72,7 +72,7 @@ extension AppModuleExt on AppModule {
   String get label {
     switch (this) {
       case AppModule.projetos:
-        return 'Projetos';
+        return 'Planilhamento';
       case AppModule.pedidosTecnicos:
         return 'Pedidos Técnicos';
       case AppModule.cliente:
@@ -80,9 +80,9 @@ extension AppModuleExt on AppModule {
       case AppModule.fabricantes:
         return 'Fabricantes';
       case AppModule.formas:
-        return 'Formas / Desenhos';
-      case AppModule.produtos:
-        return 'Produtos';
+        return 'Formas';
+      case AppModule.bitolas:
+        return 'Bitolas';
 
     }
   }

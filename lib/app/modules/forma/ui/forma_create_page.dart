@@ -14,6 +14,7 @@ class FormaCreatePage extends StatelessWidget {
   FormaCreatePage({super.key});
 
   final FocusNode _focoBotaoAdicionar = FocusNode();
+  final GlobalKey<FormaPreviewState> _previewKey = GlobalKey<FormaPreviewState>();
 
   @override
   Widget build(BuildContext context) {
@@ -64,15 +65,17 @@ class FormaCreatePage extends StatelessWidget {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text('Itens / Trechos', style: AppCss.mediumBold),
-                              ElevatedButton.icon(
+                              IconButton(
                                 focusNode: _focoBotaoAdicionar,
-                                onPressed: () => formaCtrl.adicionarItem(),
-                                icon: const Icon(Icons.add, size: 18),
-                                label: const Text('ADICIONAR'),
-                                style: ElevatedButton.styleFrom(
+                                onPressed: () {
+                                  _previewKey.currentState?.prepararAdicionarTrecho();
+                                  formaCtrl.adicionarItem();
+                                },
+                                icon: const Icon(Icons.add, size: 20),
+                                color: AppColors.primaryMain,
+                                tooltip: 'Adicionar Trecho',
+                                style: IconButton.styleFrom(
                                   backgroundColor: AppColors.primaryMain.withValues(alpha: 0.1),
-                                  foregroundColor: AppColors.primaryMain,
-                                  elevation: 0,
                                 ),
                               ),
                             ],
@@ -86,7 +89,7 @@ class FormaCreatePage extends StatelessWidget {
                     // Coluna da Direita: Desenho
                     Expanded(
                       flex: 1,
-                      child: _buildImagePicker(formulario),
+                      child: _buildImagePicker(context, formulario),
                     ),
                   ],
                 ),
@@ -131,36 +134,153 @@ class FormaCreatePage extends StatelessWidget {
 
 
 
-  Widget _buildImagePicker(FormaCriarModel formulario) {
+  Widget _buildImagePicker(BuildContext context, FormaCriarModel formulario) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Visualização / Desenho', style: AppCss.smallBold),
-            if (formulario.imagem.isNotEmpty)
-              TextButton.icon(
-                onPressed: () {
-                  // Lógica para limpar imagem e voltar para o desenho técnico
-                  formulario.imagem = '';
-                  formaCtrl.formularioStream.update();
-                },
-                icon: const Icon(Icons.refresh, size: 16),
-                label: const Text('DESENHO TÉCNICO', style: TextStyle(fontSize: 10)),
-              ),
+            Text('Visualização', style: AppCss.smallBold),
+            Row(
+              children: [
+                // ── Formas Especiais ─────────────────────────────
+                PopupMenuButton<String>(
+                  tooltip: 'Formas Especiais',
+                  offset: const Offset(0, 36),
+                  onSelected: (val) {
+                    if (val == 'circulo') formaCtrl.adicionarCirculo();
+                  },
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(
+                      value: 'circulo',
+                      child: Row(
+                        children: [
+                          Icon(Icons.circle_outlined, size: 18),
+                          SizedBox(width: 10),
+                          Text('Círculo'),
+                        ],
+                      ),
+                    ),
+                  ],
+                  child: Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryMain.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(Icons.auto_awesome_rounded, size: 18, color: AppColors.primaryMain),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                // ── Divisor visual ────────────────────────────────
+                Container(width: 1, height: 24, color: Colors.grey[300]),
+                const SizedBox(width: 6),
+                // ── Rotação ───────────────────────────────────────
+                IconButton(
+                  onPressed: () => formaCtrl.rotacionarDesenho(-90),
+                  icon: const Text('↺', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  tooltip: 'Girar 90° Anti-horário',
+                  color: AppColors.primaryMain,
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.primaryMain.withValues(alpha: 0.08),
+                    padding: const EdgeInsets.all(6),
+                    minimumSize: const Size(34, 34),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                IconButton(
+                  onPressed: () => formaCtrl.rotacionarDesenho(90),
+                  icon: const Text('↻', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  tooltip: 'Girar 90° Horário',
+                  color: AppColors.primaryMain,
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.primaryMain.withValues(alpha: 0.08),
+                    padding: const EdgeInsets.all(6),
+                    minimumSize: const Size(34, 34),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                IconButton(
+                  onPressed: () => formaCtrl.toggleLegenda(),
+                  icon: Icon(
+                    formaCtrl.mostrarLegenda ? Icons.visibility_rounded : Icons.visibility_off_rounded,
+                    size: 18,
+                  ),
+                  tooltip: formaCtrl.mostrarLegenda ? 'Ocultar legendas' : 'Mostrar legendas',
+                  color: formaCtrl.mostrarLegenda ? AppColors.primaryMain : Colors.grey[400],
+                  style: IconButton.styleFrom(
+                    backgroundColor: formaCtrl.mostrarLegenda
+                        ? AppColors.primaryMain.withValues(alpha: 0.08)
+                        : Colors.grey[200],
+                    padding: const EdgeInsets.all(6),
+                    minimumSize: const Size(34, 34),
+                  ),
+                ),
+                if (formulario.imagem.isNotEmpty) ...[
+                  const SizedBox(width: 6),
+                  TextButton.icon(
+                    onPressed: () {
+                      formulario.imagem = '';
+                      formaCtrl.formularioStream.update();
+                    },
+                    icon: const Icon(Icons.refresh, size: 16),
+                    label: const Text('DESENHO TÉCNICO', style: TextStyle(fontSize: 10)),
+                  ),
+                ],
+                if (formulario.itens.isNotEmpty) ...[
+                  const SizedBox(width: 6),
+                  Container(width: 1, height: 24, color: Colors.grey[300]),
+                  const SizedBox(width: 6),
+                  Tooltip(
+                    message: 'Limpar Desenho',
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () async {
+                        final ok = await showDialog<bool>(
+                          context: context,
+                          builder: (_) => AlertDialog(
+                            title: const Text('Limpar Desenho'),
+                            content: const Text('Deseja remover todos os trechos do desenho?'),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                child: const Text('Limpar', style: TextStyle(color: Colors.red)),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (ok == true) formaCtrl.limparDesenho();
+                      },
+                      child: Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: Colors.red.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.delete_sweep_rounded, size: 18, color: Colors.red),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ],
         ),
         const H(8),
         InkWell(
-          onTap: () {
-            // Aqui entraria o seletor de imagem se o usuário quiser substituir o desenho por uma foto
-          },
+          onTap: () {},
           child: formulario.imagem.isEmpty
               ? FormaPreviewWidget(
+                  key: _previewKey,
                   itens: formulario.itens,
                   height: 400,
                   onChanged: () => formaCtrl.formularioStream.update(),
+                  rotacaoExterna: formaCtrl.rotacaoDesenho,
+                  mostrarLegenda: formaCtrl.mostrarLegenda,
                 )
               : Container(
                   height: 400,
@@ -172,16 +292,6 @@ class FormaCreatePage extends StatelessWidget {
                   ),
                   child: Image.network(formulario.imagem, fit: BoxFit.contain),
                 ),
-        ),
-        const H(8),
-        Center(
-          child: TextButton.icon(
-            onPressed: () {
-              // Aqui chamaria o seletor de imagem real
-            },
-            icon: const Icon(Icons.camera_alt_outlined, size: 18),
-            label: const Text('SUBSTITUIR POR FOTO/ARQUIVO'),
-          ),
         ),
       ],
     );
@@ -216,7 +326,6 @@ class FormaCreatePage extends StatelessWidget {
           child: Row(
             children: [
               Expanded(child: Text('Trecho', style: AppCss.minimumBold)),
-              Expanded(child: Text('Compr.', style: AppCss.minimumBold)),
               Expanded(child: Text('Ângulo', style: AppCss.minimumBold)),
               Expanded(child: Text('Orientação', style: AppCss.minimumBold)),
               const SizedBox(width: 40),
@@ -231,6 +340,7 @@ class FormaCreatePage extends StatelessWidget {
           itemBuilder: (context, index) {
             final item = formulario.itens[index];
             return Container(
+              key: ValueKey('item_${item.trecho}'),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -258,25 +368,14 @@ class FormaCreatePage extends StatelessWidget {
                   ),
                   Expanded(
                     child: TextFormField(
-                      initialValue: item.comprimento.toString(),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      onChanged: (val) {
-                        item.comprimento = int.tryParse(val) ?? 0;
-                        formaCtrl.formularioStream.update();
-                      },
-                      decoration: const InputDecoration(isDense: true, border: InputBorder.none),
-                    ),
-                  ),
-                  Expanded(
-                    child: TextFormField(
                       focusNode: item.focusNode,
-                      initialValue: item.angulo.toString(),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      onChanged: (val) {
-                        item.angulo = double.tryParse(val) ?? 0;
+                      controller: item.anguloController,
+                      keyboardType: TextInputType.number,
+                      onEditingComplete: () {
+                        item.angulo = (int.tryParse(item.anguloController.text) ?? 0).toDouble();
                         formaCtrl.formularioStream.update();
+                        _focoBotaoAdicionar.requestFocus();
                       },
-                      onFieldSubmitted: (_) => _focoBotaoAdicionar.requestFocus(),
                       decoration: const InputDecoration(isDense: true, border: InputBorder.none),
                     ),
                   ),
@@ -285,9 +384,14 @@ class FormaCreatePage extends StatelessWidget {
                       child: DropdownButton<String>(
                         value: item.orientacao,
                         isDense: true,
-                        items: ['Horário', 'Anti-horário']
-                            .map((e) => DropdownMenuItem(value: e, child: Text(e, style: AppCss.minimumRegular)))
-                            .toList(),
+                        items: [
+                          DropdownMenuItem(value: 'Horário', child: Text('↻ Horário', style: AppCss.minimumRegular)),
+                          DropdownMenuItem(value: 'Anti-horário', child: Text('↺ Anti-horário', style: AppCss.minimumRegular)),
+                        ],
+                        selectedItemBuilder: (_) => [
+                          Text('↻', style: AppCss.smallBold.copyWith(fontSize: 18)),
+                          Text('↺', style: AppCss.smallBold.copyWith(fontSize: 18)),
+                        ],
                         onChanged: (val) {
                           if (val != null) {
                             item.orientacao = val;

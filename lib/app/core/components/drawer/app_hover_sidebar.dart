@@ -70,7 +70,7 @@ class _AppHoverSidebarState extends State<AppHoverSidebar> {
                     children: [
                       _buildItem(
                         icon: Icons.architecture_outlined,
-                        label: 'Projetos',
+                        label: 'Planilhamento',
                         module: AppModule.projetos,
                         current: current,
                       ),
@@ -94,8 +94,8 @@ class _AppHoverSidebarState extends State<AppHoverSidebar> {
                           children: [
                             _buildSubItem(AppModule.cliente, current,
                                 Icons.group_outlined, 'Clientes'),
-                            _buildSubItem(AppModule.produtos, current,
-                                Icons.inventory_2_outlined, 'Produtos'),
+                            _buildSubItem(AppModule.bitolas, current,
+                                Icons.inventory_2_outlined, 'Bitolas'),
                             _buildSubItem(AppModule.fabricantes, current,
                                 Icons.business_outlined, 'Fabricantes'),
                           ],
@@ -103,7 +103,7 @@ class _AppHoverSidebarState extends State<AppHoverSidebar> {
                       else
                         _buildCollapsedIcon(
                           icon: Icons.add_circle_outline,
-                          isSelected: current == AppModule.cliente || current == AppModule.produtos || current == AppModule.fabricantes,
+                          isSelected: current == AppModule.cliente || current == AppModule.bitolas || current == AppModule.fabricantes,
                         ),
                       
                       const Divider(height: 1),

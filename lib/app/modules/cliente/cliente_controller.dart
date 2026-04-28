@@ -20,7 +20,16 @@ class ClienteController {
   ClienteCreateModel get form => formStream.value;
 
   void init(ClienteModel? cliente) {
-    formStream.add(cliente != null ? ClienteCreateModel.edit(cliente) : ClienteCreateModel());
+    if (cliente != null) {
+      formStream.add(ClienteCreateModel.edit(cliente));
+    } else {
+      final proximoCodigo = clientes.isEmpty
+          ? 1
+          : clientes.map((c) => c.codigo).reduce((a, b) => a > b ? a : b) + 1;
+      final form = ClienteCreateModel();
+      form.codigo = proximoCodigo;
+      formStream.add(form);
+    }
   }
 
   Future<void> onConfirm(BuildContext context, ClienteModel? clienteOriginal, bool isFromOrder) async {

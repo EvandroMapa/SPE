@@ -40,41 +40,61 @@ class ClienteSupabaseCollection {
   }
 
   Future<ClienteModel?> add(ClienteModel model) async {
-    try { 
-      final insertedCliente = await SupabaseService.client.from(name).insert(model.toSupabaseMap()).select().single(); 
-      final insertedClienteId = insertedCliente['id'] as String;
+    // Calcula o próximo código sequencial
+    final proximoCodigo = data.isEmpty 
+        ? 1 
+        : data.map((c) => c.codigo).reduce((a, b) => a > b ? a : b) + 1;
+    final modelComCodigo = model.copyWith(codigo: proximoCodigo);
 
-      if (model.obras.isNotEmpty) {
-        final obrasMaps = model.obras.map((o) => o.toSupabaseMap(insertedClienteId)).toList();
-        await SupabaseService.client.from('obras').insert(obrasMaps);
-      }
+    final insertedCliente = await SupabaseService.client.from(name).insert(modelComCodigo.toSupabaseMap()).select().single(); 
+    final insertedClienteId = insertedCliente['id'] as String;
 
-      await fetch(); 
-      return model; 
+    if (modelComCodigo.obras.isNotEmpty) {
+      // Obras novas não têm UUID (id de 36 chars) — deixar o banco gerar
+      final obrasMaps = modelComCodigo.obras.map((o) {
+        final map = o.toSupabaseMap(insertedClienteId);
+        map.remove('id'); // banco gera com gen_random_uuid()
+        return map;
+      }).toList();
+      await SupabaseService.client.from('obras').insert(obrasMaps);
     }
-    catch (e) { log('Supabase Error (Cliente.add): $e'); return null; }
+
+    await fetch(); 
+    return modelComCodigo; 
   }
 
   Future<ClienteModel?> update(ClienteModel model) async {
-    try { 
-      await SupabaseService.client.from(name).update(model.toSupabaseMap()).eq('id', model.id); 
-      
-      final currentObrasUUIDs = model.obras.where((e) => e.id.length == 36).map((e) => e.id).toList();
-      if (currentObrasUUIDs.isEmpty) {
-        await SupabaseService.client.from('obras').delete().eq('cliente_id', model.id);
-      } else {
-        await SupabaseService.client.from('obras').delete().eq('cliente_id', model.id).not('id', 'in', currentObrasUUIDs);
-      }
-      
-      if (model.obras.isNotEmpty) {
-        final obrasMaps = model.obras.map((o) => o.toSupabaseMap(model.id)).toList();
-        await SupabaseService.client.from('obras').upsert(obrasMaps);
+    await SupabaseService.client.from(name).update(model.toSupabaseMap()).eq('id', model.id); 
+    
+    final currentObrasUUIDs = model.obras.where((e) => e.id.length == 36).map((e) => e.id).toList();
+    if (currentObrasUUIDs.isEmpty) {
+      await SupabaseService.client.from('obras').delete().eq('cliente_id', model.id);
+    } else {
+      await SupabaseService.client.from('obras').delete().eq('cliente_id', model.id).not('id', 'in', currentObrasUUIDs);
+    }
+    
+    if (model.obras.isNotEmpty) {
+      // Separar obras existentes (UUID válido) de novas
+      final obrasExistentes = model.obras.where((o) => o.id.length == 36).toList();
+      final obrasNovas = model.obras.where((o) => o.id.length != 36).toList();
+
+      if (obrasExistentes.isNotEmpty) {
+        final mapas = obrasExistentes.map((o) => o.toSupabaseMap(model.id)).toList();
+        await SupabaseService.client.from('obras').upsert(mapas);
       }
 
-      await fetch(); 
-      return model; 
+      if (obrasNovas.isNotEmpty) {
+        final mapas = obrasNovas.map((o) {
+          final map = o.toSupabaseMap(model.id);
+          map.remove('id'); // banco gera com gen_random_uuid()
+          return map;
+        }).toList();
+        await SupabaseService.client.from('obras').insert(mapas);
+      }
     }
-    catch (e) { log('Supabase Error (Cliente.update): $e'); return null; }
+
+    await fetch(); 
+    return model; 
   }
 
   Future<void> delete(ClienteModel model) async {

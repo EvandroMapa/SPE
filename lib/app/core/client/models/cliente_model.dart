@@ -65,19 +65,23 @@ class ClienteModel {
       nome: map['nome'] ?? '',
       telefone: map['telefone'] ?? '',
       cnpj: map['cnpj'] ?? '',
-      endereco: EnderecoModel.empty(),
+      endereco: map['endereco'] != null && map['endereco'] is Map
+          ? EnderecoModel.fromMap(Map<String, dynamic>.from(map['endereco']))
+          : EnderecoModel.empty(),
       obras: obrasRaw.map((o) => ObraModel.fromSupabaseMap(o)).toList(),
     );
   }
 
   Map<String, dynamic> toSupabaseMap() {
     final map = <String, dynamic>{
-      'codigo': codigo,
       'nome': nome,
       'telefone': telefone,
       'cnpj': cnpj,
       'endereco': endereco.toMap(),
     };
+    if (codigo > 0) {
+      map['codigo'] = codigo;
+    }
     if (id.length == 36) {
       map['id'] = id;
     }
@@ -112,6 +116,7 @@ class ClienteModel {
 
 class ObraModel {
   final String id;
+  final String identificador;
   final String descricao;
   final String telefoneFixo;
   EnderecoModel? endereco;
@@ -119,6 +124,7 @@ class ObraModel {
 
   factory ObraModel.empty() => ObraModel(
         id: HashService.get,
+        identificador: '',
         descricao: '',
         telefoneFixo: '',
         endereco: null,
@@ -127,6 +133,7 @@ class ObraModel {
 
   ObraModel({
     required this.id,
+    required this.identificador,
     required this.descricao,
     required this.telefoneFixo,
     required this.endereco,
@@ -136,6 +143,7 @@ class ObraModel {
   Map<String, dynamic> toMap() {
     return {
       'id': id,
+      'identificador': identificador,
       'descricao': descricao,
       'telefoneFixo': telefoneFixo,
       'endereco': endereco?.toMap(),
@@ -146,6 +154,7 @@ class ObraModel {
   factory ObraModel.fromMap(Map<String, dynamic> map) {
     return ObraModel(
       id: map['id'] ?? '',
+      identificador: map['identificador'] ?? '',
       descricao: map['descricao'] ?? '',
       telefoneFixo: map['telefoneFixo'] ?? '',
       endereco: map['endereco'] != null
@@ -158,6 +167,7 @@ class ObraModel {
   factory ObraModel.fromSupabaseMap(Map<String, dynamic> map) {
     return ObraModel(
       id: map['id'] ?? '',
+      identificador: map['identificador'] ?? '',
       descricao: map['nome'] ?? '',
       telefoneFixo: map['telefone'] ?? '',
       endereco: map['endereco'] != null
@@ -171,6 +181,7 @@ class ObraModel {
 
   Map<String, dynamic> toSupabaseMap(String clienteId) {
     final map = <String, dynamic>{
+      'identificador': identificador,
       'nome': descricao,
       'cliente_id': clienteId,
       'telefone': telefoneFixo,
@@ -196,6 +207,7 @@ class ObraModel {
 
 ObraModel obraDeleteObj = ObraModel(
   id: 'delete',
+  identificador: '',
   descricao: '',
   endereco: null,
   status: ObraStatus.emAndamento,

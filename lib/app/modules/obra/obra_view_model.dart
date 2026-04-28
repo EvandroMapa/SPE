@@ -10,6 +10,7 @@ class ObraUtils {
 
 class ObraCreateModel {
   final String id;
+  TextController identificador = TextController();
   TextController descricao = TextController();
   TextController telefoneFixo = TextController.phone();
   EnderecoModel? endereco;
@@ -23,6 +24,7 @@ class ObraCreateModel {
   ObraCreateModel.edit(ObraModel obra)
       : id = obra.id,
         isEdit = true {
+    identificador.text = obra.identificador;
     descricao.text = obra.descricao;
     endereco = obra.endereco;
     status = obra.status;
@@ -30,6 +32,7 @@ class ObraCreateModel {
 
   ObraModel toObraModel() => ObraModel(
         id: id,
+        identificador: identificador.text.trim(),
         descricao: descricao.text,
         endereco: endereco,
         status: status!,

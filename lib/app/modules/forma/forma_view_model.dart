@@ -12,6 +12,7 @@ class FormaCriarModel {
   TextController codigo = TextController();
   TextController descricao = TextController();
   String imagem = '';
+  double rotacao = 0;
   List<FormaItemModel> itens = [];
   late bool is_edicao;
 
@@ -25,12 +26,14 @@ class FormaCriarModel {
     codigo.text = forma.codigo;
     descricao.text = forma.descricao;
     imagem = forma.imagem;
+    rotacao = forma.rotacao;
     itens = forma.itens
         .map((e) => FormaItemModel(
               trecho: e.trecho,
               comprimento: e.comprimento,
               angulo: e.angulo,
               orientacao: e.orientacao,
+              tipo: e.tipo,
             ))
         .toList();
   }
@@ -40,6 +43,7 @@ class FormaCriarModel {
         codigo: codigo.text,
         descricao: descricao.text,
         imagem: imagem,
+        rotacao: rotacao,
         itens: itens,
       );
 }

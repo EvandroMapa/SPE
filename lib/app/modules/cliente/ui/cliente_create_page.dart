@@ -6,11 +6,13 @@ import 'package:acoplan/app/core/components/done_button.dart';
 import 'package:acoplan/app/core/components/stream_out.dart';
 import 'package:acoplan/app/core/dialogs/confirm_dialog.dart';
 import 'package:acoplan/app/core/enums/obra_status.dart';
+import 'package:acoplan/app/core/models/text_controller.dart';
 import 'package:acoplan/app/core/utils/app_colors.dart';
 import 'package:acoplan/app/core/utils/app_css.dart';
 import 'package:acoplan/app/core/utils/global_resource.dart';
 import 'package:acoplan/app/modules/cliente/cliente_controller.dart';
 import 'package:acoplan/app/modules/cliente/cliente_view_model.dart';
+import 'package:acoplan/app/modules/endereco/endereco_create_page.dart';
 import 'package:acoplan/app/modules/obra/ui/obra_create_page.dart';
 import 'package:cpf_cnpj_validator/cnpj_validator.dart';
 import 'package:cpf_cnpj_validator/cpf_validator.dart';
@@ -44,7 +46,7 @@ class _ClienteCreatePageState extends State<ClienteCreatePage> {
   String _initialSnapshot = '';
 
   String _snapshot(ClienteCreateModel form) =>
-      '${form.nome.text}|${form.telefone.text}|${form.cpf.text}|${form.obras.length}';
+      '${form.nome.text}|${form.telefone.text}|${form.cpf.text}|${form.endereco?.name}|${form.obras.length}';
 
   @override
   void initState() {
@@ -263,15 +265,13 @@ class _ClienteCreatePageState extends State<ClienteCreatePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (form.isEdit) ...[
-            AppField(
-              label: 'Código',
-              controllerObj:
-                  TextEditingController(text: form.codigo.toString()),
-              isDisable: true,
-            ),
-            const SizedBox(height: 16),
-          ],
+          AppField(
+            label: 'Código',
+            controllerObj:
+                TextEditingController(text: form.codigo.toString()),
+            isDisable: true,
+          ),
+          const SizedBox(height: 16),
           AppField(
             label: 'Nome',
             controller: form.nome,
@@ -301,6 +301,31 @@ class _ClienteCreatePageState extends State<ClienteCreatePage> {
               clienteCtrl.formStream.update();
             },
           ),
+          const SizedBox(height: 16),
+          InkWell(
+            onTap: () async {
+              final endereco = await push(
+                context,
+                EnderecoCreatePage(endereco: form.endereco),
+              );
+              if (endereco != null) {
+                form.endereco = endereco;
+                clienteCtrl.formStream.update();
+              }
+            },
+            child: IgnorePointer(
+              child: AppField(
+                label: 'Endereço',
+                required: false,
+                suffixIconSize: 12,
+                suffixIcon: Icons.arrow_forward_ios,
+                controller: TextController(
+                  text: form.endereco?.name ?? '',
+                ),
+                onChanged: (_) => clienteCtrl.formStream.update(),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -327,11 +352,11 @@ class _ClienteCreatePageState extends State<ClienteCreatePage> {
           AppMultipleRegisters<ObraModel>(
             icon: Icons.business_outlined,
             title: 'Gerenciar Obras',
-            createPage: ObraCreatePage(endereco: form.endereco),
+            createPage: ObraCreatePage(endereco: form.endereco, obrasIrmas: form.obras),
             onEdit: (obraForm) async {
               ObraModel? obra = await push(
                 context,
-                ObraCreatePage(obra: obraForm),
+                ObraCreatePage(obra: obraForm, obrasIrmas: form.obras),
               );
               if (obra != null) {
                 final i =

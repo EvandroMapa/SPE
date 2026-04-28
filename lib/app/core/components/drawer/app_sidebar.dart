@@ -70,7 +70,7 @@ class AppSideBar extends StatelessWidget {
                       _buildItem(AppModule.projetos, currentModule),
                       _buildItem(AppModule.pedidosTecnicos, currentModule),
                       _buildItem(AppModule.cliente, currentModule),
-                      _buildItem(AppModule.produtos, currentModule),
+                      _buildItem(AppModule.bitolas, currentModule),
                       _buildItem(AppModule.fabricantes, currentModule),
                     ],
                   );

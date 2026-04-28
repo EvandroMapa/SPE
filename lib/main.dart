@@ -18,9 +18,3 @@ void main() async {
 
   Service.initAplicationServices().then((_) => appCtrl.onInit());
 }
-
-//asfasdfadsf
-//asfdadsfsdf
-//asdfasdfasd
-//
-//asfasfads

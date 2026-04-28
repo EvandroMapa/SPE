@@ -16,11 +16,13 @@ import 'package:acoplan/app/modules/endereco/endereco_create_page.dart';
 import 'package:acoplan/app/modules/obra/obra_controller.dart';
 import 'package:acoplan/app/modules/obra/obra_view_model.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class ObraCreatePage extends StatefulWidget {
   final ObraModel? obra;
   final EnderecoModel? endereco;
-  const ObraCreatePage({this.obra, this.endereco, super.key});
+  final List<ObraModel> obrasIrmas;
+  const ObraCreatePage({this.obra, this.endereco, this.obrasIrmas = const [], super.key});
 
   @override
   State<ObraCreatePage> createState() => _ObraCreatePageState();
@@ -30,11 +32,11 @@ class _ObraCreatePageState extends State<ObraCreatePage> {
   String _initialSnapshot = '';
 
   String _snapshot(ObraCreateModel form) =>
-      '${form.descricao.text}|${form.telefoneFixo.text}|${form.status?.index}|${form.endereco?.name}';
+      '${form.identificador.text}|${form.descricao.text}|${form.telefoneFixo.text}|${form.status?.index}';
 
   @override
   void initState() {
-    obraCtrl.init(widget.obra, widget.endereco);
+    obraCtrl.init(widget.obra, widget.endereco, obrasIrmas: widget.obrasIrmas);
     _initialSnapshot = _snapshot(obraCtrl.form);
     super.initState();
   }
@@ -107,6 +109,15 @@ class _ObraCreatePageState extends State<ObraCreatePage> {
                 ],
               ),
               const SizedBox(height: 24),
+              AppField(
+                label: 'Identificador',
+                controller: form.identificador,
+                onChanged: (_) => obraCtrl.formStream.update(),
+                inputFormatters: [
+                  LengthLimitingTextInputFormatter(20),
+                ],
+              ),
+              const H(16),
               AppField(
                 label: 'Descrição',
                 controller: form.descricao,

@@ -119,6 +119,46 @@ class _PlanilhaCreatePageState extends State<PlanilhaCreatePage> {
         _elementoDbIds[i] = planilhaCtrl.form.elementos[i].id;
       }
     }
+
+    _fnBitola.onKeyEvent = (node, event) {
+      if (event.logicalKey == LogicalKeyboardKey.f2) {
+        if (event is KeyDownEvent) {
+          Future.microtask(() => _abrirBuscaBitola());
+        }
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
+    };
+    // Tratamento legado/web por garantia
+    _fnBitola.onKey = (node, event) {
+      if (event.logicalKey == LogicalKeyboardKey.f2) {
+        if (event.runtimeType.toString() == 'RawKeyDownEvent') {
+          Future.microtask(() => _abrirBuscaBitola());
+        }
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
+    };
+
+    _fnForma.onKeyEvent = (node, event) {
+      if (event.logicalKey == LogicalKeyboardKey.f2) {
+        if (event is KeyDownEvent) {
+          Future.microtask(() => _abrirBuscaForma());
+        }
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
+    };
+    _fnForma.onKey = (node, event) {
+      if (event.logicalKey == LogicalKeyboardKey.f2) {
+        if (event.runtimeType.toString() == 'RawKeyDownEvent') {
+          Future.microtask(() => _abrirBuscaForma());
+        }
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
+    };
+
     super.initState();
   }
 
@@ -490,20 +530,11 @@ class _PlanilhaCreatePageState extends State<PlanilhaCreatePage> {
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               onEditingComplete: () => _fnBitola.requestFocus(), onChanged: (_) {})),
             const SizedBox(width: 8),
-            Expanded(flex: 2, child: _campoCodigo('Bitola', _bitolaCtrl, _fnBitola, _pBitola?.label, () {
-              _validarBitola();
-              _fnForma.requestFocus();
-            })),
+            Expanded(flex: 2, child: _campoBitola()),
           ]),
           const SizedBox(height: 8),
           Row(children: [
-            Expanded(flex: 2, child: _campoCodigo('Forma', _formaCtrl, _fnForma,
-                _pForma != null ? '${_pForma!.codigo} - ${_pForma!.descricao}' : null, () {
-              _validarForma();
-              _pQtde.text = '1';
-              _pQtde.focus.requestFocus();
-              _pQtde.controller.selection = TextSelection(baseOffset: 0, extentOffset: 1);
-            })),
+            Expanded(flex: 2, child: _campoForma()),
             const SizedBox(width: 8),
             Expanded(child: AppField(label: 'Qtde', type: TextInputType.number, controller: _pQtde,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -564,7 +595,7 @@ class _PlanilhaCreatePageState extends State<PlanilhaCreatePage> {
                           ),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Center(child: Text(p.posicao.text, style: AppCss.minimumBold.setColor(AppColors.primaryMain).setSize(14)))),
+                        child: Center(child: Text('N${p.posicao.text}', style: AppCss.minimumBold.setColor(AppColors.primaryMain).setSize(14)))),
                       const SizedBox(width: 12),
                       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Text(p.bitolaSelecionada?.label ?? 'Sem bitola', style: AppCss.minimumBold.setSize(14), maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -606,48 +637,258 @@ class _PlanilhaCreatePageState extends State<PlanilhaCreatePage> {
     ]);
   }
 
-  // Campo código genérico (bitola/forma)
-  Widget _campoCodigo(String label, TextEditingController ctrl, FocusNode fn, String? info, VoidCallback onSubmit) {
+  Widget _campoBitola() {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('$label (código):', style: AppCss.smallBold),
+      Text('Bitola (cód / F2):', style: AppCss.smallBold),
       const SizedBox(height: 4),
-      TextField(controller: ctrl, focusNode: fn,
+      TextField(
+        controller: _bitolaCtrl, focusNode: _fnBitola,
         style: AppCss.smallRegular,
         decoration: InputDecoration(
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-          hintText: 'Código',
-          suffixIcon: info != null ? const Icon(Icons.check_circle, color: Colors.green, size: 18) : null,
+          hintText: 'Cód ou F2',
+          suffixIcon: _pBitola != null ? const Icon(Icons.check_circle, color: Colors.green, size: 18) : null,
         ),
-        onSubmitted: (_) => onSubmit(),
+        onSubmitted: (_) {
+          if (_validarBitola()) {
+            _fnForma.requestFocus();
+          } else {
+            // Código errado ou vazio: seleciona o texto, não pula de campo, e abre a busca
+            _fnBitola.requestFocus();
+            _bitolaCtrl.selection = TextSelection(baseOffset: 0, extentOffset: _bitolaCtrl.text.length);
+            Future.microtask(() => _abrirBuscaBitola());
+          }
+        },
       ),
-      if (info != null)
+      if (_pBitola != null)
         Padding(padding: const EdgeInsets.only(top: 2),
-          child: Text(info, style: AppCss.minimumRegular.setColor(AppColors.primaryMain).setSize(10))),
+          child: Text(_pBitola!.label, style: AppCss.minimumRegular.setColor(AppColors.primaryMain).setSize(10))),
     ]);
   }
 
-  void _validarBitola() {
+  Widget _campoForma() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('Forma (cód / F2):', style: AppCss.smallBold),
+      const SizedBox(height: 4),
+      TextField(
+        controller: _formaCtrl, focusNode: _fnForma,
+        style: AppCss.smallRegular,
+        decoration: InputDecoration(
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          hintText: 'Cód ou F2',
+          suffixIcon: _pForma != null ? const Icon(Icons.check_circle, color: Colors.green, size: 18) : null,
+        ),
+        onSubmitted: (_) {
+          if (_validarForma()) {
+            _pQtde.text = '1';
+            _pQtde.focus.requestFocus();
+            _pQtde.controller.selection = const TextSelection(baseOffset: 0, extentOffset: 1);
+          } else {
+            // Código errado ou vazio: não pula, seleciona o texto, abre a busca
+            _fnForma.requestFocus();
+            _formaCtrl.selection = TextSelection(baseOffset: 0, extentOffset: _formaCtrl.text.length);
+            Future.microtask(() => _abrirBuscaForma());
+          }
+        },
+      ),
+      if (_pForma != null)
+        Padding(padding: const EdgeInsets.only(top: 2),
+          child: Text('${_pForma!.codigo} - ${_pForma!.descricao}', style: AppCss.minimumRegular.setColor(AppColors.primaryMain).setSize(10))),
+    ]);
+  }
+
+  Future<void> _abrirModalBusca<T>({
+    required String titulo,
+    required List<T> itens,
+    required String Function(T) tituloItem,
+    required String Function(T) subtituloItem,
+    required bool Function(T, String) filtro,
+    required void Function(T) onSelected,
+    Widget Function(T)? trailingBuilder,
+  }) async {
+    String query = '';
+    final fnSearch = FocusNode();
+    
+    await showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            final filtrados = itens.where((e) => filtro(e, query)).toList();
+            return AlertDialog(
+              title: Text(titulo, style: AppCss.mediumBold),
+              content: SizedBox(
+                width: 600,
+                height: 600,
+                child: Column(
+                  children: [
+                    TextField(
+                      focusNode: fnSearch,
+                      autofocus: true,
+                      style: AppCss.smallRegular,
+                      decoration: InputDecoration(
+                        hintText: 'Digite para buscar e dê Enter para o primeiro...',
+                        prefixIcon: Icon(Icons.search, color: AppColors.primaryMain),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        focusedBorder: OutlineInputBorder(
+                          borderSide: BorderSide(color: AppColors.primaryMain, width: 2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      onChanged: (v) => setState(() => query = v),
+                      onSubmitted: (v) {
+                        if (filtrados.isNotEmpty) {
+                          final item = filtrados.first;
+                          Navigator.pop(context);
+                          onSelected(item);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    Expanded(
+                      child: filtrados.isEmpty
+                        ? Center(child: Text('Nenhum item encontrado', style: AppCss.smallRegular.setColor(Colors.grey[400]!)))
+                        : ListView.separated(
+                        itemCount: filtrados.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (_, i) {
+                          final item = filtrados[i];
+                          return InkWell(
+                            onTap: () {
+                              Navigator.pop(context);
+                              onSelected(item);
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(tituloItem(item), style: AppCss.smallBold),
+                                        const SizedBox(height: 2),
+                                        Text(subtituloItem(item), style: AppCss.minimumRegular.setColor(Colors.grey[600]!)),
+                                      ],
+                                    ),
+                                  ),
+                                  if (trailingBuilder != null) ...[
+                                    const SizedBox(width: 12),
+                                    trailingBuilder(item),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('Cancelar', style: AppCss.smallBold.setColor(Colors.grey[600]!)),
+                )
+              ],
+            );
+          }
+        );
+      }
+    );
+  }
+
+  void _abrirBuscaBitola() {
+    _abrirModalBusca<ProdutoModel>(
+      titulo: 'Buscar Bitola (F2)',
+      itens: BackendClient.produtos.data,
+      tituloItem: (p) => p.nome,
+      subtituloItem: (p) => p.descricao,
+      filtro: (p, q) => p.nome.toLowerCase().contains(q.toLowerCase()) || p.descricao.toLowerCase().contains(q.toLowerCase()),
+      onSelected: (p) {
+        _bitolaCtrl.text = p.nome;
+        _validarBitola();
+        _fnForma.requestFocus();
+      },
+    );
+  }
+
+  void _abrirBuscaForma() {
+    _abrirModalBusca<FormaModel>(
+      titulo: 'Buscar Forma (F2)',
+      itens: BackendClient.formas.data,
+      tituloItem: (f) => f.codigo,
+      subtituloItem: (f) => f.descricao,
+      filtro: (f, q) => f.codigo.toLowerCase().contains(q.toLowerCase()) || f.descricao.toLowerCase().contains(q.toLowerCase()),
+      trailingBuilder: (f) {
+        return Container(
+          width: 150, height: 150,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: Colors.grey[300]!),
+          ),
+          child: IgnorePointer(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: FormaPreviewWidget(
+                itens: f.itens,
+                height: 150,
+                mostrarLegenda: false,
+                mostrarVertices: false,
+                rotacaoExterna: f.rotacao,
+              ),
+            ),
+          ),
+        );
+      },
+      onSelected: (f) {
+        _formaCtrl.text = f.codigo;
+        _validarForma();
+        _pQtde.text = '1';
+        _pQtde.focus.requestFocus();
+        _pQtde.controller.selection = const TextSelection(baseOffset: 0, extentOffset: 1);
+      },
+    );
+  }
+
+  bool _validarBitola() {
     final cod = _bitolaCtrl.text.trim();
-    if (cod.isEmpty) { setState(() => _pBitola = null); return; }
+    if (cod.isEmpty) { setState(() => _pBitola = null); return false; }
     final match = BackendClient.produtos.data.where((b) =>
         b.nome.toLowerCase() == cod.toLowerCase() || b.descricao.toLowerCase() == cod.toLowerCase()).firstOrNull;
     setState(() => _pBitola = match);
     if (match == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Bitola "$cod" não encontrada'), backgroundColor: AppColors.error, duration: const Duration(seconds: 2)));
+      return false; // Retorna false para abrir o modal em vez de mostrar snackbar chata
     }
+    return true;
   }
 
-  void _validarForma() {
+  bool _validarForma() {
     final cod = _formaCtrl.text.trim();
-    if (cod.isEmpty) { setState(() => _pForma = null); return; }
+    if (cod.isEmpty) { 
+      setState(() {
+        _pForma = null;
+        _formaSelecionada = null;
+      });
+      _atualizarCompCtrls(null);
+      return false; 
+    }
     final match = BackendClient.formas.data.where((f) => f.codigo.toLowerCase() == cod.toLowerCase()).firstOrNull;
-    setState(() => _pForma = match);
+    setState(() {
+      _pForma = match;
+      _formaSelecionada = match;
+    });
     _atualizarCompCtrls(match);
     if (match == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Forma "$cod" não encontrada'), backgroundColor: AppColors.error, duration: const Duration(seconds: 2)));
+      return false;
     }
+    return true;
   }
 
   void _addPos(ElementoCreateModel elem) async {
@@ -679,13 +920,24 @@ class _PlanilhaCreatePageState extends State<PlanilhaCreatePage> {
     elem.posicoes.add(n);
     _limparPos();
     planilhaCtrl.formStream.update();
+
+    // Seleciona automaticamente a posição criada
+    _atualizarCompCtrls(n.formaSelecionada, posicao: n);
+    setState(() => _formaSelecionada = n.formaSelecionada);
+
+    // Foca o primeiro campo de trecho da tela direita
+    if (_compFns.isNotEmpty) {
+      Future.delayed(const Duration(milliseconds: 100), () {
+        _compFns.first.requestFocus();
+      });
+    }
+
     // Auto-save posição
     final elemId = _elementoDbIds[_elemIdx];
     if (elemId != null) {
       final dbId = await planilhaCtrl.adicionarPosicao(n, elemId);
       if (dbId != null) n.id = dbId;
     }
-    Future.delayed(const Duration(milliseconds: 100), () => _pNum.focus.requestFocus());
   }
 
   void _limparPos() {
@@ -816,9 +1068,16 @@ class _PlanilhaCreatePageState extends State<PlanilhaCreatePage> {
                                 onSubmitted: (_) {
                                   // Salvar comprimento no modelo
                                   _salvarComprimento(i, forma);
-                                  // Enter pula para próximo trecho
+                                  // Enter pula para próximo trecho ou volta pro início
                                   if (i + 1 < _compFns.length) {
                                     _compFns[i + 1].requestFocus();
+                                    _compCtrls[i + 1].selection = TextSelection(baseOffset: 0, extentOffset: _compCtrls[i + 1].text.length);
+                                  } else {
+                                    // Último trecho finalizado: limpa a visualização e foca na nova posição
+                                    _atualizarCompCtrls(null);
+                                    setState(() => _formaSelecionada = null);
+                                    _pNum.focus.requestFocus();
+                                    _pNum.controller.selection = TextSelection(baseOffset: 0, extentOffset: _pNum.text.length);
                                   }
                                 },
                               ),

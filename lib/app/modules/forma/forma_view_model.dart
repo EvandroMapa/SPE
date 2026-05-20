@@ -16,6 +16,9 @@ class FormaCriarModel {
   List<FormaItemModel> itens = [];
   late bool is_edicao;
 
+  /// fatorDobra calculado dinamicamente dos itens.
+  double get fatorDobra => FormaModel.calcularFatorDobra(itens);
+
   FormaCriarModel()
       : id = HashService.get,
         is_edicao = false;
@@ -34,6 +37,7 @@ class FormaCriarModel {
               angulo: e.angulo,
               orientacao: e.orientacao,
               tipo: e.tipo,
+              grupoSimetria: e.grupoSimetria,
             ))
         .toList();
   }
@@ -45,5 +49,6 @@ class FormaCriarModel {
         imagem: imagem,
         rotacao: rotacao,
         itens: itens,
+        fatorDobra: fatorDobra, // calculado dos itens ao salvar
       );
 }

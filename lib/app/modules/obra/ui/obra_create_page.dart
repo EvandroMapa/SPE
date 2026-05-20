@@ -32,7 +32,7 @@ class _ObraCreatePageState extends State<ObraCreatePage> {
   String _initialSnapshot = '';
 
   String _snapshot(ObraCreateModel form) =>
-      '${form.identificador.text}|${form.descricao.text}|${form.telefoneFixo.text}|${form.status?.index}';
+      '${form.descricao.text}|${form.prefixo.text}|${form.telefoneFixo.text}|${form.status?.index}';
 
   @override
   void initState() {
@@ -110,11 +110,13 @@ class _ObraCreatePageState extends State<ObraCreatePage> {
               ),
               const SizedBox(height: 24),
               AppField(
-                label: 'Identificador',
-                controller: form.identificador,
+                label: 'Prefixo da Obra',
+                hint: 'Ex: Cliente-Obra (sem espaços, máx 20 chars)',
+                controller: form.prefixo,
                 onChanged: (_) => obraCtrl.formStream.update(),
                 inputFormatters: [
                   LengthLimitingTextInputFormatter(20),
+                  FilteringTextInputFormatter.deny(RegExp(r'\s')),
                 ],
               ),
               const H(16),

@@ -80,7 +80,8 @@ class PlanilhaController {
         form.isEdit = true;
       }
 
-      NotificationService.showPositive('Sucesso', 'Planilha salva');
+      formStream.update(); // reconstrói sidebar → desbloqueia aba Elementos
+      NotificationService.showPositive('Planilha salva', 'Dados gerais registrados com sucesso');
     } catch (e) {
       NotificationService.showNegative('Erro', e.toString());
     }
@@ -114,6 +115,17 @@ class PlanilhaController {
     } catch (e) {
       NotificationService.showNegative('Erro', e.toString());
       return null;
+    }
+  }
+
+  // ── Elemento: atualizar ──────────────────────────────────
+  Future<void> atualizarElemento(ElementoCreateModel elemCreate) async {
+    try {
+      if (!await _garantirPlanilha()) return;
+      final elemModel = elemCreate.toElementoModel();
+      await BackendClient.planilhas.atualizarElemento(elemModel, _planilhaDbId!);
+    } catch (e) {
+      NotificationService.showNegative('Erro', e.toString());
     }
   }
 
@@ -174,6 +186,12 @@ class PlanilhaController {
     if (planilhaId.length != 36) return;
     try {
       await BackendClient.planilhas.atualizarPesoTotal(planilhaId, pesoTotal);
+    } catch (_) {}
+  }
+
+  Future<void> atualizarPesoElemento(String elementoId, double pesoTotal) async {
+    try {
+      await BackendClient.planilhas.atualizarPesoElemento(elementoId, pesoTotal);
     } catch (_) {}
   }
 }

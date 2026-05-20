@@ -7,6 +7,7 @@ import 'package:acoplan/app/modules/usuario/ui/usuario_tipo_page.dart';
 import 'package:acoplan/app/modules/usuario/ui/usuarios_page.dart';
 import 'package:acoplan/app/modules/backup/ui/backups_page.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ConfigPage extends StatelessWidget {
   const ConfigPage({super.key});
@@ -52,6 +53,16 @@ class ConfigPage extends StatelessWidget {
           const Divisor(),
           _buildItem(
             context,
+            Icons.auto_awesome_outlined,
+            'Inteligência Artificial (IA)',
+            'Chaves de API e integrações',
+            () {
+              _showApiKeyDialog(context);
+            },
+          ),
+          const Divisor(),
+          _buildItem(
+            context,
             Icons.settings_suggest_outlined,
             'Configurações Gerais',
             'Parâmetros globais do sistema',
@@ -84,6 +95,57 @@ class ConfigPage extends StatelessWidget {
       subtitle: Text(subtitle, style: AppCss.minimumRegular.setColor(AppColors.neutralDark)),
       trailing: const Icon(Icons.chevron_right_rounded),
       onTap: onTap,
+    );
+  }
+
+  void _showApiKeyDialog(BuildContext context) async {
+    final prefs = await SharedPreferences.getInstance();
+    final currentKey = prefs.getString('gemini_api_key') ?? '';
+    final controller = TextEditingController(text: currentKey);
+
+    if (!context.mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          title: Text('Configuração da IA', style: AppCss.mediumBold),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Informe sua chave da API do Google Gemini (AI Studio). Ela será usada para processar os PDFs de projetos no robô de planilhamento.',
+                style: AppCss.minimumRegular.setColor(Colors.grey[700]!),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: controller,
+                decoration: const InputDecoration(
+                  labelText: 'API Key',
+                  border: OutlineInputBorder(),
+                ),
+                obscureText: true,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Cancelar', style: AppCss.smallBold.setColor(Colors.grey)),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                await prefs.setString('gemini_api_key', controller.text.trim());
+                if (context.mounted) Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryMain),
+              child: Text('Salvar', style: AppCss.smallBold.setColor(Colors.white)),
+            ),
+          ],
+        );
+      },
     );
   }
 }

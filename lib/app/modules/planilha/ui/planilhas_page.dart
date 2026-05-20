@@ -1,3 +1,4 @@
+import 'package:acoplan/app/core/client/backend_client.dart';
 import 'package:acoplan/app/core/components/app_scaffold.dart';
 import 'package:acoplan/app/core/components/empty_data.dart';
 import 'package:acoplan/app/core/components/stream_out.dart';
@@ -7,7 +8,12 @@ import 'package:acoplan/app/core/utils/app_css.dart';
 import 'package:acoplan/app/core/utils/global_resource.dart';
 import 'package:acoplan/app/modules/planilha/planilha_controller.dart';
 import 'package:acoplan/app/modules/planilha/ui/planilha_create_page.dart';
+import 'package:acoplan/app/modules/planilha/pdf_planilha.dart';
+import 'package:acoplan/app/modules/forma/forma_controller.dart';
+import 'package:acoplan/app/core/services/notification_service.dart';
+import 'package:overlay_support/overlay_support.dart';
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 
 class PlanilhasPage extends StatefulWidget {
   const PlanilhasPage({super.key});
@@ -125,15 +131,43 @@ class _PlanilhasPageState extends State<PlanilhasPage> {
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            IconButton(
-                              icon: Icon(Icons.edit_outlined, color: AppColors.primaryMain, size: 20),
-                              onPressed: () => _openForm(planilha),
-                              tooltip: 'Editar',
+                            Tooltip(
+                              message: 'Gerar PDF',
+                              child: InkWell(
+                                onTap: () => _gerarPDF(planilha),
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  width: 36, height: 36,
+                                  decoration: BoxDecoration(color: Colors.orange.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(8)),
+                                  child: const Icon(Icons.picture_as_pdf_outlined, size: 18, color: Colors.orange),
+                                ),
+                              ),
                             ),
-                            IconButton(
-                              icon: Icon(Icons.delete_outline_rounded, color: Colors.red[400], size: 20),
-                              onPressed: () => _confirmDelete(planilha),
-                              tooltip: 'Excluir',
+                            const SizedBox(width: 8),
+                            Tooltip(
+                              message: 'Editar',
+                              child: InkWell(
+                                onTap: () => _openForm(planilha),
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  width: 36, height: 36,
+                                  decoration: BoxDecoration(color: AppColors.primaryMain.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(8)),
+                                  child: Icon(Icons.edit_outlined, size: 18, color: AppColors.primaryMain),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Tooltip(
+                              message: 'Excluir',
+                              child: InkWell(
+                                onTap: () => _confirmDelete(planilha),
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  width: 36, height: 36,
+                                  decoration: BoxDecoration(color: AppColors.error.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(8)),
+                                  child: Icon(Icons.delete_outline, size: 18, color: AppColors.error),
+                                ),
+                              ),
                             ),
                           ],
                         ),
@@ -150,26 +184,69 @@ class _PlanilhasPageState extends State<PlanilhasPage> {
   }
 
   void _openForm(PlanilhaModel? planilha) async {
+    if (planilha != null) {
+      final estaVinculada = await BackendClient.planilhas.estaVinculadaAPedido(planilha.id);
+      if (estaVinculada) {
+        if (!mounted) return;
+        NotificationService.showNeutral('Modo de Visualização', 'Esta planilha está em um Pedido Técnico e não pode ser alterada.', position: NotificationPosition.bottom);
+        await push(context, PlanilhaCreatePage(planilha: planilha, isReadOnly: true));
+        return;
+      }
+    }
+    if (!mounted) return;
     await push(context, PlanilhaCreatePage(planilha: planilha));
   }
 
-  void _confirmDelete(PlanilhaModel planilha) {
+  void _gerarPDF(PlanilhaModel planilha) async {
+    final pdfBytes = await PdfPlanilha.gerarRelatorio(planilha, formaCtrl.formas, BackendClient.produtos.data);
+    await Printing.layoutPdf(
+      onLayout: (format) async => pdfBytes,
+      name: 'Planilha ${planilha.codigo} - ${planilha.clienteNome}',
+    );
+  }
+
+  void _confirmDelete(PlanilhaModel planilha) async {
+    final estaVinculada = await BackendClient.planilhas.estaVinculadaAPedido(planilha.id);
+    if (estaVinculada) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          icon: Icon(Icons.info_outline, size: 40, color: Colors.orange[700]),
+          title: Text('Exclusão Bloqueada', textAlign: TextAlign.center, style: AppCss.mediumBold),
+          content: Text(
+            'Esta planilha não pode ser excluída pois possui elementos vinculados a um Pedido Técnico.\n\nRemova os elementos do pedido antes de excluir.',
+            style: AppCss.smallRegular,
+            textAlign: TextAlign.center,
+          ),
+          actionsAlignment: MainAxisAlignment.center,
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryMain),
+              onPressed: () => pop(context),
+              child: Text('Entendi', style: AppCss.smallBold.setColor(Colors.white)),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    
+    if (!mounted) return;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Excluir Planilha'),
-        content:
-            Text('Deseja realmente excluir a planilha ${planilha.codigo}?'),
+        content: Text('Deseja realmente excluir a planilha ${planilha.codigo}?'),
         actions: [
-          TextButton(
-              onPressed: () => pop(context), child: const Text('Cancelar')),
-          TextButton(
+          TextButton(onPressed: () => pop(context), child: const Text('Cancelar')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
             onPressed: () {
               pop(context);
               planilhaCtrl.onDelete(context, planilha);
             },
-            child:
-                const Text('Excluir', style: TextStyle(color: Colors.red)),
+            child: const Text('Excluir', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),

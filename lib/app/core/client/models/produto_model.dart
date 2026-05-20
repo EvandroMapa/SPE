@@ -8,6 +8,7 @@ class ProdutoModel {
   final double massaFinal;
   final String codigoFinanceiro;
   final int sortIndex;
+  final double diametro; // mm — ex: 12.5 para vergalhão ø12,5mm
 
   factory ProdutoModel.empty() => ProdutoModel(
         id: HashService.get,
@@ -16,6 +17,7 @@ class ProdutoModel {
         massaFinal: 0.0,
         codigoFinanceiro: '',
         sortIndex: 999,
+        diametro: 0.0,
       );
 
   ProdutoModel({
@@ -25,6 +27,7 @@ class ProdutoModel {
     required this.massaFinal,
     this.codigoFinanceiro = '',
     this.sortIndex = 999,
+    this.diametro = 0.0,
   });
 
   String get label => '$nome - $descricao';
@@ -37,6 +40,7 @@ class ProdutoModel {
       'massa_final': massaFinal,
       'codigo_financeiro': codigoFinanceiro,
       'sort_index': sortIndex,
+      'diametro': diametro,
     };
   }
 
@@ -47,6 +51,7 @@ class ProdutoModel {
       'massa_final': massaFinal,
       'codigo_financeiro': codigoFinanceiro,
       'sort_index': sortIndex,
+      'diametro': diametro,
     };
     if (id.length == 36) {
       map['id'] = id;
@@ -65,6 +70,7 @@ class ProdutoModel {
       codigoFinanceiro:
           (map['codigo_financeiro'] ?? map['codigoFinanceiro'] ?? '').toString(),
       sortIndex: (map['sort_index'] ?? map['sortIndex'] ?? 999) as int,
+      diametro: (map['diametro'] as num?)?.toDouble() ?? 0.0,
     );
   }
 
@@ -80,6 +86,7 @@ class ProdutoModel {
     double? massaFinal,
     String? codigoFinanceiro,
     int? sortIndex,
+    double? diametro,
   }) {
     return ProdutoModel(
       id: id ?? this.id,
@@ -88,6 +95,7 @@ class ProdutoModel {
       massaFinal: massaFinal ?? this.massaFinal,
       codigoFinanceiro: codigoFinanceiro ?? this.codigoFinanceiro,
       sortIndex: sortIndex ?? this.sortIndex,
+      diametro: diametro ?? this.diametro,
     );
   }
 }

@@ -112,6 +112,15 @@ class ClienteModel {
       obras: obras ?? this.obras,
     );
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is ClienteModel && other.id == id;
+  }
+
+  @override
+  int get hashCode => id.hashCode;
 }
 
 class ObraModel {
@@ -119,6 +128,7 @@ class ObraModel {
   final String identificador;
   final String descricao;
   final String telefoneFixo;
+  final String prefixo; // ex: 'Evandro-Sitio' — prefixo do identificador do PT
   EnderecoModel? endereco;
   final ObraStatus status;
 
@@ -127,6 +137,7 @@ class ObraModel {
         identificador: '',
         descricao: '',
         telefoneFixo: '',
+        prefixo: '',
         endereco: null,
         status: ObraStatus.emAndamento,
       );
@@ -136,6 +147,7 @@ class ObraModel {
     required this.identificador,
     required this.descricao,
     required this.telefoneFixo,
+    required this.prefixo,
     required this.endereco,
     required this.status,
   });
@@ -146,6 +158,7 @@ class ObraModel {
       'identificador': identificador,
       'descricao': descricao,
       'telefoneFixo': telefoneFixo,
+      'prefixo': prefixo,
       'endereco': endereco?.toMap(),
       'status': status.index,
     };
@@ -157,6 +170,7 @@ class ObraModel {
       identificador: map['identificador'] ?? '',
       descricao: map['descricao'] ?? '',
       telefoneFixo: map['telefoneFixo'] ?? '',
+      prefixo: map['prefixo'] ?? '',
       endereco: map['endereco'] != null
           ? EnderecoModel.fromMap(map['endereco'])
           : null,
@@ -170,6 +184,7 @@ class ObraModel {
       identificador: map['identificador'] ?? '',
       descricao: map['nome'] ?? '',
       telefoneFixo: map['telefone'] ?? '',
+      prefixo: map['prefixo'] ?? '',
       endereco: map['endereco'] != null
           ? EnderecoModel.fromMap(map['endereco'])
           : null,
@@ -185,6 +200,7 @@ class ObraModel {
       'nome': descricao,
       'cliente_id': clienteId,
       'telefone': telefoneFixo,
+      'prefixo': prefixo,
       'status': status.index,
       'endereco': endereco?.toMap(),
     };
@@ -203,12 +219,22 @@ class ObraModel {
   String toString() {
     return 'ObraModel(id: $id, descricao: $descricao, telefoneFixo: $telefoneFixo, endereco: $endereco, status: $status)';
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is ObraModel && other.id == id;
+  }
+
+  @override
+  int get hashCode => id.hashCode;
 }
 
 ObraModel obraDeleteObj = ObraModel(
   id: 'delete',
   identificador: '',
   descricao: '',
+  prefixo: '',
   endereco: null,
   status: ObraStatus.emAndamento,
   telefoneFixo: '',

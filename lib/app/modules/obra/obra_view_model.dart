@@ -10,9 +10,9 @@ class ObraUtils {
 
 class ObraCreateModel {
   final String id;
-  TextController identificador = TextController();
   TextController descricao = TextController();
   TextController telefoneFixo = TextController.phone();
+  TextController prefixo = TextController();
   EnderecoModel? endereco;
   ObraStatus? status = ObraStatus.emAndamento;
   late bool isEdit;
@@ -24,16 +24,17 @@ class ObraCreateModel {
   ObraCreateModel.edit(ObraModel obra)
       : id = obra.id,
         isEdit = true {
-    identificador.text = obra.identificador;
     descricao.text = obra.descricao;
+    prefixo.text = obra.prefixo;
     endereco = obra.endereco;
     status = obra.status;
   }
 
   ObraModel toObraModel() => ObraModel(
         id: id,
-        identificador: identificador.text.trim(),
+        identificador: '',
         descricao: descricao.text,
+        prefixo: prefixo.text.trim(),
         endereco: endereco,
         status: status!,
         telefoneFixo: telefoneFixo.text,

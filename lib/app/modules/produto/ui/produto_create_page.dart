@@ -24,7 +24,7 @@ class _ProdutoCreatePageState extends State<ProdutoCreatePage> {
   String _initialSnapshot = '';
 
   String _snapshot(ProdutoCreateModel form) =>
-      '${form.nome.text}|${form.codigoFinanceiro.text}|${form.descricao.text}|${form.massaFinal.text}';
+      '${form.nome.text}|${form.codigoFinanceiro.text}|${form.descricao.text}|${form.massaFinal.text}|${form.diametro.text}';
 
   @override
   void initState() {
@@ -245,6 +245,14 @@ class _ProdutoCreatePageState extends State<ProdutoCreatePage> {
                 controller: form.massaFinal,
                 onChanged: (_) => produtoCtrl.formStream.update(),
                 suffixText: 'Kg',
+              ),
+              const H(16),
+              AppField(
+                label: 'Diâmetro',
+                controller: form.diametro,
+                type: TextInputType.number,
+                onChanged: (_) => produtoCtrl.formStream.update(),
+                suffixText: 'mm',
               ),
             ],
           ),

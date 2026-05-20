@@ -8,6 +8,9 @@ class FormaModel {
   final String imagem;
   final List<FormaItemModel> itens;
   final double rotacao;
+  /// Soma dos ângulos de dobra em equivalentes de 90°.
+  /// Ex: 4 dobras 90° = 4.0 | 1 dobra 45° = 0.5
+  final double fatorDobra;
 
   FormaModel({
     required this.id,
@@ -16,7 +19,17 @@ class FormaModel {
     required this.imagem,
     required this.itens,
     required this.rotacao,
+    this.fatorDobra = 0.0,
   });
+
+  /// Calcula fatorDobra a partir dos itens da forma.
+  /// Uma dobra ocorre ENTRE dois trechos, logo o último item
+  /// nunca tem dobra após ele — seu ângulo é ignorado.
+  static double calcularFatorDobra(List<FormaItemModel> itens) {
+    if (itens.length <= 1) return 0.0; // 1 só trecho = sem dobras
+    return itens.take(itens.length - 1).fold(
+        0.0, (s, item) => s + (item.angulo > 0 ? item.angulo / 90.0 : 0.0));
+  }
 
   factory FormaModel.empty() => FormaModel(
         id: '',
@@ -34,6 +47,7 @@ class FormaModel {
       descricao: map['descricao'] ?? '',
       imagem: map['imagem'] ?? '',
       rotacao: (map['rotacao'] ?? 0).toDouble(),
+      fatorDobra: (map['fator_dobra'] as num?)?.toDouble() ?? 0.0,
       itens: (map['itens'] as List? ?? [])
           .map((e) => FormaItemModel.fromMap(e as Map<String, dynamic>))
           .toList(),
@@ -47,6 +61,7 @@ class FormaModel {
       'imagem': imagem,
       'rotacao': rotacao,
       'itens': itens.map((e) => e.toMap()).toList(),
+      'fator_dobra': fatorDobra,
     };
     if (id.isNotEmpty && id.length == 36) {
       map['id'] = id;
@@ -62,6 +77,9 @@ class FormaItemModel {
   String orientacao;
   /// Tipo do trecho: 'linear' (padrão) ou 'circulo'
   String tipo;
+  /// Grupo de simetria: '' = sem vínculo, 'A'/'B'/'C'/'D' = trechos espelhados.
+  /// Trechos do mesmo grupo compartilham o comprimento na digitação.
+  String grupoSimetria;
   FocusNode focusNode = FocusNode();
   late TextEditingController anguloController;
 
@@ -81,6 +99,7 @@ class FormaItemModel {
     required double angulo,
     required this.orientacao,
     this.tipo = 'linear',
+    this.grupoSimetria = '',
   }) {
     _angulo = angulo;
     anguloController = TextEditingController(text: angulo.toInt().toString());
@@ -93,6 +112,7 @@ class FormaItemModel {
       angulo: (map['angulo'] ?? 0).toDouble(),
       orientacao: map['orientacao'] ?? 'Horário',
       tipo: map['tipo'] ?? 'linear',
+      grupoSimetria: map['grupo_simetria'] ?? '',
     );
   }
 
@@ -103,6 +123,7 @@ class FormaItemModel {
       'angulo': angulo,
       'orientacao': orientacao,
       'tipo': tipo,
+      'grupo_simetria': grupoSimetria,
     };
   }
 

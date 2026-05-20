@@ -104,8 +104,14 @@ class _AppDrawerMenuState extends State<AppDrawerMenu> {
                   children: [
                     _buildItem(
                       icon: Icons.architecture_outlined,
-                      label: 'Planilhamento',
+                      label: 'Planilha Manual',
                       module: AppModule.projetos,
+                      current: current,
+                    ),
+                    _buildItem(
+                      icon: Icons.auto_awesome_outlined,
+                      label: 'Planilhamento IA',
+                      module: AppModule.planilhamentoIA,
                       current: current,
                     ),
                     _buildItem(

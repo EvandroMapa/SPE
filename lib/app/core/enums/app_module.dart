@@ -3,6 +3,7 @@ import 'package:acoplan/app/modules/fabricante/ui/fabricantes_page.dart';
 import 'package:acoplan/app/modules/pedido_tecnico/ui/pedidos_tecnicos_page.dart';
 import 'package:acoplan/app/modules/produto/ui/produtos_page.dart';
 import 'package:acoplan/app/modules/planilha/ui/planilhas_page.dart';
+import 'package:acoplan/app/modules/planilhamento_ia/ui/planilhamento_ia_page.dart';
 import 'package:acoplan/app/modules/forma/ui/formas_page.dart';
 
 import 'package:acoplan/app/core/utils/app_colors.dart';
@@ -11,6 +12,7 @@ import 'package:flutter/material.dart';
 
 enum AppModule {
   projetos,
+  planilhamentoIA,
   pedidosTecnicos,
   cliente,
   fabricantes,
@@ -23,6 +25,8 @@ extension AppModuleExt on AppModule {
     switch (this) {
       case AppModule.projetos:
         return const PlanilhasPage();
+      case AppModule.planilhamentoIA:
+        return const PlanilhamentoIaPage();
       case AppModule.pedidosTecnicos:
         return const PedidosTecnicosPage();
       case AppModule.cliente:
@@ -55,6 +59,8 @@ extension AppModuleExt on AppModule {
     switch (this) {
       case AppModule.projetos:
         return Icons.architecture_outlined;
+      case AppModule.planilhamentoIA:
+        return Icons.auto_awesome_outlined;
       case AppModule.pedidosTecnicos:
         return Icons.description_outlined;
       case AppModule.cliente:
@@ -72,7 +78,9 @@ extension AppModuleExt on AppModule {
   String get label {
     switch (this) {
       case AppModule.projetos:
-        return 'Planilhamento';
+        return 'Planilha Manual';
+      case AppModule.planilhamentoIA:
+        return 'Planilhamento IA';
       case AppModule.pedidosTecnicos:
         return 'Pedidos Técnicos';
       case AppModule.cliente:

@@ -13,6 +13,7 @@ class ProdutoCreateModel {
   TextController descricao = TextController();
   TextController massaFinal = TextController.number();
   TextController codigoFinanceiro = TextController();
+  TextController diametro = TextController.number(); // mm
   int sortIndex = 999;
   late bool isEdit;
 
@@ -27,6 +28,7 @@ class ProdutoCreateModel {
     descricao.text = produto.descricao;
     massaFinal = TextController.number(value: produto.massaFinal);
     codigoFinanceiro.text = produto.codigoFinanceiro;
+    diametro.text = produto.diametro > 0 ? produto.diametro.toString() : '';
     sortIndex = produto.sortIndex;
   }
 
@@ -37,5 +39,6 @@ class ProdutoCreateModel {
         massaFinal: massaFinal.doubleValue,
         codigoFinanceiro: codigoFinanceiro.text,
         sortIndex: sortIndex,
+        diametro: double.tryParse(diametro.text.replaceAll(',', '.')) ?? 0.0,
       );
 }

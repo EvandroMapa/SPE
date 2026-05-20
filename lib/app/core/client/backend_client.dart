@@ -6,6 +6,7 @@ import 'package:acoplan/app/core/client/supabase/usuario_supabase_collection.dar
 import 'package:acoplan/app/core/client/supabase/usuario_tipo_supabase_collection.dart';
 import 'package:acoplan/app/core/client/supabase/forma_supabase_collection.dart';
 import 'package:acoplan/app/core/client/supabase/planilha_supabase_collection.dart';
+import 'package:acoplan/app/core/client/supabase/pedido_tecnico_supabase_collection.dart';
 
 class BackendClient {
   static UsuarioSupabaseCollection get usuarios => AppSupabaseClient.usuarios;
@@ -15,4 +16,5 @@ class BackendClient {
   static FabricanteSupabaseCollection get fabricantes => AppSupabaseClient.fabricantes;
   static FormaSupabaseCollection get formas => AppSupabaseClient.formas;
   static PlanilhaSupabaseCollection get planilhas => AppSupabaseClient.planilhas;
+  static PedidoTecnicoSupabaseCollection get pedidosTecnicos => AppSupabaseClient.pedidosTecnicos;
 }

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:acoplan/app/core/client/models/trecho_variavel_config.dart';
 import 'package:acoplan/app/core/services/hash_service.dart';
 
 class PlanilhaModel {
@@ -126,6 +127,7 @@ class ElementoModel {
   final int quantidade;
   final double pesoTotal;
   final List<PosicaoModel> posicoes;
+  final List<String> elementosEquivalentes;
 
   ElementoModel({
     required this.id,
@@ -133,7 +135,17 @@ class ElementoModel {
     required this.quantidade,
     required this.pesoTotal,
     required this.posicoes,
+    this.elementosEquivalentes = const [],
   });
+
+  /// Retorna a lista expandida: [nome] + elementosEquivalentes
+  List<String> get todosNomes => [nome, ...elementosEquivalentes];
+
+  /// Quantidade total considerando equivalentes
+  int get quantidadeExpandida => quantidade * todosNomes.length;
+
+  /// Peso total considerando equivalentes
+  double get pesoExpandido => pesoTotal * todosNomes.length;
 
   factory ElementoModel.empty() => ElementoModel(
         id: HashService.get,
@@ -141,6 +153,7 @@ class ElementoModel {
         quantidade: 0,
         pesoTotal: 0,
         posicoes: [],
+        elementosEquivalentes: [],
       );
 
   factory ElementoModel.fromSupabaseMap(
@@ -153,6 +166,10 @@ class ElementoModel {
       quantidade: int.tryParse(map['quantidade']?.toString() ?? '0') ?? 0,
       pesoTotal: double.tryParse(map['peso_total']?.toString() ?? '0') ?? 0,
       posicoes: posicoesRaw.map((p) => PosicaoModel.fromSupabaseMap(p)).toList(),
+      elementosEquivalentes: (map['elementos_equivalentes'] as List?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          [],
     );
   }
 
@@ -162,6 +179,7 @@ class ElementoModel {
       'quantidade': quantidade,
       'peso_total': pesoTotal,
       'planilha_id': planilhaId,
+      'elementos_equivalentes': elementosEquivalentes,
     };
     if (id.length == 36) {
       map['id'] = id;
@@ -176,6 +194,7 @@ class ElementoModel {
       'quantidade': quantidade,
       'peso_total': pesoTotal,
       'posicoes': posicoes.map((p) => p.toMap()).toList(),
+      'elementos_equivalentes': elementosEquivalentes,
     };
   }
 
@@ -192,7 +211,10 @@ class PosicaoModel {
   final String formaCodigo;
   final int qtde;
   final Map<String, int> comprimentos; // {"T1": 150, "T2": 200, ...}
-  final Map<String, bool> variaveis; // {"T1": true, ...}
+  final Map<String, bool> variaveis;   // {"T1": true, ...}
+  final Map<String, TrechoVariavelConfig> variaveisConfig; // config de variação por trecho
+  final int multiplicador;               // multiplicador da posição (ex: 2 = duas peças de cada medida)
+  final int comprimentoDeCorte;        // cm — calculado a partir da lógica de corte
 
   PosicaoModel({
     required this.id,
@@ -204,6 +226,9 @@ class PosicaoModel {
     required this.qtde,
     this.comprimentos = const {},
     this.variaveis = const {},
+    this.variaveisConfig = const {},
+    this.multiplicador = 1,
+    this.comprimentoDeCorte = 0,
   });
 
   factory PosicaoModel.empty() => PosicaoModel(
@@ -216,6 +241,7 @@ class PosicaoModel {
         qtde: 0,
         comprimentos: {},
         variaveis: {},
+        variaveisConfig: {},
       );
 
   factory PosicaoModel.fromSupabaseMap(Map<String, dynamic> map) {
@@ -233,6 +259,12 @@ class PosicaoModel {
       variaveis: map['variaveis'] != null
           ? Map<String, bool>.from((map['variaveis'] as Map).map((k, v) => MapEntry(k.toString(), v as bool)))
           : {},
+      variaveisConfig: map['variaveis_config'] != null
+          ? (map['variaveis_config'] as Map).map((k, v) =>
+              MapEntry(k.toString(), TrechoVariavelConfig.fromMap(v as Map<String, dynamic>)))
+          : {},
+      multiplicador: int.tryParse(map['multiplicador']?.toString() ?? '1') ?? 1,
+      comprimentoDeCorte: int.tryParse(map['comprimento_de_corte']?.toString() ?? '0') ?? 0,
     );
   }
 
@@ -246,7 +278,10 @@ class PosicaoModel {
       'qtde': qtde,
       'comprimentos': comprimentos,
       'variaveis': variaveis,
+      'variaveis_config': variaveisConfig.map((k, v) => MapEntry(k, v.toMap())),
+      'multiplicador': multiplicador,
       'elemento_id': elementoId,
+      'comprimento_de_corte': comprimentoDeCorte,
     };
     if (id.length == 36) {
       map['id'] = id;
@@ -265,6 +300,9 @@ class PosicaoModel {
       'qtde': qtde,
       'comprimentos': comprimentos,
       'variaveis': variaveis,
+      'variaveis_config': variaveisConfig.map((k, v) => MapEntry(k, v.toMap())),
+      'multiplicador': multiplicador,
+      'comprimento_de_corte': comprimentoDeCorte,
     };
   }
 

@@ -60,13 +60,12 @@ class _FormasPageState extends State<FormasPage> {
             child: StreamOut<List<FormaModel>>(
               stream: formaCtrl.formasStream.listen,
               builder: (context, formas) {
-                final filtered = formas.where((u) {
+                final filtered = formas.where((f) {
                   final query = _filter.toLowerCase();
-                  return u.codigo.toLowerCase().contains(query) ||
-                      u.descricao.toLowerCase().contains(query);
+                  return f.codigo.toLowerCase().contains(query) ||
+                      f.descricao.toLowerCase().contains(query);
                 }).toList();
 
-                // Ordenação numérica: converte para int para comparar corretamente (ex: 1, 2, 10)
                 filtered.sort((a, b) {
                   final n1 = int.tryParse(a.codigo) ?? 0;
                   final n2 = int.tryParse(b.codigo) ?? 0;
@@ -78,34 +77,136 @@ class _FormasPageState extends State<FormasPage> {
                 }
 
                 return ListView.separated(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
                   itemCount: filtered.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  separatorBuilder: (_, _) => const SizedBox(height: 4),
                   itemBuilder: (context, index) {
                     final forma = filtered[index];
-                    return ListTile(
-                      leading: Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: AppColors.primaryMain.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(Icons.architecture, color: AppColors.primaryMain),
-                      ),
-                      title: Text(forma.codigo, style: AppCss.smallBold),
-                      subtitle: Text(forma.descricao, style: AppCss.minimumRegular),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.edit_outlined),
-                            onPressed: () => _openCreateForma(forma),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline_rounded, color: Colors.red),
-                            onPressed: () => _confirmDelete(forma),
-                          ),
+                    final temDobras = forma.fatorDobra > 0;
+                    final dobrasCount = forma.itens.length <= 1
+                        ? 0
+                        : forma.itens
+                            .take(forma.itens.length - 1)
+                            .where((i) => i.angulo > 0)
+                            .length;
+                    return Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.grey[200]!),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.03),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          )
                         ],
+                      ),
+                      child: ListTile(
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                        leading: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                AppColors.primaryMain.withValues(alpha: 0.15),
+                                AppColors.primaryMain.withValues(alpha: 0.05),
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Center(
+                            child: Text(
+                              forma.codigo,
+                              style: AppCss.smallBold
+                                  .setColor(AppColors.primaryMain)
+                                  .setSize(15),
+                            ),
+                          ),
+                        ),
+                        title: Text(
+                          'Forma ${forma.codigo}',
+                          style: AppCss.smallBold.setSize(14),
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SizedBox(height: 2),
+                            Text(
+                              forma.descricao.isEmpty ? 'Sem descrição' : forma.descricao,
+                              style: AppCss.minimumRegular.setSize(11),
+                            ),
+                            const SizedBox(height: 3),
+                            Row(children: [
+                              Icon(
+                                Icons.content_cut,
+                                size: 12,
+                                color: temDobras
+                                    ? const Color(0xFFF59E0B)
+                                    : Colors.grey[400],
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                temDobras
+                                    ? 'Fator dobra: ${forma.fatorDobra.toStringAsFixed(2)}  •  $dobrasCount dobra(s)'
+                                    : 'Sem dobras',
+                                style: AppCss.minimumBold
+                                    .setColor(temDobras
+                                        ? const Color(0xFFF59E0B)
+                                        : Colors.grey[400]!)
+                                    .setSize(11),
+                              ),
+                            ]),
+                          ],
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Tooltip(
+                              message: 'Editar',
+                              child: InkWell(
+                                onTap: () => _openCreateForma(forma),
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primaryMain
+                                        .withValues(alpha: 0.10),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(Icons.edit_outlined,
+                                      size: 18, color: AppColors.primaryMain),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Tooltip(
+                              message: 'Excluir',
+                              child: InkWell(
+                                onTap: () => _confirmDelete(forma),
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.error.withValues(alpha: 0.10),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(Icons.delete_outline,
+                                      size: 18, color: AppColors.error),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   },
@@ -130,13 +231,17 @@ class _FormasPageState extends State<FormasPage> {
         title: const Text('Excluir Forma'),
         content: Text('Deseja realmente excluir a forma ${forma.codigo}?'),
         actions: [
-          TextButton(onPressed: () => pop(context), child: const Text('Cancelar')),
           TextButton(
+            onPressed: () => pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
             onPressed: () {
               pop(context);
               formaCtrl.excluir(context, forma);
             },
-            child: const Text('Excluir', style: TextStyle(color: Colors.red)),
+            child: const Text('Excluir', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),

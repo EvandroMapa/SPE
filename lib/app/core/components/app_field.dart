@@ -34,6 +34,9 @@ class AppField extends StatefulWidget {
   final bool obscure;
   final TextCapitalization? capitalization;
 
+  final bool isDense;
+  final EdgeInsetsGeometry? contentPadding;
+
   const AppField({
     this.controller,
     this.label,
@@ -61,6 +64,8 @@ class AppField extends StatefulWidget {
     this.capitalization,
     this.controllerObj,
     this.focusObj,
+    this.isDense = false,
+    this.contentPadding,
     super.key,
   });
 
@@ -102,6 +107,8 @@ class _AppFieldState extends State<AppField> {
             minLines: widget.minLines,
             decoration: InputDecoration(
               filled: true,
+              isDense: widget.isDense,
+              contentPadding: widget.contentPadding,
               fillColor:
                   widget.isDisable ? Colors.grey[400]! : Colors.transparent,
               hintText: widget.hint,

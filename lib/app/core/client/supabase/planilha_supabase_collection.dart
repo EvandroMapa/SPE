@@ -60,6 +60,20 @@ class PlanilhaSupabaseCollection {
     return inserted['id'] as String;
   }
 
+  Future<bool> estaVinculadaAPedido(String planilhaId) async {
+    try {
+      final res = await SupabaseService.client
+          .from('pedido_tecnico_elementos')
+          .select('elemento_id, elementos!inner(planilha_id)')
+          .eq('elementos.planilha_id', planilhaId)
+          .limit(1);
+      return res.isNotEmpty;
+    } catch (e) {
+      log('Supabase Error (Planilha.estaVinculada): $e');
+      return false;
+    }
+  }
+
   Future<void> atualizarPlanilha(PlanilhaModel model) async {
     await SupabaseService.client.from(name).update(model.toSupabaseMap()).eq('id', model.id);
     await fetch();
@@ -94,6 +108,13 @@ class PlanilhaSupabaseCollection {
   Future<void> excluirElemento(String elementoId) async {
     await SupabaseService.client.from('posicoes').delete().eq('elemento_id', elementoId);
     await SupabaseService.client.from('elementos').delete().eq('id', elementoId);
+    await fetch();
+  }
+
+  Future<void> atualizarElemento(ElementoModel elemento, String planilhaId) async {
+    final map = elemento.toSupabaseMap(planilhaId);
+    map.remove('id');
+    await SupabaseService.client.from('elementos').update(map).eq('id', elemento.id);
     await fetch();
   }
 
@@ -135,5 +156,12 @@ class PlanilhaSupabaseCollection {
         .update({'peso_total': pesoTotal})
         .eq('id', planilhaId);
     await fetch();
+  }
+
+  Future<void> atualizarPesoElemento(String elementoId, double pesoTotal) async {
+    await SupabaseService.client
+        .from('elementos')
+        .update({'peso_total': pesoTotal})
+        .eq('id', elementoId);
   }
 }

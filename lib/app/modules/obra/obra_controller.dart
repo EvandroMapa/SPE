@@ -52,13 +52,6 @@ class ObraController {
   }
 
   void onValid() {
-    final identificador = form.identificador.text.trim();
-    if (identificador.isEmpty) {
-      throw Exception('Identificador é obrigatório');
-    }
-    if (identificador.length > 20) {
-      throw Exception('Identificador deve ter no máximo 20 caracteres');
-    }
     if (form.descricao.text.length < 2) {
       throw Exception('Descrição deve conter no mínimo 3 caracteres');
     }
@@ -66,18 +59,29 @@ class ObraController {
       throw Exception('Selecione um status para a obra');
     }
 
-    // Validação de duplicidade — verifica todas as obras do sistema
+    // Validação do prefixo
+    final prefixo = form.prefixo.text.trim();
+    if (prefixo.isEmpty) {
+      throw Exception('Prefixo da obra é obrigatório (ex: Cliente-Obra)');
+    }
+    if (prefixo.length > 20) {
+      throw Exception('Prefixo deve ter no máximo 20 caracteres');
+    }
+    if (!RegExp(r'^[\w\-\.]+$').hasMatch(prefixo)) {
+      throw Exception('Prefixo deve conter apenas letras, números, hífen e ponto');
+    }
+
+    // Verifica duplicidade do prefixo em todas as obras do sistema
     final todasObras = BackendClient.clientes.data
         .expand((c) => c.obras)
         .toList()
       ..addAll(_obrasIrmas);
 
-    final duplicada = todasObras.any((o) =>
-        o.identificador.trim().toLowerCase() == identificador.toLowerCase() &&
+    final duplicadaPrefixo = todasObras.any((o) =>
+        o.prefixo.trim().toLowerCase() == prefixo.toLowerCase() &&
         o.id != form.id);
-
-    if (duplicada) {
-      throw Exception('Já existe uma obra com o identificador "$identificador"');
+    if (duplicadaPrefixo) {
+      throw Exception('Já existe uma obra com o prefixo "$prefixo"');
     }
   }
 }

@@ -1,11 +1,11 @@
 import 'dart:developer';
 import 'package:acoplan/app/core/client/supabase/cliente_supabase_collection.dart';
 import 'package:acoplan/app/core/client/supabase/fabricante_supabase_collection.dart';
-import 'package:acoplan/app/core/client/supabase/produto_supabase_collection.dart';
+import 'package:acoplan/app/core/client/supabase/bitola_supabase_collection.dart';
 import 'package:acoplan/app/core/client/supabase/usuario_supabase_collection.dart';
 import 'package:acoplan/app/core/client/supabase/usuario_tipo_supabase_collection.dart';
 import 'package:acoplan/app/core/client/supabase/forma_supabase_collection.dart';
-import 'package:acoplan/app/core/client/supabase/planilha_supabase_collection.dart';
+import 'package:acoplan/app/core/client/supabase/detalhamento_supabase_collection.dart';
 import 'package:acoplan/app/core/client/supabase/pedido_tecnico_supabase_collection.dart';
 
 
@@ -13,10 +13,10 @@ class AppSupabaseClient {
   static UsuarioSupabaseCollection usuarios = UsuarioSupabaseCollection();
   static UsuarioTipoSupabaseCollection usuarioTipos = UsuarioTipoSupabaseCollection();
   static ClienteSupabaseCollection clientes = ClienteSupabaseCollection();
-  static ProdutoSupabaseCollection produtos = ProdutoSupabaseCollection();
+  static BitolaSupabaseCollection bitolas = BitolaSupabaseCollection();
   static FabricanteSupabaseCollection fabricantes = FabricanteSupabaseCollection();
   static FormaSupabaseCollection formas = FormaSupabaseCollection();
-  static PlanilhaSupabaseCollection planilhas = PlanilhaSupabaseCollection();
+  static DetalhamentoSupabaseCollection detalhamentos = DetalhamentoSupabaseCollection();
   static PedidoTecnicoSupabaseCollection pedidosTecnicos = PedidoTecnicoSupabaseCollection();
 
 
@@ -26,10 +26,10 @@ class AppSupabaseClient {
       usuarioTipos.listen();
       usuarios.listen();
       clientes.listen();
-      produtos.listen();
+      bitolas.listen();
       fabricantes.listen();
       formas.listen();
-      planilhas.listen();
+      detalhamentos.listen();
       pedidosTecnicos.listen();
 
 
@@ -37,10 +37,10 @@ class AppSupabaseClient {
       await usuarioTipos.start().catchError((e) => log('Error starting usuarioTipos: $e'));
       await usuarios.start().catchError((e) => log('Error starting usuarios: $e'));
       await clientes.start().catchError((e) => log('Error starting clientes: $e'));
-      await produtos.start().catchError((e) => log('Error starting produtos: $e'));
+      await bitolas.start().catchError((e) => log('Error starting bitolas: $e'));
       await fabricantes.start().catchError((e) => log('Error starting fabricantes: $e'));
       await formas.start().catchError((e) => log('Error starting formas: $e'));
-      await planilhas.start().catchError((e) => log('Error starting planilhas: $e'));
+      await detalhamentos.start().catchError((e) => log('Error starting detalhamentos: $e'));
       await pedidosTecnicos.start().catchError((e) => log('Error starting pedidosTecnicos: $e'));
 
     } catch (e) {

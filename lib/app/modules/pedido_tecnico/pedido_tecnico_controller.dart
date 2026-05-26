@@ -1,6 +1,6 @@
 import 'package:acoplan/app/core/client/backend_client.dart';
 import 'package:acoplan/app/core/client/models/pedido_tecnico_model.dart';
-import 'package:acoplan/app/core/client/models/planilha_model.dart';
+import 'package:acoplan/app/core/client/models/detalhamento_model.dart';
 import 'package:acoplan/app/core/models/app_stream.dart';
 import 'package:acoplan/app/core/services/notification_service.dart';
 import 'package:acoplan/app/core/utils/global_resource.dart';
@@ -35,16 +35,16 @@ class PedidoTecnicoController {
     }
   }
 
-  // ── Retorna elementos da planilha com disponibilidade ─
-  List<ElementoPlanilhaViewModel> elementosComDisponibilidade(
-      PlanilhaModel planilha) {
+  // ── Retorna elementos do detalhamento com disponibilidade ─
+  List<ElementoDetalhamentoViewModel> elementosComDisponibilidade(
+      DetalhamentoModel detalhamento) {
     final ocupados = BackendClient.pedidosTecnicos.elementosEmPedidoAberto;
     // Se estamos editando um pedido, desconsiderar os elementos do próprio pedido
     final pedidoAtualId = form.id;
 
-    final lista = <ElementoPlanilhaViewModel>[];
+    final lista = <ElementoDetalhamentoViewModel>[];
 
-    for (final elem in planilha.elementos) {
+    for (final elem in detalhamento.elementos) {
       for (final nome in elem.todosNomes) {
         // Clonar o elemento com o nome específico e remover equivalentes
         final elemClonado = ElementoModel(
@@ -62,13 +62,13 @@ class PedidoTecnicoController {
             pedidoAtualId != null && pedidoOcupante?.id == pedidoAtualId;
 
         if (pedidoOcupante != null && !pertenceAoPedidoAtual) {
-          lista.add(ElementoPlanilhaViewModel(
+          lista.add(ElementoDetalhamentoViewModel(
             elemento: elemClonado,
             disponibilidade: DisponibilidadeElemento.emPedido,
             codigoPedidoOcupante: pedidoOcupante.codigo,
           ));
         } else {
-          lista.add(ElementoPlanilhaViewModel(
+          lista.add(ElementoDetalhamentoViewModel(
             elemento: elemClonado,
             disponibilidade: DisponibilidadeElemento.disponivel,
           ));
@@ -81,10 +81,10 @@ class PedidoTecnicoController {
 
   // ── Salvar (criar ou atualizar) ───────────────────────
   Future<bool> salvar() async {
-    if (form.planilhaId.isEmpty) {
+    if (form.detalhamentoId.isEmpty) {
       NotificationService.showNegative(
-        'Selecione uma planilha',
-        'Escolha a planilha antes de gerar o pedido',
+        'Selecione um detalhamento',
+        'Escolha o detalhamento antes de gerar o pedido',
         position: NotificationPosition.bottom,
       );
       return false;
@@ -131,7 +131,6 @@ class PedidoTecnicoController {
   Future<void> onDelete(BuildContext context, PedidoTecnicoModel pedido) async {
     try {
       await BackendClient.pedidosTecnicos.delete(pedido);
-      if (context.mounted) pop(context);
       NotificationService.showPositive(
         'Pedido excluído',
         'Os elementos voltaram a ficar disponíveis',

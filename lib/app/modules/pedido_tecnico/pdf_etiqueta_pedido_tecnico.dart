@@ -2,7 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:acoplan/app/core/client/models/forma_model.dart';
 import 'package:acoplan/app/core/client/models/pedido_tecnico_model.dart';
-import 'package:acoplan/app/core/client/models/planilha_model.dart';
+import 'package:acoplan/app/core/client/models/detalhamento_model.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
@@ -31,19 +31,19 @@ class PdfEtiquetaPedidoTecnico {
   // ── Gerador principal ────────────────────────────────────────────────────
   static Future<Uint8List> gerar({
     required PedidoTecnicoModel pedido,
-    required PlanilhaModel planilha,
+    required DetalhamentoModel detalhamento,
     required List<FormaModel> formasCadastradas,
   }) async {
     final pdf = pw.Document();
     for (final elem in pedido.elementos) {
-      final elemPlanilha = planilha.elementos.where((e) => e.id == elem.elementoId).firstOrNull;
-      if (elemPlanilha == null) continue;
-      for (final pos in elemPlanilha.posicoes) {
+      final elemDetalhamento = detalhamento.elementos.where((e) => e.id == elem.elementoId).firstOrNull;
+      if (elemDetalhamento == null) continue;
+      for (final pos in elemDetalhamento.posicoes) {
         final formaDef = formasCadastradas.where((f) => f.codigo == pos.formaCodigo).firstOrNull;
         pdf.addPage(pw.Page(
           pageFormat: _formato,
           margin: pw.EdgeInsets.zero,
-          build: (_) => _buildEtiqueta(pedido: pedido, elem: elem, elemPlanilha: elemPlanilha, pos: pos, formaDef: formaDef),
+          build: (_) => _buildEtiqueta(pedido: pedido, elem: elem, elemDetalhamento: elemDetalhamento, pos: pos, formaDef: formaDef),
         ));
       }
     }
@@ -54,7 +54,7 @@ class PdfEtiquetaPedidoTecnico {
   static pw.Widget _buildEtiqueta({
     required PedidoTecnicoModel pedido,
     required PedidoTecnicoElementoModel elem,
-    required ElementoModel elemPlanilha,
+    required ElementoModel elemDetalhamento,
     required PosicaoModel pos,
     FormaModel? formaDef,
   }) {
@@ -175,7 +175,7 @@ class PdfEtiquetaPedidoTecnico {
           // 7 ── RODAPÉ
           pw.SizedBox(height: 3),
           pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
-            pw.Text('Planilha ${pedido.planilhaCodigo}', style: _sMini),
+            pw.Text('Det. ${pedido.detalhamentoCodigo}', style: _sMini),
             pw.Text(id, style: _sMiniBold),
           ]),
         ],

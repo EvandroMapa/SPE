@@ -51,6 +51,7 @@ dependencies:
   printing: ^5.14.3
   google_generative_ai: ^0.4.7
   desktop_drop: ^0.7.1
+  pdfx: ^2.9.2
 
 dev_dependencies:
   flutter_test:

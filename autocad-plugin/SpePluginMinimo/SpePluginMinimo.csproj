@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <AssemblyName>SpePluginMinimo</AssemblyName>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateRuntimeConfigurationFiles>false</GenerateRuntimeConfigurationFiles>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="acmgd">
+      <HintPath>C:\Program Files\Autodesk\AutoCAD 2025\acmgd.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="accoremgd">
+      <HintPath>C:\Program Files\Autodesk\AutoCAD 2025\accoremgd.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="acdbmgd">
+      <HintPath>C:\Program Files\Autodesk\AutoCAD 2025\acdbmgd.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

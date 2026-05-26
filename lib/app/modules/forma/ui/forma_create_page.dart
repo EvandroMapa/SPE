@@ -1,6 +1,6 @@
 
 import 'package:acoplan/app/core/client/backend_client.dart';
-import 'package:acoplan/app/core/client/models/produto_model.dart';
+import 'package:acoplan/app/core/client/models/bitola_model.dart';
 import 'package:acoplan/app/core/components/app_scaffold.dart';
 import 'package:acoplan/app/core/components/h.dart';
 import 'package:acoplan/app/core/components/stream_out.dart';
@@ -329,6 +329,7 @@ class FormaCreatePage extends StatelessWidget {
           ),
           child: Row(
             children: [
+              const SizedBox(width: 52), // espaço dos botões ↑↓
               Expanded(child: Text('Trecho', style: AppCss.minimumBold)),
               Expanded(child: Text('Ângulo', style: AppCss.minimumBold)),
               Expanded(child: Text('Orientação', style: AppCss.minimumBold)),
@@ -341,19 +342,21 @@ class FormaCreatePage extends StatelessWidget {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: formulario.itens.length,
-          separatorBuilder: (_, _) => const Divider(height: 1),
+          separatorBuilder: (_, __) => const Divider(height: 1),
           itemBuilder: (context, index) {
             final item = formulario.itens[index];
+            final podeSubir  = index > 0;
+            final podeDescer = index < formulario.itens.length - 1;
             return Container(
               key: ValueKey('item_${item.trecho}'),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: Colors.white,
                 border: Border(
                   left: BorderSide(color: Colors.grey[200]!),
                   right: BorderSide(color: Colors.grey[200]!),
-                  bottom: index == formulario.itens.length - 1 
-                      ? BorderSide(color: Colors.grey[200]!) 
+                  bottom: index == formulario.itens.length - 1
+                      ? BorderSide(color: Colors.grey[200]!)
                       : BorderSide.none,
                 ),
                 borderRadius: index == formulario.itens.length - 1
@@ -362,6 +365,25 @@ class FormaCreatePage extends StatelessWidget {
               ),
               child: Row(
                 children: [
+                  // ── Botões ↑ ↓ para trocar rótulo (posição no desenho) ─
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _TrocaBtn(
+                        icon: Icons.keyboard_arrow_up,
+                        ativo: podeSubir,
+                        tooltip: 'Mover posição para cima no desenho',
+                        onTap: () => formaCtrl.trocarRotulosTrechos(index, index - 1),
+                      ),
+                      _TrocaBtn(
+                        icon: Icons.keyboard_arrow_down,
+                        ativo: podeDescer,
+                        tooltip: 'Mover posição para baixo no desenho',
+                        onTap: () => formaCtrl.trocarRotulosTrechos(index, index + 1),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 4),
                   Expanded(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -406,7 +428,7 @@ class FormaCreatePage extends StatelessWidget {
                       ),
                     ),
                   ),
-                   // ── Dropdown Grupo de Simetria ───────────────────
+                  // ── Dropdown Grupo de Simetria ───────────────────
                   SizedBox(
                     width: 64,
                     child: Center(
@@ -433,6 +455,38 @@ class FormaCreatePage extends StatelessWidget {
   }
 }
 
+/// Botão pequeno para trocar posição (rótulo) do trecho no desenho.
+class _TrocaBtn extends StatelessWidget {
+  final IconData icon;
+  final bool ativo;
+  final String tooltip;
+  final VoidCallback onTap;
+  const _TrocaBtn({required this.icon, required this.ativo, required this.tooltip, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: ativo ? tooltip : '',
+      preferBelow: false,
+      waitDuration: const Duration(milliseconds: 300),
+      child: InkWell(
+        onTap: ativo ? onTap : null,
+        borderRadius: BorderRadius.circular(4),
+        child: SizedBox(
+          width: 22,
+          height: 18,
+          child: Icon(
+            icon,
+            size: 16,
+            color: ativo ? AppColors.primaryMain : Colors.grey[300],
+          ),
+        ),
+      ),
+    );
+  }
+
+}
+
 // ── Widget de Simulação de Comprimento de Corte ──────────────────────────────
 class _SimulacaoCorte extends StatefulWidget {
   final FormaCriarModel formulario;
@@ -443,7 +497,7 @@ class _SimulacaoCorte extends StatefulWidget {
 }
 
 class _SimulacaoCorteState extends State<_SimulacaoCorte> {
-  ProdutoModel? _bitolaSelecionada;
+  BitolaModel? _bitolaSelecionada;
 
   @override
   void dispose() {
@@ -496,7 +550,7 @@ class _SimulacaoCorteState extends State<_SimulacaoCorte> {
               Text('Bitola para teste:', style: AppCss.minimumBold.setSize(12)),
               const SizedBox(height: 6),
               Builder(builder: (context) {
-                final bitolas = BackendClient.produtos.data
+                final bitolas = BackendClient.bitolas.data
                   ..sort((a, b) => a.sortIndex.compareTo(b.sortIndex));
                 if (bitolas.isEmpty) {
                   return Text('Nenhuma bitola cadastrada',
@@ -509,7 +563,7 @@ class _SimulacaoCorteState extends State<_SimulacaoCorte> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: DropdownButtonHideUnderline(
-                    child: DropdownButton<ProdutoModel>(
+                    child: DropdownButton<BitolaModel>(
                       value: _bitolaSelecionada,
                       hint: Text('Selecionar...', style: AppCss.minimumRegular.setSize(12)),
                       isDense: true,

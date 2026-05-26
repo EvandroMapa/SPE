@@ -1,7 +1,7 @@
 import 'package:acoplan/app/core/client/backend_client.dart';
 import 'package:acoplan/app/core/client/models/cliente_model.dart';
 import 'package:acoplan/app/core/client/models/pedido_tecnico_model.dart';
-import 'package:acoplan/app/core/client/models/planilha_model.dart';
+import 'package:acoplan/app/core/client/models/detalhamento_model.dart';
 import 'package:acoplan/app/core/components/app_drop_down.dart';
 import 'package:acoplan/app/core/components/app_scaffold.dart';
 import 'package:acoplan/app/core/components/stream_out.dart';
@@ -11,8 +11,11 @@ import 'package:acoplan/app/core/utils/app_css.dart';
 import 'package:acoplan/app/core/utils/global_resource.dart';
 import 'package:acoplan/app/modules/pedido_tecnico/pedido_tecnico_controller.dart';
 import 'package:acoplan/app/modules/pedido_tecnico/pedido_tecnico_view_model.dart';
+import 'package:acoplan/app/modules/pedido_tecnico/pdf_pedido_tecnico.dart';
+import 'package:acoplan/app/modules/pedido_tecnico/pdf_etiqueta_pedido_tecnico.dart';
 import 'package:flutter/material.dart';
 import 'package:overlay_support/overlay_support.dart';
+import 'package:printing/printing.dart';
 
 enum _Sec { dadosGerais, elementos }
 
@@ -32,7 +35,7 @@ class _PedidoTecnicoCreatePageState
   // Seleções de contexto
   ClienteModel? _clienteSel;
   ObraModel? _obraSel;
-  PlanilhaModel? _planilhaSel;
+  DetalhamentoModel? _detalhamentoSel;
   final _obsCtrl = TextEditingController();
 
   final Map<String, int> _elementosSelecionados = {};
@@ -55,8 +58,8 @@ class _PedidoTecnicoCreatePageState
           .firstOrNull;
       _obraSel =
           _clienteSel?.obras.where((o) => o.id == p.obraId).firstOrNull;
-      _planilhaSel = BackendClient.planilhas.data
-          .where((pl) => pl.id == p.planilhaId)
+      _detalhamentoSel = BackendClient.detalhamentos.data
+          .where((pl) => pl.id == p.detalhamentoId)
           .firstOrNull;
       for (final e in p.elementos) {
         _elementosSelecionados['${e.elementoId}_${e.elementoNome}'] = e.quantidadeSolicitada;
@@ -70,9 +73,141 @@ class _PedidoTecnicoCreatePageState
     super.dispose();
   }
 
-  List<PlanilhaModel> get _planilhasDaObra {
+  Future<void> _confirmDelete() async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Excluir Pedido Técnico'),
+        content: Text(
+            'Deseja realmente excluir o Pedido Técnico ${widget.pedido!.codigo}?\nEsta ação não poderá ser desfeita e os elementos voltarão a ficar disponíveis.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Excluir'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar == true && mounted) {
+      await BackendClient.pedidosTecnicos.delete(widget.pedido!);
+      if (mounted) {
+        pop(context);
+        NotificationService.showPositive(
+          'Pedido excluído',
+          'Os elementos voltaram a ficar disponíveis',
+          position: NotificationPosition.bottom,
+        );
+      }
+    }
+  }
+
+  void _gerarPdf({required bool completo}) async {
+    if (widget.pedido == null) return;
+    final pedido = widget.pedido!;
+    final det = BackendClient.detalhamentos.data
+        .where((p) => p.id == pedido.detalhamentoId)
+        .firstOrNull;
+
+    final pdfBytes = await PdfPedidoTecnico.gerar(
+      pedido: pedido,
+      detalhamento: det,
+      completo: completo,
+    );
+    await Printing.layoutPdf(
+      onLayout: (format) async => pdfBytes,
+      name: completo
+          ? 'PT-${pedido.codigo} - ${pedido.clienteNome} (Completo)'
+          : 'PT-${pedido.codigo} - ${pedido.clienteNome} (Resumido)',
+    );
+  }
+
+  void _gerarEtiqueta() async {
+    if (widget.pedido == null) return;
+    final pedido = widget.pedido!;
+    final det = BackendClient.detalhamentos.data
+        .where((p) => p.id == pedido.detalhamentoId)
+        .firstOrNull;
+    if (det == null) return;
+
+    final formas = BackendClient.formas.data;
+    final pdfBytes = await PdfEtiquetaPedidoTecnico.gerar(
+      pedido: pedido,
+      detalhamento: det,
+      formasCadastradas: formas,
+    );
+    await Printing.layoutPdf(
+      onLayout: (format) async => pdfBytes,
+      name: '${pedido.identificador.isNotEmpty ? pedido.identificador : 'PT-${pedido.codigo}'} - Etiquetas',
+    );
+  }
+
+  void _cancelarOuReabrir() {
+    if (widget.pedido == null) return;
+    final pedido = widget.pedido!;
+    if (pedido.isAberto) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Cancelar Pedido'),
+          content: Text(
+              'Cancelar o Pedido Técnico ${pedido.codigo}?\nOs elementos voltarão a ficar disponíveis.'),
+          actions: [
+            TextButton(
+                onPressed: () => pop(ctx),
+                child: const Text('Voltar')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.pending),
+              onPressed: () {
+                pop(ctx);
+                pedidoTecnicoCtrl.cancelar(pedido.id);
+                pop(context);
+              },
+              child: const Text('Cancelar Pedido',
+                  style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+    } else {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Reabrir Pedido'),
+          content: Text('Reabrir o Pedido Técnico ${pedido.codigo}?'),
+          actions: [
+            TextButton(
+                onPressed: () => pop(ctx),
+                child: const Text('Cancelar')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.success),
+              onPressed: () {
+                pop(ctx);
+                pedidoTecnicoCtrl.reabrir(pedido.id);
+                pop(context);
+              },
+              child: const Text('Reabrir',
+                  style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  List<DetalhamentoModel> get _detalhamentosDaObra {
     if (_clienteSel == null || _obraSel == null) return [];
-    return BackendClient.planilhas.data
+    return BackendClient.detalhamentos.data
         .where((p) =>
             p.clienteId == _clienteSel!.id &&
             p.obraId == _obraSel!.id)
@@ -124,6 +259,34 @@ class _PedidoTecnicoCreatePageState
             ),
           ),
         ),
+        actions: widget.pedido != null
+            ? [
+                Tooltip(
+                  message: widget.pedido!.isAberto
+                      ? 'Cancelar Pedido'
+                      : 'Reabrir Pedido',
+                  child: IconButton(
+                    icon: Icon(
+                      widget.pedido!.isAberto
+                          ? Icons.pause_circle_outline
+                          : Icons.play_circle_outline,
+                      color: Colors.white70,
+                      size: 20,
+                    ),
+                    onPressed: _cancelarOuReabrir,
+                  ),
+                ),
+                Tooltip(
+                  message: 'Excluir Pedido',
+                  child: IconButton(
+                    icon: const Icon(Icons.delete_outline,
+                        color: Colors.white70, size: 20),
+                    onPressed: _confirmDelete,
+                  ),
+                ),
+                const SizedBox(width: 4),
+              ]
+            : null,
         elevation: 2,
       ),
       body: StreamOut(
@@ -204,7 +367,7 @@ class _PedidoTecnicoCreatePageState
     }
 
     final elementosHabilitado =
-        form.isEdit || _planilhaSel != null;
+        form.isEdit || _detalhamentoSel != null;
 
     return Container(
       width: 60,
@@ -245,28 +408,64 @@ class _PedidoTecnicoCreatePageState
           item(_Sec.elementos, Icons.check_box_outlined, 'Elementos',
               habilitado: elementosHabilitado),
           const Spacer(),
-          if (form.isEdit)
-            Tooltip(
-              message: 'Excluir Pedido ${form.codigo}',
-              preferBelow: false,
-              child: InkWell(
-                onTap: () =>
-                    pedidoTecnicoCtrl.onDelete(context, widget.pedido!),
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: AppColors.error.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(Icons.delete_outline,
-                      size: 18, color: AppColors.error),
-                ),
-              ),
+          // ── Ações de impressão (somente ao editar) ──
+          if (form.isEdit) ...[
+            const SizedBox(height: 4),
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 14),
+              height: 1,
+              color: const Color(0xFFE2E8F0),
             ),
+            const SizedBox(height: 4),
+            _sidebarAction(
+              tooltip: 'PDF Resumido',
+              icon: Icons.summarize_outlined,
+              color: Colors.deepOrange,
+              onTap: () => _gerarPdf(completo: false),
+            ),
+            _sidebarAction(
+              tooltip: 'PDF Completo',
+              icon: Icons.picture_as_pdf_outlined,
+              color: Colors.orange,
+              onTap: () => _gerarPdf(completo: true),
+            ),
+            _sidebarAction(
+              tooltip: 'Etiquetas',
+              icon: Icons.label_outline,
+              color: const Color(0xFF7C3AED),
+              onTap: _gerarEtiqueta,
+            ),
+          ],
           const SizedBox(height: 8),
         ],
+      ),
+    );
+  }
+
+  Widget _sidebarAction({
+    required String tooltip,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      preferBelow: false,
+      waitDuration: const Duration(milliseconds: 300),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 18, color: color),
+        ),
       ),
     );
   }
@@ -275,7 +474,7 @@ class _PedidoTecnicoCreatePageState
   Widget _dadosGerais(PedidoTecnicoCreateModel form) {
     final clientes = BackendClient.clientes.data;
     final obras = _clienteSel?.obras ?? [];
-    final planilhas = _planilhasDaObra;
+    final detalhamentos = _detalhamentosDaObra;
 
     return ListView(
       padding: const EdgeInsets.all(24),
@@ -316,7 +515,7 @@ class _PedidoTecnicoCreatePageState
                 onSelect: (e) => setState(() {
                   _clienteSel = e;
                   _obraSel = null;
-                  _planilhaSel = null;
+                  _detalhamentoSel = null;
                   _elementosSelecionados.clear();
                 }),
               ),
@@ -329,20 +528,20 @@ class _PedidoTecnicoCreatePageState
                 itemLabel: (e) => e?.descricao ?? 'Selecione uma obra',
                 onSelect: (e) => setState(() {
                   _obraSel = e;
-                  _planilhaSel = null;
+                  _detalhamentoSel = null;
                   _elementosSelecionados.clear();
                 }),
               ),
               const SizedBox(height: 16),
               // Planilha
-              AppDropDown<PlanilhaModel?>(
-                label: 'Planilha',
-                item: _planilhaSel,
-                itens: planilhas,
+              AppDropDown<DetalhamentoModel?>(
+                label: 'Detalhamento',
+                item: _detalhamentoSel,
+                itens: detalhamentos,
                 itemLabel: (e) =>
-                    e != null ? 'Planilha ${e.codigo}' : 'Selecione uma planilha',
+                    e != null ? 'Detalhamento ${e.codigo}' : 'Selecione um detalhamento',
                 onSelect: (e) => setState(() {
-                  _planilhaSel = e;
+                  _detalhamentoSel = e;
                   _elementosSelecionados.clear();
                 }),
               ),
@@ -369,14 +568,14 @@ class _PedidoTecnicoCreatePageState
         ),
         const SizedBox(height: 16),
         InkWell(
-          onTap: _planilhaSel != null
+          onTap: _detalhamentoSel != null
               ? () => setState(() => _sel = _Sec.elementos)
               : null,
           child: Container(
             height: 44,
             width: double.infinity,
             decoration: BoxDecoration(
-              color: _planilhaSel != null
+              color: _detalhamentoSel != null
                   ? AppColors.primaryMain
                   : Colors.grey[300],
               borderRadius: BorderRadius.circular(12),
@@ -398,18 +597,18 @@ class _PedidoTecnicoCreatePageState
 
   // ═══ ELEMENTOS — PAINEL DUPLO ═══════════════════════════
   Widget _elementosView(PedidoTecnicoCreateModel form) {
-    final planilha = _planilhaSel;
-    if (planilha == null) {
-      return const Center(child: Text('Selecione uma planilha primeiro'));
+    final detalhamento = _detalhamentoSel;
+    if (detalhamento == null) {
+      return const Center(child: Text('Selecione um detalhamento primeiro'));
     }
 
     final elementosVm =
-        pedidoTecnicoCtrl.elementosComDisponibilidade(planilha);
+        pedidoTecnicoCtrl.elementosComDisponibilidade(detalhamento);
 
     // Separar: esquerda mostra não-selecionados + parcialmente selecionados
-    final disponiveis = <ElementoPlanilhaViewModel>[];
-    final bloqueados = <ElementoPlanilhaViewModel>[];
-    final selecionados = <ElementoPlanilhaViewModel>[];
+    final disponiveis = <ElementoDetalhamentoViewModel>[];
+    final bloqueados = <ElementoDetalhamentoViewModel>[];
+    final selecionados = <ElementoDetalhamentoViewModel>[];
 
     for (final vm in elementosVm) {
       final qtdeSel = _elementosSelecionados['${vm.elemento.id}_${vm.elemento.nome}'];
@@ -479,7 +678,7 @@ class _PedidoTecnicoCreatePageState
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(14),
                 child: _painelSelecionados(
-                    selecionados, planilha, form, totalSelecionados),
+                    selecionados, detalhamento, form, totalSelecionados),
               ),
             ),
           ),
@@ -490,9 +689,9 @@ class _PedidoTecnicoCreatePageState
 
   // ═══ PAINEL ESQUERDO — DISPONÍVEIS ════════════════════
   Widget _painelDisponiveis(
-    List<ElementoPlanilhaViewModel> disponiveis,
-    List<ElementoPlanilhaViewModel> bloqueados,
-    List<ElementoPlanilhaViewModel> todosVm,
+    List<ElementoDetalhamentoViewModel> disponiveis,
+    List<ElementoDetalhamentoViewModel> bloqueados,
+    List<ElementoDetalhamentoViewModel> todosVm,
   ) {
     final apenasDisponiveis = disponiveis
         .where((vm) => !_elementosSelecionados.containsKey(_chave(vm.elemento)))
@@ -532,7 +731,7 @@ class _PedidoTecnicoCreatePageState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Elementos da Planilha',
+                      'Elementos do Detalhamento',
                       style: AppCss.mediumBold.setSize(15),
                     ),
                     const SizedBox(height: 2),
@@ -710,8 +909,8 @@ class _PedidoTecnicoCreatePageState
 
   // ═══ PAINEL DIREITO — SELECIONADOS ════════════════════
   Widget _painelSelecionados(
-    List<ElementoPlanilhaViewModel> selecionados,
-    PlanilhaModel planilha,
+    List<ElementoDetalhamentoViewModel> selecionados,
+    DetalhamentoModel detalhamento,
     PedidoTecnicoCreateModel form,
     int totalSelecionados,
   ) {
@@ -978,7 +1177,7 @@ class _PedidoTecnicoCreatePageState
   }
 
   // ── Tile: Elemento Disponível ──────────────────────────
-  Widget _tileDisponivel(ElementoPlanilhaViewModel vm) {
+  Widget _tileDisponivel(ElementoDetalhamentoViewModel vm) {
     final elem = vm.elemento;
     return InkWell(
       onTap: () {
@@ -1066,7 +1265,7 @@ class _PedidoTecnicoCreatePageState
   }
 
   // ── Tile: Parcialmente alocado (restante na esquerda) ──
-  Widget _tileParcial(ElementoPlanilhaViewModel vm) {
+  Widget _tileParcial(ElementoDetalhamentoViewModel vm) {
     final elem = vm.elemento;
     final qtdeSel = _elementosSelecionados[_chave(elem)] ?? 0;
     final restante = elem.quantidade - qtdeSel;
@@ -1193,7 +1392,7 @@ class _PedidoTecnicoCreatePageState
                   Text(
                     somarAoExistente
                         ? '$max peça(s) restante(s) de ${elem.quantidade}'
-                        : 'Total na planilha: ${elem.quantidade}',
+                        : 'Total no detalhamento: ${elem.quantidade}',
                     style: AppCss.minimumRegular
                         .setColor(Colors.grey[500]!)
                         .setSize(12),
@@ -1346,7 +1545,7 @@ class _PedidoTecnicoCreatePageState
   }
 
   // ── Tile: Elemento Bloqueado ───────────────────────────
-  Widget _tileBloqueado(ElementoPlanilhaViewModel vm) {
+  Widget _tileBloqueado(ElementoDetalhamentoViewModel vm) {
     final elem = vm.elemento;
     return Tooltip(
       message: 'Em uso no Pedido Técnico ${vm.codigoPedidoOcupante}',
@@ -1421,7 +1620,7 @@ class _PedidoTecnicoCreatePageState
   }
 
   // ── Tile: Elemento Selecionado ─────────────────────────
-  Widget _tileSelecionado(ElementoPlanilhaViewModel vm) {
+  Widget _tileSelecionado(ElementoDetalhamentoViewModel vm) {
     final elem = vm.elemento;
     final qtdeSolicitada = _elementosSelecionados[_chave(elem)] ?? elem.quantidade;
     final pesoUnitario =
@@ -1566,8 +1765,8 @@ class _PedidoTecnicoCreatePageState
   }
 
   Future<void> _gerarPedido() async {
-    final planilha = _planilhaSel;
-    if (planilha == null || _salvando) return;
+    final detalhamento = _detalhamentoSel;
+    if (detalhamento == null || _salvando) return;
 
     setState(() => _salvando = true);
 
@@ -1578,10 +1777,10 @@ class _PedidoTecnicoCreatePageState
       form.obraId = _obraSel?.id ?? '';
       form.obraNome = _obraSel?.descricao ?? '';
       form.obraPrefixo = _obraSel?.prefixo ?? '';
-      form.planilhaId = planilha.id;
-      form.planilhaCodigo = planilha.codigo;
+      form.detalhamentoId = detalhamento.id;
+      form.detalhamentoCodigo = detalhamento.codigo;
       form.observacao = _obsCtrl.text.trim();
-      form.elementosSelecionados = planilha.elementos
+      form.elementosSelecionados = detalhamento.elementos
           .expand((e) {
             return e.todosNomes.map((nome) => ElementoModel(
                   id: e.id,

@@ -1,3 +1,4 @@
+import 'package:acoplan/app/app_controller.dart';
 import 'package:acoplan/app/core/components/app_scaffold.dart';
 import 'package:acoplan/app/core/components/divisor.dart';
 import 'package:acoplan/app/core/utils/app_colors.dart';
@@ -6,6 +7,7 @@ import 'package:acoplan/app/core/utils/global_resource.dart';
 import 'package:acoplan/app/modules/usuario/ui/usuario_tipo_page.dart';
 import 'package:acoplan/app/modules/usuario/ui/usuarios_page.dart';
 import 'package:acoplan/app/modules/backup/ui/backups_page.dart';
+import 'package:acoplan/app/modules/config/plugin_cad_page.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -70,6 +72,14 @@ class ConfigPage extends StatelessWidget {
               // Placeholder
             },
           ),
+          const Divisor(),
+          _buildItem(
+            context,
+            Icons.architecture_rounded,
+            'Plugin AutoCAD',
+            'Cores e marcações de importação',
+            () => push(context, const PluginCadPage()),
+          ),
         ],
       ),
     );
@@ -116,7 +126,7 @@ class ConfigPage extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Informe sua chave da API do Google Gemini (AI Studio). Ela será usada para processar os PDFs de projetos no robô de planilhamento.',
+                'Informe sua chave da API do Google Gemini (AI Studio). Ela será usada para processar os PDFs de projetos no robô de detalhamento.',
                 style: AppCss.minimumRegular.setColor(Colors.grey[700]!),
               ),
               const SizedBox(height: 16),
@@ -137,7 +147,10 @@ class ConfigPage extends StatelessWidget {
             ),
             ElevatedButton(
               onPressed: () async {
-                await prefs.setString('gemini_api_key', controller.text.trim());
+                final apiKey = controller.text.trim();
+                await prefs.setString('gemini_api_key', apiKey);
+                await appCtrl.saveGlobalApiKey(apiKey);
+
                 if (context.mounted) Navigator.pop(context);
               },
               style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryMain),

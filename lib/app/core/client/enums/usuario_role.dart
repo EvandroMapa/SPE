@@ -1,7 +1,7 @@
 enum UsuarioRole {
   administrador,
   coordenador,
-  planilhador,
+  detalhador,
   vendedor,
   cliente,
   operador,
@@ -14,8 +14,8 @@ extension UsuarioRoleExtension on UsuarioRole {
         return 'Administrador';
       case UsuarioRole.coordenador:
         return 'Coordenador';
-      case UsuarioRole.planilhador:
-        return 'Planilhador';
+      case UsuarioRole.detalhador:
+        return 'Detalhador';
       case UsuarioRole.vendedor:
         return 'Vendedor';
       case UsuarioRole.cliente:

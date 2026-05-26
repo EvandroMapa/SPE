@@ -1,9 +1,9 @@
 import 'package:acoplan/app/modules/cliente/ui/clientes_page.dart';
 import 'package:acoplan/app/modules/fabricante/ui/fabricantes_page.dart';
 import 'package:acoplan/app/modules/pedido_tecnico/ui/pedidos_tecnicos_page.dart';
-import 'package:acoplan/app/modules/produto/ui/produtos_page.dart';
-import 'package:acoplan/app/modules/planilha/ui/planilhas_page.dart';
-import 'package:acoplan/app/modules/planilhamento_ia/ui/planilhamento_ia_page.dart';
+import 'package:acoplan/app/modules/bitola/ui/bitolas_page.dart';
+import 'package:acoplan/app/modules/detalhamento/ui/detalhamentos_page.dart';
+import 'package:acoplan/app/modules/detalhamento_ia/ui/detalhamento_ia_page.dart';
 import 'package:acoplan/app/modules/forma/ui/formas_page.dart';
 
 import 'package:acoplan/app/core/utils/app_colors.dart';
@@ -12,7 +12,7 @@ import 'package:flutter/material.dart';
 
 enum AppModule {
   projetos,
-  planilhamentoIA,
+  detalhamentoIA,
   pedidosTecnicos,
   cliente,
   fabricantes,
@@ -24,9 +24,9 @@ extension AppModuleExt on AppModule {
   Widget get widget {
     switch (this) {
       case AppModule.projetos:
-        return const PlanilhasPage();
-      case AppModule.planilhamentoIA:
-        return const PlanilhamentoIaPage();
+        return const DetalhamentosPage();
+      case AppModule.detalhamentoIA:
+        return const DetalhamentoIaPage();
       case AppModule.pedidosTecnicos:
         return const PedidosTecnicosPage();
       case AppModule.cliente:
@@ -36,7 +36,7 @@ extension AppModuleExt on AppModule {
       case AppModule.formas:
         return const FormasPage();
       case AppModule.bitolas:
-        return const ProdutosPage();
+        return const BitolasPage();
 
     }
   }
@@ -59,7 +59,7 @@ extension AppModuleExt on AppModule {
     switch (this) {
       case AppModule.projetos:
         return Icons.architecture_outlined;
-      case AppModule.planilhamentoIA:
+      case AppModule.detalhamentoIA:
         return Icons.auto_awesome_outlined;
       case AppModule.pedidosTecnicos:
         return Icons.description_outlined;
@@ -78,9 +78,9 @@ extension AppModuleExt on AppModule {
   String get label {
     switch (this) {
       case AppModule.projetos:
-        return 'Planilha Manual';
-      case AppModule.planilhamentoIA:
-        return 'Planilhamento IA';
+        return 'Projetos';
+      case AppModule.detalhamentoIA:
+        return 'Detalhamento por I.A.';
       case AppModule.pedidosTecnicos:
         return 'Pedidos Técnicos';
       case AppModule.cliente:

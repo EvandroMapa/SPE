@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 import 'package:acoplan/app/core/client/models/pedido_tecnico_model.dart';
-import 'package:acoplan/app/core/client/models/planilha_model.dart';
+import 'package:acoplan/app/core/client/models/detalhamento_model.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -8,7 +8,7 @@ import 'package:pdf/widgets.dart' as pw;
 class PdfPedidoTecnico {
   static Future<Uint8List> gerar({
     required PedidoTecnicoModel pedido,
-    PlanilhaModel? planilha,
+    DetalhamentoModel? detalhamento,
     required bool completo,
   }) async {
     final pdf = pw.Document();
@@ -147,8 +147,8 @@ class PdfPedidoTecnico {
                             'Obra', pedido.obraNome, estLabel, estValor),
                         pw.SizedBox(height: 6),
                         _infoLinhasPdf(
-                          'Planilha',
-                          'Nº ${pedido.planilhaCodigo}',
+                          'Detalhamento',
+                          'Nº ${pedido.detalhamentoCodigo}',
                           estLabel,
                           estValor,
                         ),
@@ -260,11 +260,11 @@ class PdfPedidoTecnico {
                       ? PdfColors.white
                       : const PdfColor.fromInt(0xFFF8FAFC);
 
-                  // Posições da planilha para esse elemento
-                  final elemPlanilha = planilha?.elementos
+                  // Posições do detalhamento para esse elemento
+                  final elemDetalhamento = detalhamento?.elementos
                       .where((e) => e.id == elem.elementoId)
                       .firstOrNull;
-                  final nPosicoes = elemPlanilha?.posicoes.length ?? 0;
+                  final nPosicoes = elemDetalhamento?.posicoes.length ?? 0;
 
                   return pw.TableRow(
                     decoration: pw.BoxDecoration(color: bg),
@@ -323,7 +323,7 @@ class PdfPedidoTecnico {
             ),
 
             // ── Detalhes de posições (só relatório completo) ──
-            if (completo && planilha != null) ...[
+            if (completo && detalhamento != null) ...[
               pw.SizedBox(height: 24),
               pw.Text(
                 'DETALHAMENTO POR ELEMENTO',
@@ -336,10 +336,10 @@ class PdfPedidoTecnico {
               ),
               pw.SizedBox(height: 10),
               ...pedido.elementos.map((elem) {
-                final elemPlanilha = planilha.elementos
+                final elemDetalhamento = detalhamento.elementos
                     .where((e) => e.id == elem.elementoId)
                     .firstOrNull;
-                if (elemPlanilha == null) return pw.SizedBox();
+                if (elemDetalhamento == null) return pw.SizedBox();
 
                 return pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -364,7 +364,7 @@ class PdfPedidoTecnico {
                             ),
                           ),
                           pw.Text(
-                            'Qtde: ${elem.elementoQuantidade}  •  ${elemPlanilha.posicoes.length} posição(ões)  •  ${elem.pesoTotal > 0 ? '${elem.pesoTotal.toStringAsFixed(2)} kg' : '—'}',
+                            'Qtde: ${elem.elementoQuantidade}  •  ${elemDetalhamento.posicoes.length} posição(ões)  •  ${elem.pesoTotal > 0 ? '${elem.pesoTotal.toStringAsFixed(2)} kg' : '—'}',
                             style: pw.TextStyle(
                               fontSize: 9,
                               color: PdfColors.grey300,
@@ -373,7 +373,7 @@ class PdfPedidoTecnico {
                         ],
                       ),
                     ),
-                    if (elemPlanilha.posicoes.isNotEmpty)
+                    if (elemDetalhamento.posicoes.isNotEmpty)
                       pw.Table(
                         columnWidths: {
                           0: const pw.FixedColumnWidth(40),
@@ -399,7 +399,7 @@ class PdfPedidoTecnico {
                                   align: pw.Alignment.center),
                             ],
                           ),
-                          ...elemPlanilha.posicoes.map((pos) =>
+                          ...elemDetalhamento.posicoes.map((pos) =>
                               pw.TableRow(
                                 children: [
                                   _celTbl('${pos.posicao}', estCelula,

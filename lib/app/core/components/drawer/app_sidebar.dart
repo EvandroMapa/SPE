@@ -68,7 +68,6 @@ class AppSideBar extends StatelessWidget {
                   return Column(
                     children: [
                       _buildItem(AppModule.projetos, currentModule),
-                      _buildItem(AppModule.planilhamentoIA, currentModule),
                       _buildItem(AppModule.pedidosTecnicos, currentModule),
                       _buildItem(AppModule.cliente, currentModule),
                       _buildItem(AppModule.bitolas, currentModule),

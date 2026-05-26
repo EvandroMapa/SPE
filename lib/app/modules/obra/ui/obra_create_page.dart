@@ -1,3 +1,4 @@
+import 'package:acoplan/app/core/client/backend_client.dart';
 import 'package:acoplan/app/core/client/models/cliente_model.dart';
 import 'package:acoplan/app/core/components/app_drop_down.dart';
 import 'package:acoplan/app/core/components/app_field.dart';
@@ -180,6 +181,34 @@ class _ObraCreatePageState extends State<ObraCreatePage> {
   Widget _buildDeleteButton() {
     return InkWell(
       onTap: () async {
+        // Verificar se a obra tem projeto vinculado
+        final obraId = widget.obra?.id ?? '';
+        final temProjeto = BackendClient.detalhamentos.data
+            .any((d) => d.obraId == obraId);
+        if (temProjeto) {
+          if (!mounted) return;
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              icon: Icon(Icons.info_outline, size: 40, color: Colors.orange[700]),
+              title: Text('Exclusão Bloqueada', textAlign: TextAlign.center, style: AppCss.mediumBold),
+              content: Text(
+                'Esta obra não pode ser excluída pois possui projetos (detalhamentos) vinculados.\n\nExclua os projetos antes de excluir a obra.',
+                style: AppCss.smallRegular,
+                textAlign: TextAlign.center,
+              ),
+              actionsAlignment: MainAxisAlignment.center,
+              actions: [
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryMain),
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('Entendi', style: AppCss.smallBold.setColor(Colors.white)),
+                ),
+              ],
+            ),
+          );
+          return;
+        }
         if (!await showConfirmDialog(
           'Excluir obra?',
           'Todos os dados da obra serão apagados do sistema',

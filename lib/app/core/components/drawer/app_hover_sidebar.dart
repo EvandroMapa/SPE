@@ -70,14 +70,8 @@ class _AppHoverSidebarState extends State<AppHoverSidebar> {
                     children: [
                       _buildItem(
                         icon: Icons.architecture_outlined,
-                        label: 'Planilha Manual',
+                        label: 'Projetos',
                         module: AppModule.projetos,
-                        current: current,
-                      ),
-                      _buildItem(
-                        icon: Icons.auto_awesome_outlined,
-                        label: 'Planilhamento IA',
-                        module: AppModule.planilhamentoIA,
                         current: current,
                       ),
                       _buildItem(

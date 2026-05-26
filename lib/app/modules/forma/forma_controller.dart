@@ -150,6 +150,16 @@ class FormaController {
     formularioStream.update();
   }
 
+  /// Troca apenas os RÓTULOS (T1, T2...) de dois trechos na lista,
+  /// sem mover os itens nem alterar a geometria do desenho.
+  void trocarRotulosTrechos(int indexA, int indexB) {
+    if (indexA == indexB) return;
+    final rotuloA = formulario.itens[indexA].trecho;
+    formulario.itens[indexA].trecho = formulario.itens[indexB].trecho;
+    formulario.itens[indexB].trecho = rotuloA;
+    formularioStream.update();
+  }
+
   /// Substitui o desenho atual por um círculo especial.
   /// O diâmetro é representado por um único trecho do tipo 'circulo'.
   void adicionarCirculo() {

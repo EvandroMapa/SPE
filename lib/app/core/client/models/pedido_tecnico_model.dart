@@ -5,8 +5,8 @@ class PedidoTecnicoModel {
   final String id;
   final int codigo;
   final String identificador; // ex: 'Evandro-Sitio.001'
-  final String planilhaId;
-  final int planilhaCodigo;
+  final String detalhamentoId;
+  final int detalhamentoCodigo;
   final String clienteId;
   final String clienteNome;
   final String obraId;
@@ -20,8 +20,8 @@ class PedidoTecnicoModel {
     required this.id,
     required this.codigo,
     required this.identificador,
-    required this.planilhaId,
-    required this.planilhaCodigo,
+    required this.detalhamentoId,
+    required this.detalhamentoCodigo,
     required this.clienteId,
     required this.clienteNome,
     required this.obraId,
@@ -36,8 +36,8 @@ class PedidoTecnicoModel {
         id: HashService.get,
         codigo: 0,
         identificador: '',
-        planilhaId: '',
-        planilhaCodigo: 0,
+        detalhamentoId: '',
+        detalhamentoCodigo: 0,
         clienteId: '',
         clienteNome: '',
         obraId: '',
@@ -61,9 +61,9 @@ class PedidoTecnicoModel {
       id: map['id'] ?? '',
       codigo: int.tryParse(map['codigo']?.toString() ?? '0') ?? 0,
       identificador: map['identificador'] ?? '',
-      planilhaId: map['planilha_id'] ?? '',
-      planilhaCodigo:
-          int.tryParse(map['planilha_codigo']?.toString() ?? '0') ?? 0,
+      detalhamentoId: map['detalhamento_id'] ?? '',
+      detalhamentoCodigo:
+          int.tryParse(map['detalhamento_codigo']?.toString() ?? '0') ?? 0,
       clienteId: map['cliente_id'] ?? '',
       clienteNome: map['cliente_nome'] ?? '',
       obraId: map['obra_id'] ?? '',
@@ -82,8 +82,8 @@ class PedidoTecnicoModel {
   Map<String, dynamic> toSupabaseMap() {
     final map = <String, dynamic>{
       'identificador': identificador,
-      'planilha_id': planilhaId,
-      'planilha_codigo': planilhaCodigo,
+      'detalhamento_id': detalhamentoId,
+      'detalhamento_codigo': detalhamentoCodigo,
       'cliente_id': clienteId,
       'cliente_nome': clienteNome,
       'obra_id': obraId,
@@ -100,8 +100,8 @@ class PedidoTecnicoModel {
         'id': id,
         'codigo': codigo,
         'identificador': identificador,
-        'planilha_id': planilhaId,
-        'planilha_codigo': planilhaCodigo,
+        'detalhamento_id': detalhamentoId,
+        'detalhamento_codigo': detalhamentoCodigo,
         'cliente_id': clienteId,
         'cliente_nome': clienteNome,
         'obra_id': obraId,
@@ -118,8 +118,8 @@ class PedidoTecnicoModel {
     String? id,
     int? codigo,
     String? identificador,
-    String? planilhaId,
-    int? planilhaCodigo,
+    String? detalhamentoId,
+    int? detalhamentoCodigo,
     String? clienteId,
     String? clienteNome,
     String? obraId,
@@ -133,8 +133,8 @@ class PedidoTecnicoModel {
         id: id ?? this.id,
         codigo: codigo ?? this.codigo,
         identificador: identificador ?? this.identificador,
-        planilhaId: planilhaId ?? this.planilhaId,
-        planilhaCodigo: planilhaCodigo ?? this.planilhaCodigo,
+        detalhamentoId: detalhamentoId ?? this.detalhamentoId,
+        detalhamentoCodigo: detalhamentoCodigo ?? this.detalhamentoCodigo,
         clienteId: clienteId ?? this.clienteId,
         clienteNome: clienteNome ?? this.clienteNome,
         obraId: obraId ?? this.obraId,

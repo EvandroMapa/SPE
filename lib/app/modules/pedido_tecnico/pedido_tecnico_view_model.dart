@@ -1,4 +1,4 @@
-import 'package:acoplan/app/core/client/models/planilha_model.dart';
+import 'package:acoplan/app/core/client/models/detalhamento_model.dart';
 import 'package:acoplan/app/core/client/models/pedido_tecnico_model.dart';
 
 /// ViewModel de criação/edição de pedido técnico
@@ -13,8 +13,8 @@ class PedidoTecnicoCreateModel {
   String obraId = '';
   String obraNome = '';
   String obraPrefixo = ''; // prefixo da obra — usado no identificador do PT
-  String planilhaId = '';
-  int planilhaCodigo = 0;
+  String detalhamentoId = '';
+  int detalhamentoCodigo = 0;
 
   String observacao = '';
 
@@ -41,8 +41,8 @@ class PedidoTecnicoCreateModel {
         identificador: identificador?.isNotEmpty == true
             ? identificador!
             : _gerarIdentificador(codigo),
-        planilhaId: planilhaId,
-        planilhaCodigo: planilhaCodigo,
+        detalhamentoId: detalhamentoId,
+        detalhamentoCodigo: detalhamentoCodigo,
         clienteId: clienteId,
         clienteNome: clienteNome,
         obraId: obraId,
@@ -73,8 +73,8 @@ class PedidoTecnicoCreateModel {
     m.clienteNome = pedido.clienteNome;
     m.obraId = pedido.obraId;
     m.obraNome = pedido.obraNome;
-    m.planilhaId = pedido.planilhaId;
-    m.planilhaCodigo = pedido.planilhaCodigo;
+    m.detalhamentoId = pedido.detalhamentoId;
+    m.detalhamentoCodigo = pedido.detalhamentoCodigo;
     m.observacao = pedido.observacao;
     m.elementosSelecionados = pedido.elementos
         .map((e) => ElementoSelecionadoModel(
@@ -89,7 +89,7 @@ class PedidoTecnicoCreateModel {
   }
 }
 
-/// Representa um elemento da planilha na tela de criação de pedido
+/// Representa um elemento do detalhamento na tela de criação de pedido
 class ElementoSelecionadoModel {
   final String elementoId;
   final String nome;
@@ -122,14 +122,14 @@ class ElementoSelecionadoModel {
       );
 }
 
-/// Estado de disponibilidade de um elemento da planilha
+/// Estado de disponibilidade de um elemento do detalhamento
 enum DisponibilidadeElemento {
   disponivel,
   emPedido,
 }
 
-/// Representa um elemento da planilha com metadados de disponibilidade
-class ElementoPlanilhaViewModel {
+/// Representa um elemento do detalhamento com metadados de disponibilidade
+class ElementoDetalhamentoViewModel {
   final ElementoModel elemento;
   final DisponibilidadeElemento disponibilidade;
 
@@ -139,7 +139,7 @@ class ElementoPlanilhaViewModel {
   bool get estaDisponivel =>
       disponibilidade == DisponibilidadeElemento.disponivel;
 
-  ElementoPlanilhaViewModel({
+  ElementoDetalhamentoViewModel({
     required this.elemento,
     required this.disponibilidade,
     this.codigoPedidoOcupante,

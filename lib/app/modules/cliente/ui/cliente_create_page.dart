@@ -1,3 +1,4 @@
+import 'package:acoplan/app/core/client/backend_client.dart';
 import 'package:acoplan/app/core/client/models/cliente_model.dart';
 import 'package:acoplan/app/core/components/app_field.dart';
 import 'package:acoplan/app/core/components/app_multiple_registers.dart';
@@ -7,6 +8,7 @@ import 'package:acoplan/app/core/components/stream_out.dart';
 import 'package:acoplan/app/core/dialogs/confirm_dialog.dart';
 import 'package:acoplan/app/core/enums/obra_status.dart';
 import 'package:acoplan/app/core/models/text_controller.dart';
+import 'package:acoplan/app/core/services/notification_service.dart';
 import 'package:acoplan/app/core/utils/app_colors.dart';
 import 'package:acoplan/app/core/utils/app_css.dart';
 import 'package:acoplan/app/core/utils/global_resource.dart';
@@ -54,6 +56,69 @@ class _ClienteCreatePageState extends State<ClienteCreatePage> {
     clienteCtrl.init(widget.cliente);
     _initialSnapshot = _snapshot(clienteCtrl.form);
     super.initState();
+  }
+
+  Future<void> _confirmDelete() async {
+    // Verificar se alguma obra do cliente tem projeto vinculado
+    final obrasIds = widget.cliente!.obras.map((o) => o.id).toSet();
+    final obrasComProjeto = BackendClient.detalhamentos.data
+        .where((d) => obrasIds.contains(d.obraId))
+        .toList();
+
+    if (obrasComProjeto.isNotEmpty) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          icon: Icon(Icons.info_outline, size: 40, color: Colors.orange[700]),
+          title: Text('Exclusão Bloqueada', textAlign: TextAlign.center, style: AppCss.mediumBold),
+          content: Text(
+            'Este cliente não pode ser excluído pois possui obras com projetos (detalhamentos) vinculados.\n\nExclua os projetos antes de excluir o cliente.',
+            style: AppCss.smallRegular,
+            textAlign: TextAlign.center,
+          ),
+          actionsAlignment: MainAxisAlignment.center,
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryMain),
+              onPressed: () => Navigator.pop(context),
+              child: Text('Entendi', style: AppCss.smallBold.setColor(Colors.white)),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Excluir Cliente'),
+        content: Text('Deseja realmente excluir o cliente ${widget.cliente!.nome}?\nEsta ação não poderá ser desfeita.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Excluir'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar == true && mounted) {
+      await BackendClient.clientes.delete(widget.cliente!);
+      if (mounted) {
+        pop(context);
+        NotificationService.showPositive('Sucesso', 'Cliente excluído');
+      }
+    }
   }
 
   @override
@@ -201,7 +266,7 @@ class _ClienteCreatePageState extends State<ClienteCreatePage> {
       message: 'Excluir ${form.nome.text}',
       preferBelow: false,
       child: InkWell(
-        onTap: () => clienteCtrl.onDelete(context, widget.cliente!),
+        onTap: _confirmDelete,
         borderRadius: BorderRadius.circular(8),
         child: Container(
           width: 36,
@@ -378,7 +443,9 @@ class _ClienteCreatePageState extends State<ClienteCreatePage> {
               children: [
                 Expanded(
                   child: Text(
-                    e.descricao,
+                    e.prefixo.isNotEmpty
+                        ? '${e.prefixo} - ${e.descricao}'
+                        : e.descricao,
                     style: AppCss.minimumBold.setSize(14),
                     overflow: TextOverflow.ellipsis,
                   ),

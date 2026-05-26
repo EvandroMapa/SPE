@@ -57,7 +57,7 @@ class BackupController {
       'usuarios',
       'clientes',
       'fabricantes',
-      'produtos',
+      'bitolas',
     ];
 
     // Exibe diálogo de progresso (não modal, com stream)
@@ -119,7 +119,7 @@ class BackupController {
         'usuarios',
         'clientes',
         'fabricantes',
-        'produtos',
+        'bitolas',
       ];
 
       final Map<String, dynamic> data = {};
@@ -192,7 +192,7 @@ class BackupController {
           jsonDecode(utf8.decode(result.files.first.bytes!));
 
       final deleteOrder = [
-        'produtos',
+        'bitolas',
         'fabricantes',
         'clientes',
         'usuarios',

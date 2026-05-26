@@ -1,4 +1,3 @@
-import 'package:acoplan/app/core/client/backend_client.dart';
 import 'package:acoplan/app/core/client/models/pedido_tecnico_model.dart';
 import 'package:acoplan/app/core/components/app_scaffold.dart';
 import 'package:acoplan/app/core/components/empty_data.dart';
@@ -8,11 +7,8 @@ import 'package:acoplan/app/core/utils/app_css.dart';
 import 'package:acoplan/app/core/utils/global_resource.dart';
 import 'package:acoplan/app/modules/pedido_tecnico/pedido_tecnico_controller.dart';
 import 'package:acoplan/app/modules/pedido_tecnico/ui/pedido_tecnico_create_page.dart';
-import 'package:acoplan/app/modules/pedido_tecnico/pdf_pedido_tecnico.dart';
-import 'package:acoplan/app/modules/pedido_tecnico/pdf_etiqueta_pedido_tecnico.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:printing/printing.dart';
 
 class PedidosTecnicosPage extends StatefulWidget {
   const PedidosTecnicosPage({super.key});
@@ -99,7 +95,7 @@ class _PedidosTecnicosPageState extends State<PedidosTecnicosPage> {
                           p.obraNome.toLowerCase().contains(query) ||
                           p.codigo.toString().contains(query) ||
                           p.identificador.toLowerCase().contains(query) ||
-                          p.planilhaCodigo.toString().contains(query);
+                          p.detalhamentoCodigo.toString().contains(query);
                   final matchStatus = _statusFiltro == 'todos' ||
                       p.status == _statusFiltro;
                   return matchText && matchStatus;
@@ -118,15 +114,7 @@ class _PedidosTecnicosPageState extends State<PedidosTecnicosPage> {
                   itemBuilder: (context, index) {
                     return _PedidoCard(
                       pedido: filtered[index],
-                      onEditar: () => _openForm(filtered[index]),
-                      onExcluir: () => _confirmDelete(filtered[index]),
-                      onPdfCompleto: () =>
-                          _gerarPdf(filtered[index], completo: true),
-                      onPdfResumido: () =>
-                          _gerarPdf(filtered[index], completo: false),
-                      onEtiqueta: () => _gerarEtiqueta(filtered[index]),
-                      onCancelar: () =>
-                          _cancelarOuReabrir(filtered[index]),
+                      onTap: () => _openForm(filtered[index]),
                     );
                   },
                 );
@@ -169,120 +157,6 @@ class _PedidosTecnicosPageState extends State<PedidosTecnicosPage> {
   void _openForm(PedidoTecnicoModel? pedido) async {
     await push(context, PedidoTecnicoCreatePage(pedido: pedido));
   }
-
-  void _gerarEtiqueta(PedidoTecnicoModel pedido) async {
-    final planilha = BackendClient.planilhas.data
-        .where((p) => p.id == pedido.planilhaId)
-        .firstOrNull;
-    if (planilha == null) return;
-
-    final formas = BackendClient.formas.data;
-    final pdfBytes = await PdfEtiquetaPedidoTecnico.gerar(
-      pedido: pedido,
-      planilha: planilha,
-      formasCadastradas: formas,
-    );
-    await Printing.layoutPdf(
-      onLayout: (format) async => pdfBytes,
-      name: '${pedido.identificador.isNotEmpty ? pedido.identificador : 'PT-${pedido.codigo}'} - Etiquetas',
-    );
-  }
-
-  void _gerarPdf(PedidoTecnicoModel pedido,
-      {required bool completo}) async {
-    final planilha = BackendClient.planilhas.data
-        .where((p) => p.id == pedido.planilhaId)
-        .firstOrNull;
-
-    final pdfBytes = await PdfPedidoTecnico.gerar(
-      pedido: pedido,
-      planilha: planilha,
-      completo: completo,
-    );
-    await Printing.layoutPdf(
-      onLayout: (format) async => pdfBytes,
-      name: completo
-          ? 'PT-${pedido.codigo} - ${pedido.clienteNome} (Completo)'
-          : 'PT-${pedido.codigo} - ${pedido.clienteNome} (Resumido)',
-    );
-  }
-
-  void _cancelarOuReabrir(PedidoTecnicoModel pedido) {
-    if (pedido.isAberto) {
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Cancelar Pedido'),
-          content: Text(
-              'Cancelar o Pedido Técnico ${pedido.codigo}?\nOs elementos voltarão a ficar disponíveis.'),
-          actions: [
-            TextButton(
-                onPressed: () => pop(ctx),
-                child: const Text('Voltar')),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.pending),
-              onPressed: () {
-                pop(ctx);
-                pedidoTecnicoCtrl.cancelar(pedido.id);
-              },
-              child: const Text('Cancelar Pedido',
-                  style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        ),
-      );
-    } else {
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Reabrir Pedido'),
-          content: Text('Reabrir o Pedido Técnico ${pedido.codigo}?'),
-          actions: [
-            TextButton(
-                onPressed: () => pop(ctx),
-                child: const Text('Cancelar')),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.success),
-              onPressed: () {
-                pop(ctx);
-                pedidoTecnicoCtrl.reabrir(pedido.id);
-              },
-              child: const Text('Reabrir',
-                  style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        ),
-      );
-    }
-  }
-
-  void _confirmDelete(PedidoTecnicoModel pedido) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Excluir Pedido Técnico'),
-        content: Text(
-            'Deseja realmente excluir o Pedido Técnico ${pedido.codigo}?\nOs elementos voltarão a ficar disponíveis.'),
-        actions: [
-          TextButton(
-              onPressed: () => pop(ctx),
-              child: const Text('Cancelar')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.error),
-            onPressed: () {
-              pop(ctx);
-              pedidoTecnicoCtrl.onDelete(context, pedido);
-            },
-            child: const Text('Excluir',
-                style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -290,21 +164,11 @@ class _PedidosTecnicosPageState extends State<PedidosTecnicosPage> {
 // ─────────────────────────────────────────────────────────────
 class _PedidoCard extends StatelessWidget {
   final PedidoTecnicoModel pedido;
-  final VoidCallback onEditar;
-  final VoidCallback onExcluir;
-  final VoidCallback onPdfCompleto;
-  final VoidCallback onPdfResumido;
-  final VoidCallback onEtiqueta;
-  final VoidCallback onCancelar;
+  final VoidCallback onTap;
 
   const _PedidoCard({
     required this.pedido,
-    required this.onEditar,
-    required this.onExcluir,
-    required this.onPdfCompleto,
-    required this.onPdfResumido,
-    required this.onEtiqueta,
-    required this.onCancelar,
+    required this.onTap,
   });
 
   @override
@@ -315,7 +179,10 @@ class _PedidoCard extends StatelessWidget {
     final statusLabel = statusAberto ? 'ABERTO' : 'CANCELADO';
     final fmt = DateFormat('dd/MM/yyyy');
 
-    return Container(
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -416,61 +283,13 @@ class _PedidoCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Planilha ${pedido.planilhaCodigo} • ${fmt.format(pedido.criadoEm.toLocal())}',
+                        'Det. ${pedido.detalhamentoCodigo} • ${fmt.format(pedido.criadoEm.toLocal())}',
                         style: AppCss.minimumRegular
                             .setColor(Colors.grey[500]!)
                             .setSize(11),
                       ),
                     ],
                   ),
-                ),
-                // Ações
-                _actionBtn(
-                  tooltip: 'PDF Completo',
-                  icon: Icons.picture_as_pdf_outlined,
-                  color: Colors.orange,
-                  onTap: onPdfCompleto,
-                ),
-                const SizedBox(width: 6),
-                _actionBtn(
-                  tooltip: 'PDF Resumido',
-                  icon: Icons.summarize_outlined,
-                  color: Colors.deepOrange,
-                  onTap: onPdfResumido,
-                ),
-                const SizedBox(width: 6),
-                _actionBtn(
-                  tooltip: 'Etiquetas (1 por posição)',
-                  icon: Icons.label_outline,
-                  color: const Color(0xFF7C3AED),
-                  onTap: onEtiqueta,
-                ),
-                const SizedBox(width: 6),
-                _actionBtn(
-                  tooltip: statusAberto
-                      ? 'Cancelar Pedido'
-                      : 'Reabrir Pedido',
-                  icon: statusAberto
-                      ? Icons.pause_circle_outline
-                      : Icons.play_circle_outline,
-                  color: statusAberto
-                      ? AppColors.pending
-                      : AppColors.success,
-                  onTap: onCancelar,
-                ),
-                const SizedBox(width: 6),
-                _actionBtn(
-                  tooltip: 'Editar',
-                  icon: Icons.edit_outlined,
-                  color: AppColors.primaryMain,
-                  onTap: onEditar,
-                ),
-                const SizedBox(width: 6),
-                _actionBtn(
-                  tooltip: 'Excluir',
-                  icon: Icons.delete_outline,
-                  color: AppColors.error,
-                  onTap: onExcluir,
                 ),
               ],
             ),
@@ -523,31 +342,9 @@ class _PedidoCard extends StatelessWidget {
           ),
         ],
       ),
+      ),
     );
   }
-
-  Widget _actionBtn({
-    required String tooltip,
-    required IconData icon,
-    required Color color,
-    required VoidCallback onTap,
-  }) =>
-      Tooltip(
-        message: tooltip,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(8),
-          child: Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, size: 16, color: color),
-          ),
-        ),
-      );
 
   Widget _infoRow(IconData icon, String text, {bool italic = false}) =>
       Row(

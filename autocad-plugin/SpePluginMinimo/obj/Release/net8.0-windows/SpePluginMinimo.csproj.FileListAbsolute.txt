@@ -1,0 +1,13 @@
+D:\DESENVOLVIMENTO\SPE\autocad-plugin\SpePluginMinimo\obj\Release\net8.0-windows\SpePluginMinimo.csproj.AssemblyReference.cache
+D:\DESENVOLVIMENTO\SPE\autocad-plugin\SpePluginMinimo\obj\Release\net8.0-windows\SpePluginMinimo.GeneratedMSBuildEditorConfig.editorconfig
+D:\DESENVOLVIMENTO\SPE\autocad-plugin\SpePluginMinimo\obj\Release\net8.0-windows\SpePluginMinimo.AssemblyInfoInputs.cache
+D:\DESENVOLVIMENTO\SPE\autocad-plugin\SpePluginMinimo\obj\Release\net8.0-windows\SpePluginMinimo.AssemblyInfo.cs
+D:\DESENVOLVIMENTO\SPE\autocad-plugin\SpePluginMinimo\obj\Release\net8.0-windows\SpePluginMinimo.csproj.CoreCompileInputs.cache
+D:\DESENVOLVIMENTO\SPE\autocad-plugin\SpePluginMinimo\obj\Release\net8.0-windows\SpePluginMinimo.sourcelink.json
+D:\DESENVOLVIMENTO\SPE\autocad-plugin\SpePluginMinimo\bin\Release\net8.0-windows\SpePluginMinimo.deps.json
+D:\DESENVOLVIMENTO\SPE\autocad-plugin\SpePluginMinimo\bin\Release\net8.0-windows\SpePluginMinimo.dll
+D:\DESENVOLVIMENTO\SPE\autocad-plugin\SpePluginMinimo\bin\Release\net8.0-windows\SpePluginMinimo.pdb
+D:\DESENVOLVIMENTO\SPE\autocad-plugin\SpePluginMinimo\obj\Release\net8.0-windows\SpePluginMinimo.dll
+D:\DESENVOLVIMENTO\SPE\autocad-plugin\SpePluginMinimo\obj\Release\net8.0-windows\refint\SpePluginMinimo.dll
+D:\DESENVOLVIMENTO\SPE\autocad-plugin\SpePluginMinimo\obj\Release\net8.0-windows\SpePluginMinimo.pdb
+D:\DESENVOLVIMENTO\SPE\autocad-plugin\SpePluginMinimo\obj\Release\net8.0-windows\ref\SpePluginMinimo.dll

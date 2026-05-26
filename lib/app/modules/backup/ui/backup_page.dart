@@ -32,7 +32,7 @@ class _BackupPageState extends State<BackupPage> {
         'usuarios': BackendClient.usuarios.data.map((e) => e.toMap()).toList(),
         'perfis': BackendClient.usuarioTipos.data.map((e) => e.toSupabaseMap()).toList(),
         'clientes': BackendClient.clientes.data.map((e) => e.toMap()).toList(),
-        'produtos': BackendClient.produtos.data.map((e) => e.toMap()).toList(),
+        'bitolas': BackendClient.bitolas.data.map((e) => e.toMap()).toList(),
         'fabricantes': BackendClient.fabricantes.data.map((e) => e.toMap()).toList(),
       };
 
@@ -81,7 +81,7 @@ class _BackupPageState extends State<BackupPage> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Faça o download de todos os registros do sistema (Usuários, Perfis, Clientes, Produtos e Fabricantes) em formato JSON seguro.',
+                'Faça o download de todos os registros do sistema (Usuários, Perfis, Clientes, Bitolas e Fabricantes) em formato JSON seguro.',
                 style: AppCss.mediumRegular.setColor(AppColors.neutralDark),
                 textAlign: TextAlign.center,
               ),

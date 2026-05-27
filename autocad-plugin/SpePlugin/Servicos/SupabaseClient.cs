@@ -155,11 +155,9 @@ namespace SpePlugin.Servicos
         private List<Dictionary<string, object?>> Get(string endpoint)
         {
             var request = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl}/{endpoint}");
-            var response = _http.Send(request);
+            var response = _http.SendAsync(request).GetAwaiter().GetResult();
             response.EnsureSuccessStatusCode();
-            using var stream = response.Content.ReadAsStream();
-            using var reader = new System.IO.StreamReader(stream);
-            var json = reader.ReadToEnd();
+            var json = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
             return DeserializeList(json);
         }
 
@@ -168,11 +166,9 @@ namespace SpePlugin.Servicos
             var json = JsonSerializer.Serialize(dados);
             var request = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/{endpoint}");
             request.Content = new StringContent(json, Encoding.UTF8, "application/json");
-            var response = _http.Send(request);
+            var response = _http.SendAsync(request).GetAwaiter().GetResult();
             response.EnsureSuccessStatusCode();
-            using var stream = response.Content.ReadAsStream();
-            using var reader = new System.IO.StreamReader(stream);
-            var responseJson = reader.ReadToEnd();
+            var responseJson = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
 
             var lista = DeserializeList(responseJson);
             return lista.Count > 0 ? lista[0] : null;
@@ -181,16 +177,16 @@ namespace SpePlugin.Servicos
         private void Patch(string endpoint, Dictionary<string, object?> dados)
         {
             var json = JsonSerializer.Serialize(dados);
-            var request = new HttpRequestMessage(HttpMethod.Patch, $"{BaseUrl}/{endpoint}");
+            var request = new HttpRequestMessage(new HttpMethod("PATCH"), $"{BaseUrl}/{endpoint}");
             request.Content = new StringContent(json, Encoding.UTF8, "application/json");
-            var response = _http.Send(request);
+            var response = _http.SendAsync(request).GetAwaiter().GetResult();
             response.EnsureSuccessStatusCode();
         }
 
         private void Delete(string endpoint)
         {
             var request = new HttpRequestMessage(HttpMethod.Delete, $"{BaseUrl}/{endpoint}");
-            var response = _http.Send(request);
+            var response = _http.SendAsync(request).GetAwaiter().GetResult();
             response.EnsureSuccessStatusCode();
         }
 

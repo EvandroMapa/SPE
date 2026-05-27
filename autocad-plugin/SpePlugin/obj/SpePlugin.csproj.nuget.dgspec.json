@@ -13,10 +13,12 @@
         "packagesPath": "C:\\Users\\evandromapa\\.nuget\\packages\\",
         "outputPath": "d:\\DESENVOLVIMENTO\\SPE\\autocad-plugin\\SpePlugin\\obj\\",
         "projectStyle": "PackageReference",
+        "crossTargeting": true,
         "configFilePaths": [
           "C:\\Users\\evandromapa\\AppData\\Roaming\\NuGet\\NuGet.Config"
         ],
         "originalTargetFrameworks": [
+          "net48",
           "net8.0-windows"
         ],
         "sources": {
@@ -25,6 +27,10 @@
         "frameworks": {
           "net8.0-windows7.0": {
             "targetAlias": "net8.0-windows",
+            "projectReferences": {}
+          },
+          "net48": {
+            "targetAlias": "net48",
             "projectReferences": {}
           }
         },
@@ -59,6 +65,22 @@
             }
           },
           "runtimeIdentifierGraphPath": "C:\\dotnet\\sdk\\8.0.421/PortableRuntimeIdentifierGraph.json"
+        },
+        "net48": {
+          "targetAlias": "net48",
+          "dependencies": {
+            "Microsoft.NETFramework.ReferenceAssemblies": {
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[1.0.3, )",
+              "autoReferenced": true
+            },
+            "System.Text.Json": {
+              "target": "Package",
+              "version": "[8.0.5, )"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\dotnet\\sdk\\8.0.421\\RuntimeIdentifierGraph.json"
         }
       }
     }

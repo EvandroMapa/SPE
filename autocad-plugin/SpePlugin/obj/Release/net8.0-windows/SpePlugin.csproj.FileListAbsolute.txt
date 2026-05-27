@@ -1,0 +1,12 @@
+d:\DESENVOLVIMENTO\SPE\autocad-plugin\SpePlugin\bin\Release\net8.0-windows\SpePlugin.dll
+d:\DESENVOLVIMENTO\SPE\autocad-plugin\SpePlugin\bin\Release\net8.0-windows\SpePlugin.pdb
+d:\DESENVOLVIMENTO\SPE\autocad-plugin\SpePlugin\obj\Release\net8.0-windows\SpePlugin.csproj.AssemblyReference.cache
+d:\DESENVOLVIMENTO\SPE\autocad-plugin\SpePlugin\obj\Release\net8.0-windows\SpePlugin.GeneratedMSBuildEditorConfig.editorconfig
+d:\DESENVOLVIMENTO\SPE\autocad-plugin\SpePlugin\obj\Release\net8.0-windows\SpePlugin.AssemblyInfoInputs.cache
+d:\DESENVOLVIMENTO\SPE\autocad-plugin\SpePlugin\obj\Release\net8.0-windows\SpePlugin.AssemblyInfo.cs
+d:\DESENVOLVIMENTO\SPE\autocad-plugin\SpePlugin\obj\Release\net8.0-windows\SpePlugin.csproj.CoreCompileInputs.cache
+d:\DESENVOLVIMENTO\SPE\autocad-plugin\SpePlugin\obj\Release\net8.0-windows\SpePlugin.sourcelink.json
+d:\DESENVOLVIMENTO\SPE\autocad-plugin\SpePlugin\obj\Release\net8.0-windows\SpePlugin.dll
+d:\DESENVOLVIMENTO\SPE\autocad-plugin\SpePlugin\obj\Release\net8.0-windows\refint\SpePlugin.dll
+d:\DESENVOLVIMENTO\SPE\autocad-plugin\SpePlugin\obj\Release\net8.0-windows\SpePlugin.pdb
+d:\DESENVOLVIMENTO\SPE\autocad-plugin\SpePlugin\obj\Release\net8.0-windows\ref\SpePlugin.dll

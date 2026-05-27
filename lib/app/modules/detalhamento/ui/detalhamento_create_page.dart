@@ -92,7 +92,6 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
   void _atualizarCompCtrls(FormaModel? forma, {PosicaoCreateModel? posicao}) {
     for (final c in _compCtrls) { c.dispose(); }
     for (final f in _compFns) { f.dispose(); }
-    _posicaoSelecionada = posicao;
     if (forma == null) { _compCtrls = []; _compFns = []; return; }
     _compCtrls = List.generate(forma.itens.length, (i) {
       final trecho = forma.itens[i].trecho;
@@ -210,6 +209,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
   bool _equivalentesExpandidos = true;
   bool _importacaoPendente = false;
   bool _salvandoImportacao = false;
+  bool _elementoModificado = false;
 
   // Posição form
   final TextController _pNum = TextController();
@@ -220,6 +220,8 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
   final _fnForma = FocusNode();
   BitolaModel? _pBitola;
   FormaModel? _pForma;
+  String? _posicaoFocadaId;
+  bool _editandoPosicao = false;
 
 
   @override
@@ -228,6 +230,17 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
     if (!widget.skipInit) {
       detalhamentoCtrl.init(widget.detalhamento);
     }
+    // Detectar modificações nos campos do elemento
+    _eNome.controller.addListener(() {
+      if (_editandoIdx != -1 && !_elementoModificado) {
+        setState(() => _elementoModificado = true);
+      }
+    });
+    _eQtde.controller.addListener(() {
+      if (_editandoIdx != -1 && !_elementoModificado) {
+        setState(() => _elementoModificado = true);
+      }
+    });
     
     // Preencher IDs do banco para elementos existentes
     if (widget.detalhamento != null) {
@@ -236,22 +249,15 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
       }
     }
 
-    // Auto-selecionar primeiro elemento e primeira posição ao editar
+    // Selecionar primeiro elemento ao editar (sem entrar em edição)
     if (widget.detalhamento != null) {
       if (detalhamentoCtrl.form.elementos.isNotEmpty) {
         _sel = _Sec.elementos;
         _elemIdx = 0;
         final primeiroElem = detalhamentoCtrl.form.elementos[0];
+        _ultimaPosCount = primeiroElem.posicoes.length;
         if (primeiroElem.posicoes.isNotEmpty) {
-          final primeiraPosicao = primeiroElem.posicoes[0];
-          _pNum.text = primeiraPosicao.posicao.text;
-          _pBitola = primeiraPosicao.bitolaSelecionada;
-          _bitolaCtrl.text = primeiraPosicao.bitolaSelecionada?.nome ?? '';
-          _pForma = primeiraPosicao.formaSelecionada;
-          _formaCtrl.text = primeiraPosicao.formaSelecionada?.codigo ?? '';
-          _pQtde.text = primeiraPosicao.qtde.text;
-          _atualizarCompCtrls(primeiraPosicao.formaSelecionada, posicao: primeiraPosicao);
-          _formaSelecionada = primeiraPosicao.formaSelecionada;
+          _posicaoFocadaId = primeiroElem.posicoes.first.id;
         }
       }
     }
@@ -625,16 +631,11 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
               final e = form.elementos[lastIdx];
               setState(() {
                 _elemIdx = lastIdx;
-                _editandoIdx = lastIdx;
-                _eNome.text = e.nome.text;
-                _eQtde.text = e.quantidade.text;
-                _equivalentesTemp = List.from(e.elementosEquivalentes);
-                _eEquiv.text = '';
-                _equivalentesExpandidos = false;
+                _ultimaPosCount = e.posicoes.length;
+                if (e.posicoes.isNotEmpty) {
+                  _posicaoFocadaId = e.posicoes.first.id;
+                }
               });
-              if (e.posicoes.isNotEmpty) {
-                _selecionarPosicao(e.posicoes.first);
-              }
             });
           }
           // Corrigir _elemIdx se fora de bounds (ex: elemento deletado via plugin)
@@ -663,18 +664,13 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
               if (!mounted) return;
               setState(() {
                 _elemIdx = novoIdx;
-                _editandoIdx = novoIdx;
-                _eNome.text = e.nome.text;
-                _eQtde.text = e.quantidade.text;
-                _equivalentesTemp = List.from(e.elementosEquivalentes);
-                _eEquiv.text = '';
-                _equivalentesExpandidos = false;
                 _posicaoSelecionada = null;
+                _posicaoFocadaId = null;
                 _formaSelecionada = null;
                 _ultimaPosCount = e.posicoes.length;
               });
               if (e.posicoes.isNotEmpty) {
-                _selecionarPosicao(e.posicoes.last);
+                _focarPosicao(e.posicoes.first);
               }
               // Auto-scroll para o novo elemento
               if (_elemScrollCtrl.hasClients) {
@@ -702,7 +698,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                   final pos = curElem.posicoes.where((p) => p.id == lastPosId).firstOrNull
                       ?? (curElem.posicoes.isNotEmpty ? curElem.posicoes.last : null);
                   if (pos != null) {
-                    _selecionarPosicao(pos);
+                    _focarPosicao(pos);
                   }
                   // Auto-scroll para a última posição
                   if (_posScrollCtrl.hasClients) {
@@ -752,13 +748,13 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                         _compCtrls[k].text = novoTexto;
                       }
                     }
-                    // Só sincroniza campos do formulário se o usuário NÃO está editando
+                    // Só sincroniza campos do formulário se estiver em modo edição
                     final formEmEdicao = _posicaoModificada
                         || _pNum.focus.hasFocus
                         || _pQtde.focus.hasFocus
                         || _fnBitola.hasFocus
                         || _fnForma.hasFocus;
-                    if (!formEmEdicao) {
+                    if (_editandoPosicao && !formEmEdicao) {
                       _pNum.text = posAtualizada.posicao.text;
                       _pQtde.text = posAtualizada.qtde.text;
                       if (posAtualizada.bitolaSelecionada != null) {
@@ -1294,6 +1290,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                         onTap: () {
                           setState(() {
                             _editandoIdx = -1;
+                            _elementoModificado = false;
                             _eNome.text = ''; _eQtde.text = ''; _eEquiv.text = '';
                             _equivalentesTemp.clear();
                             _equivalentesExpandidos = true;
@@ -1354,25 +1351,21 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                 itemBuilder: (_, i) {
                 final e = form.elementos[i]; final on = i == _elemIdx;
                 return InkWell(
-                  onTap: () {
+                  onTap: () async {
+                    if (!await _verificarEdicaoPendente()) return;
                     setState(() {
                       _elemIdx = i;
-                      _editandoIdx = i;
-                      _eNome.text = e.nome.text;
-                      _eQtde.text = e.quantidade.text;
-                      _equivalentesTemp = List.from(e.elementosEquivalentes);
-                      _eEquiv.text = '';
-                      _equivalentesExpandidos = false;
-                      _ultimaPosCount = e.posicoes.length; // evitar auto-scroll
+                      _ultimaPosCount = e.posicoes.length;
                     });
-                    // Auto-selecionar primeira posição do elemento
-                    if (e.posicoes.isNotEmpty) {
-                      _selecionarPosicao(e.posicoes.first);
-                    } else {
-                      _limparPos();
-                      _atualizarCompCtrls(null);
-                      setState(() => _formaSelecionada = null);
-                    }
+                    // Limpa seleção de posição (apenas mostra a lista)
+                    _limparPos();
+                    _atualizarCompCtrls(null);
+                    setState(() {
+                      _posicaoSelecionada = null;
+                      _posicaoFocadaId = null;
+                      _editandoPosicao = false;
+                      _formaSelecionada = null;
+                    });
                   },
                   borderRadius: BorderRadius.circular(12),
                   child: AnimatedContainer(duration: const Duration(milliseconds: 150),
@@ -1419,45 +1412,66 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                              if (!_isRO) InkWell(onTap: () async {
-                                if (await showConfirmDialog('Excluir elemento?', 'Posições serão removidas.')) {
-                                  setState(() => _excluindoElementoIdx = i);
-                                  try {
-                                    final elemId = _elementoDbIds[i];
-                                    if (elemId != null && elemId.length == 36) {
-                                      await detalhamentoCtrl.excluirElemento(elemId);
+                              if (!_isRO) ...[                                InkWell(onTap: () async {
+                                  if (!await _verificarEdicaoPendente()) return;
+                                  setState(() {
+                                    _elemIdx = i;
+                                    _editandoIdx = i;
+                                    _elementoModificado = false;
+                                    _eNome.text = e.nome.text;
+                                    _eQtde.text = e.quantidade.text;
+                                    _equivalentesTemp = List.from(e.elementosEquivalentes);
+                                    _eEquiv.text = '';
+                                    _equivalentesExpandidos = false;
+                                  });
+                                }, borderRadius: BorderRadius.circular(6),
+                                  child: Tooltip(message: 'Editar elemento', preferBelow: false,
+                                    child: Icon(Icons.edit_outlined, size: 14, color: Colors.white.withValues(alpha: 0.5)),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                InkWell(onTap: () async {
+                                  if (await showConfirmDialog('Excluir elemento?', 'Posições serão removidas.')) {
+                                    setState(() => _excluindoElementoIdx = i);
+                                    try {
+                                      final elemId = _elementoDbIds[i];
+                                      if (elemId != null && elemId.length == 36) {
+                                        await detalhamentoCtrl.excluirElemento(elemId);
+                                      }
+                                      _elemIdx = -1;
+                                      _editandoIdx = -1;
+                                      _elementoModificado = false;
+                                      _posicaoSelecionada = null;
+                                      _elementoDbIds.clear();
+                                      final formAtual = detalhamentoCtrl.form;
+                                      for (int j = 0; j < formAtual.elementos.length; j++) {
+                                        final id = formAtual.elementos[j].id;
+                                        if (id.isNotEmpty) _elementoDbIds[j] = id;
+                                      }
+                                      _eNome.text = ''; _eQtde.text = ''; _eEquiv.text = '';
+                                      _equivalentesTemp.clear();
+                                      _limparPos();
+                                      _atualizarCompCtrls(null);
+                                      setState(() {
+                                        _formaSelecionada = null;
+                                        _posicaoModificada = false;
+                                        _excluindoElementoIdx = -1;
+                                      });
+                                    } catch (_) {
+                                      setState(() => _excluindoElementoIdx = -1);
                                     }
-                                    // fetch() dentro de excluirElemento já reconstruiu o form
-                                    _elemIdx = -1;
-                                    _editandoIdx = -1;
-                                    _posicaoSelecionada = null;
-                                    _elementoDbIds.clear();
-                                    final formAtual = detalhamentoCtrl.form;
-                                    for (int j = 0; j < formAtual.elementos.length; j++) {
-                                      final id = formAtual.elementos[j].id;
-                                      if (id.isNotEmpty) _elementoDbIds[j] = id;
-                                    }
-                                    _eNome.text = ''; _eQtde.text = ''; _eEquiv.text = '';
-                                    _equivalentesTemp.clear();
-                                    _limparPos();
-                                    _atualizarCompCtrls(null);
-                                    setState(() {
-                                      _formaSelecionada = null;
-                                      _posicaoModificada = false;
-                                      _excluindoElementoIdx = -1;
-                                    });
-                                  } catch (_) {
-                                    setState(() => _excluindoElementoIdx = -1);
                                   }
-                                }
-                              }, borderRadius: BorderRadius.circular(6),
-                                child: _excluindoElementoIdx == i
-                                    ? const SizedBox(
-                                        width: 16, height: 16,
-                                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white70),
-                                      )
-                                    : Icon(Icons.delete_outline, size: 16, color: Colors.white.withValues(alpha: 0.5)),
-                              ),
+                                }, borderRadius: BorderRadius.circular(6),
+                                  child: _excluindoElementoIdx == i
+                                      ? const SizedBox(
+                                          width: 16, height: 16,
+                                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white70),
+                                        )
+                                      : Tooltip(message: 'Excluir elemento', preferBelow: false,
+                                          child: Icon(Icons.delete_outline, size: 16, color: Colors.white.withValues(alpha: 0.5)),
+                                        ),
+                                ),
+                              ],
                             ],
                           ),
                         ),
@@ -1521,7 +1535,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
     _atualizarCompCtrls(null);
     setState(() {
       _elemIdx = idx;
-      _editandoIdx = -1;
+      _editandoIdx = -1; _elementoModificado = false;
       _equivalentesExpandidos = true;
       _formaSelecionada = null;
     });
@@ -1562,7 +1576,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
     elem.elementosEquivalentes = List.from(_equivalentesTemp);
     
     setState(() {
-      _editandoIdx = -1;
+      _editandoIdx = -1; _elementoModificado = false;
       _equivalentesExpandidos = true;
       _eNome.text = ''; _eQtde.text = ''; _eEquiv.text = '';
       _equivalentesTemp.clear();
@@ -1595,20 +1609,25 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   style: AppCss.smallRegular,
-                  readOnly: _posicaoSelecionada != null,
+                  readOnly: _editandoPosicao,
                   decoration: InputDecoration(
                     isDense: true,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                    filled: _posicaoSelecionada != null,
-                    fillColor: _posicaoSelecionada != null ? Colors.grey[100] : null,
-                    suffixIcon: _posicaoSelecionada != null
+                    filled: _editandoPosicao,
+                    fillColor: _editandoPosicao ? Colors.grey[100] : null,
+                    suffixIcon: _editandoPosicao
                       ? IconButton(
                           icon: const Icon(Icons.clear, size: 16),
                           onPressed: () {
                             _limparPos();
                             _atualizarCompCtrls(null);
-                            setState(() => _formaSelecionada = null);
+                            setState(() {
+                              _formaSelecionada = null;
+                              _posicaoSelecionada = null;
+                              _posicaoFocadaId = null;
+                              _editandoPosicao = false;
+                            });
                           },
                         )
                       : null,
@@ -1707,13 +1726,13 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                 separatorBuilder: (_, __) => const SizedBox(height: 4),
                 itemBuilder: (_, i) {
                 final pRaw = elem.posicoes[i]; // ordem de inserção
-                final on = _posicaoSelecionada?.id == pRaw.id;
+                final on = (_posicaoFocadaId ?? _posicaoSelecionada?.id) == pRaw.id;
                 // Usar dados locais (mais recentes) quando é a posição selecionada
-                final p = on && _posicaoSelecionada != null ? _posicaoSelecionada! : pRaw;
+                final p = (_posicaoSelecionada?.id == pRaw.id) && _posicaoSelecionada != null ? _posicaoSelecionada! : pRaw;
                 return InkWell(
                   key: ValueKey(p.id),
                   onTap: () {
-                    _selecionarPosicao(p);
+                    _focarPosicao(p);
                   },
                   borderRadius: BorderRadius.circular(12),
                   child: AnimatedContainer(
@@ -1774,27 +1793,37 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                                 style: AppCss.minimumBold.setColor(Colors.white).setSize(13),
                               ),
                               const Spacer(),
-                              if (!_isRO) InkWell(
-                                onTap: () async {
-                                  if (await showConfirmDialog('Excluir posição?', 'Posição ${p.posicao.text} será removida.')) {
-                                    final posId = p.id;
-                                    // Se a posição excluída é a selecionada, limpa tudo
-                                    if (_posicaoSelecionada == p || _posicaoSelecionada?.id == posId) {
-                                      _posicaoSelecionada = null;
-                                      _atualizarCompCtrls(null);
-                                      _limparPos();
-                                      setState(() => _formaSelecionada = null);
+                              if (!_isRO) ...[                                InkWell(
+                                  onTap: () => _selecionarPosicao(p),
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: Tooltip(message: 'Editar posição', preferBelow: false,
+                                    child: Icon(Icons.edit_outlined, size: 14, color: Colors.white.withValues(alpha: 0.5)),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                InkWell(
+                                  onTap: () async {
+                                    if (await showConfirmDialog('Excluir posição?', 'Posição ${p.posicao.text} será removida.')) {
+                                      final posId = p.id;
+                                      if (_posicaoSelecionada == p || _posicaoSelecionada?.id == posId) {
+                                        _posicaoSelecionada = null;
+                                        _atualizarCompCtrls(null);
+                                        _limparPos();
+                                        setState(() => _formaSelecionada = null);
+                                      }
+                                      elem.posicoes.remove(p);
+                                      detalhamentoCtrl.formStream.update();
+                                      _atualizarPesoElementoAtual();
+                                      _atualizarPesoTotal(detalhamentoCtrl.form);
+                                      if (posId.length == 36) await detalhamentoCtrl.excluirPosicao(posId);
                                     }
-                                    elem.posicoes.remove(p);
-                                    detalhamentoCtrl.formStream.update();
-                                    _atualizarPesoElementoAtual();
-                                    _atualizarPesoTotal(detalhamentoCtrl.form);
-                                    if (posId.length == 36) await detalhamentoCtrl.excluirPosicao(posId);
-                                  }
-                                },
-                                borderRadius: BorderRadius.circular(6),
-                                child: Icon(Icons.delete_outline, size: 16, color: Colors.white.withValues(alpha: 0.5)),
-                              ),
+                                  },
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: Tooltip(message: 'Excluir posição', preferBelow: false,
+                                    child: Icon(Icons.delete_outline, size: 16, color: Colors.white.withValues(alpha: 0.5)),
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                         ),
@@ -2222,6 +2251,9 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
       }
       _atualizarPesoElementoAtual();
       _atualizarPesoTotal(detalhamentoCtrl.form);
+      // Sai do modo edição mas mantém foco no card (trechos visíveis)
+      _limparPos();
+      _focarPosicao(posExistente);
       return;
     }
     final n = PosicaoCreateModel();
@@ -2233,10 +2265,9 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
     elem.posicoes.add(n);
     _limparPos();
 
-    // Seleciona a posição ANTES de atualizar a stream
-    // (evita que o auto-select do StreamOut recrie os controllers e quebre o foco)
-    _selecionarPosicao(n);
-    _ultimaPosCount = elem.posicoes.length; // sincroniza contador para o sync não re-selecionar
+    // Foca a posição recém-adicionada (sem entrar em edição)
+    _focarPosicao(n);
+    _ultimaPosCount = elem.posicoes.length;
 
     detalhamentoCtrl.formStream.update();
     // Auto-scroll para a nova posição
@@ -2279,6 +2310,75 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
     _atualizarPesoTotal(detalhamentoCtrl.form);
   }
 
+  /// Verifica se há edição pendente (posição ou elemento) e pergunta se deseja descartar.
+  Future<bool> _verificarEdicaoPendente() async {
+    // Verifica edição de posição
+    if (_editandoPosicao && _posicaoModificada) {
+      final descartar = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Posição com alterações'),
+          content: const Text('A posição tem alterações não salvas. Deseja descartar?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Continuar editando'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700], foregroundColor: Colors.white),
+              child: const Text('Descartar'),
+            ),
+          ],
+        ),
+      );
+      if (!(descartar ?? false)) return false;
+    }
+    // Verifica edição de elemento
+    if (_editandoIdx != -1 && _elementoModificado) {
+      final descartar = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Elemento com alterações'),
+          content: const Text('O elemento tem alterações não salvas. Deseja descartar?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Continuar editando'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700], foregroundColor: Colors.white),
+              child: const Text('Descartar'),
+            ),
+          ],
+        ),
+      );
+      if (!(descartar ?? false)) return false;
+      // Descartou: reseta modo edição do elemento
+      setState(() { _editandoIdx = -1; _elementoModificado = false; });
+      _eNome.text = ''; _eQtde.text = '';
+    }
+    return true;
+  }
+
+  /// Foca na posição sem preencher os campos de edição (clique no card)
+  Future<void> _focarPosicao(PosicaoCreateModel p) async {
+    if (!await _verificarEdicaoPendente()) return;
+    _atualizarCompCtrls(p.formaSelecionada, posicao: p);
+    _pNum.text = ''; _pQtde.text = ''; _bitolaCtrl.text = ''; _formaCtrl.text = '';
+    setState(() {
+      _posicaoSelecionada = p;
+      _posicaoFocadaId = p.id;
+      _editandoPosicao = false;
+      _pBitola = null;
+      _pForma = null;
+      _formaSelecionada = p.formaSelecionada;
+      _posicaoModificada = false;
+    });
+  }
+
+  /// Seleciona e preenche os campos de edição (botão lápis)
   void _selecionarPosicao(PosicaoCreateModel p) {
     _pNum.text = p.posicao.text;
     _pBitola = p.bitolaSelecionada;
@@ -2289,6 +2389,8 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
     _atualizarCompCtrls(p.formaSelecionada, posicao: p);
     setState(() {
       _posicaoSelecionada = p;
+      _posicaoFocadaId = p.id;
+      _editandoPosicao = true;
       _formaSelecionada = p.formaSelecionada;
       _posicaoModificada = false;
     });
@@ -2609,14 +2711,17 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                                     _compFns[nextFisico].requestFocus();
                                     _compCtrls[nextFisico].selection = TextSelection(baseOffset: 0, extentOffset: _compCtrls[nextFisico].text.length);
                                   } else {
-                                    // Último campo preenchido: salva e mantém selecionado
+                                    // Último trecho: salva e tira foco, mantém card e trechos visíveis
                                     _salvarComprimento(i, forma);
                                     final posParaSalvar = _posicaoSelecionada;
                                     final elemId = _elementoDbIds[_elemIdx];
                                     if (posParaSalvar != null && elemId != null && posParaSalvar.id.length == 36) {
                                       detalhamentoCtrl.adicionarPosicaoAtualizada(posParaSalvar, elemId);
                                     }
-                                    // Tira o foco do campo sem limpar nada
+                                    // Garante highlight no card
+                                    if (posParaSalvar != null && _posicaoFocadaId != posParaSalvar.id) {
+                                      setState(() => _posicaoFocadaId = posParaSalvar.id);
+                                    }
                                     FocusScope.of(context).unfocus();
                                   }
                                 },

@@ -79,17 +79,18 @@ class PosicaoCreateModel {
   Map<String, bool> variaveis = {};
   Map<String, TrechoVariavelConfig> variaveisConfig = {};
   int multiplicador = 1;
-  int comprimentoDeCorte = 0;
+  double comprimentoDeCorte = 0;
   int ordem = 0; // índice para ordenação persistida
 
   /// Recalcula comprimentoDeCorte usando descontoDobra da forma e diâmetro da bitola.
   /// Fórmula: soma_trechos − descontoDobra × diâmetro_cm
-  /// O descontoDobra é configurado na forma (editável), padrão = fatorDobra × 2.
   void calcularComprimentoDeCorte() {
     final somaCm = comprimentos.values.fold(0, (s, v) => s + v);
     final diametroCm = (bitolaSelecionada?.diametro ?? 0) / 10.0;
     final desconto = formaSelecionada?.descontoDobra ?? 0.0;
-    comprimentoDeCorte = (somaCm - desconto * diametroCm).round().clamp(0, somaCm);
+    final resultado = somaCm - desconto * diametroCm;
+    // 1 casa decimal, não pode ser negativo nem maior que a soma
+    comprimentoDeCorte = double.parse(resultado.clamp(0, somaCm.toDouble()).toStringAsFixed(1));
   }
 
   PosicaoCreateModel() : id = HashService.get;
@@ -101,7 +102,7 @@ class PosicaoCreateModel {
     variaveis = Map<String, bool>.from(modelo.variaveis);
     variaveisConfig = modelo.variaveisConfig.map((k, v) => MapEntry(k, v.copyWith()));
     multiplicador = modelo.multiplicador;
-    comprimentoDeCorte = modelo.comprimentoDeCorte;
+    comprimentoDeCorte = (modelo.comprimentoDeCorte as num).toDouble();
     ordem = modelo.ordem;
   }
 

@@ -410,7 +410,7 @@ class PdfPedidoTecnico {
                                       align: pw.Alignment.center),
                                   _celTbl(
                                     pos.comprimentoDeCorte > 0
-                                        ? '${pos.comprimentoDeCorte}'
+                                        ? pos.comprimentoDeCorte.toStringAsFixed(1)
                                         : '—',
                                     estCelula,
                                     align: pw.Alignment.center,

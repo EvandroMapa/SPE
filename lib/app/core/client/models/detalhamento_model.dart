@@ -214,7 +214,7 @@ class PosicaoModel {
   final Map<String, bool> variaveis;
   final Map<String, TrechoVariavelConfig> variaveisConfig;
   final int multiplicador;
-  final int comprimentoDeCorte;
+  final double comprimentoDeCorte;
   final int ordem; // índice para ordenação persistida
 
   PosicaoModel({
@@ -266,7 +266,7 @@ class PosicaoModel {
               MapEntry(k.toString(), TrechoVariavelConfig.fromMap(v as Map<String, dynamic>)))
           : {},
       multiplicador: int.tryParse(map['multiplicador']?.toString() ?? '1') ?? 1,
-      comprimentoDeCorte: int.tryParse(map['comprimento_de_corte']?.toString() ?? '0') ?? 0,
+      comprimentoDeCorte: double.tryParse(map['comprimento_de_corte']?.toString() ?? '0') ?? 0.0,
       ordem: int.tryParse(map['ordem']?.toString() ?? '0') ?? 0,
     );
   }
@@ -284,7 +284,7 @@ class PosicaoModel {
       'variaveis_config': variaveisConfig.map((k, v) => MapEntry(k, v.toMap())),
       'multiplicador': multiplicador,
       'elemento_id': elementoId,
-      'comprimento_de_corte': comprimentoDeCorte,
+      'comprimento_de_corte': double.parse(comprimentoDeCorte.toStringAsFixed(1)),
     };
     if (ordem > 0) map['ordem'] = ordem;
     if (id.length == 36) {

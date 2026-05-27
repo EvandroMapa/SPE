@@ -241,6 +241,27 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
         setState(() => _elementoModificado = true);
       }
     });
+    // Detectar modificações nos campos de posição (ao digitar)
+    _pNum.controller.addListener(() {
+      if (_editandoPosicao && !_posicaoModificada) {
+        setState(() => _posicaoModificada = true);
+      }
+    });
+    _pQtde.controller.addListener(() {
+      if (_editandoPosicao && !_posicaoModificada) {
+        setState(() => _posicaoModificada = true);
+      }
+    });
+    _bitolaCtrl.addListener(() {
+      if (_editandoPosicao && !_posicaoModificada) {
+        setState(() => _posicaoModificada = true);
+      }
+    });
+    _formaCtrl.addListener(() {
+      if (_editandoPosicao && !_posicaoModificada) {
+        setState(() => _posicaoModificada = true);
+      }
+    });
     
     // Preencher IDs do banco para elementos existentes
     if (widget.detalhamento != null) {
@@ -725,7 +746,16 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                   posAtualizada.comprimentos
                     ..clear()
                     ..addAll(_posicaoSelecionada!.comprimentos);
-                  posAtualizada.comprimentoDeCorte = _posicaoSelecionada!.comprimentoDeCorte;
+                  // Usa a forma mais recente do cadastro para recalcular
+                  final formaAtual = posAtualizada.formaSelecionada ?? _posicaoSelecionada!.formaSelecionada;
+                  if (formaAtual != null) {
+                    final formaAtualizada = BackendClient.formas.data
+                        .where((f) => f.id == formaAtual.id)
+                        .firstOrNull;
+                    posAtualizada.formaSelecionada = formaAtualizada ?? formaAtual;
+                    posAtualizada.bitolaSelecionada = _posicaoSelecionada!.bitolaSelecionada;
+                  }
+                  posAtualizada.calcularComprimentoDeCorte();
                 }
 
                 if (posAtualizada.formaSelecionada != null && posAtualizada.formaSelecionada?.id != _formaSelecionada?.id && !_posicaoModificada) {
@@ -1850,7 +1880,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                                   if (temCompr && corteCm != somaCm) ...[
                                     Text(' → ', style: AppCss.minimumRegular.setColor(Colors.grey[400]!).setSize(10)),
                                     Icon(Icons.content_cut, size: 10, color: const Color(0xFFF59E0B)),
-                                    Text('${corteCm}cm', style: AppCss.minimumBold.setColor(const Color(0xFFF59E0B)).setSize(11)),
+                                    Text('${corteCm.toStringAsFixed(1)}cm', style: AppCss.minimumBold.setColor(const Color(0xFFF59E0B)).setSize(11)),
                                   ],
                                 ]);
                               }),
@@ -2365,6 +2395,13 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
   /// Foca na posição sem preencher os campos de edição (clique no card)
   Future<void> _focarPosicao(PosicaoCreateModel p) async {
     if (!await _verificarEdicaoPendente()) return;
+    // Atualiza a forma com o descontoDobra mais recente do cadastro
+    if (p.formaSelecionada != null) {
+      final formaAtualizada = BackendClient.formas.data
+          .where((f) => f.id == p.formaSelecionada!.id)
+          .firstOrNull;
+      if (formaAtualizada != null) p.formaSelecionada = formaAtualizada;
+    }
     _atualizarCompCtrls(p.formaSelecionada, posicao: p);
     _pNum.text = ''; _pQtde.text = ''; _bitolaCtrl.text = ''; _formaCtrl.text = '';
     setState(() {
@@ -2449,6 +2486,17 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
             _compCtrls[j].text = valor?.toString() ?? '';
           }
         }
+      }
+    }
+
+    // Atualiza a forma com o descontoDobra mais recente do cadastro
+    final formaAtual = _posicaoSelecionada!.formaSelecionada;
+    if (formaAtual != null) {
+      final formaAtualizada = BackendClient.formas.data
+          .where((f) => f.id == formaAtual.id)
+          .firstOrNull;
+      if (formaAtualizada != null) {
+        _posicaoSelecionada!.formaSelecionada = formaAtualizada;
       }
     }
 

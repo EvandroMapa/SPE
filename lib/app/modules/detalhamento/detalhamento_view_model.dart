@@ -82,16 +82,14 @@ class PosicaoCreateModel {
   int comprimentoDeCorte = 0;
   int ordem = 0; // índice para ordenação persistida
 
-  /// Recalcula comprimentoDeCorte usando fatorDobra da forma e diâmetro da bitola.
-  /// Fórmula: soma_trechos − fatorDobra × 2 × diâmetro_cm
-  /// Cada dobra de 90° desconta 1d de cada segmento adjacente = 2d por dobra no total.
-  /// Exemplo: U 600×50×50cm + bitola 12,5mm (1,25cm):
-  ///   fator=2 → 700 − 2×2×1,25 = 700 − 5 = 695cm ✓
+  /// Recalcula comprimentoDeCorte usando descontoDobra da forma e diâmetro da bitola.
+  /// Fórmula: soma_trechos − descontoDobra × diâmetro_cm
+  /// O descontoDobra é configurado na forma (editável), padrão = fatorDobra × 2.
   void calcularComprimentoDeCorte() {
     final somaCm = comprimentos.values.fold(0, (s, v) => s + v);
     final diametroCm = (bitolaSelecionada?.diametro ?? 0) / 10.0;
-    final fator = formaSelecionada?.fatorDobra ?? 0.0;
-    comprimentoDeCorte = (somaCm - fator * 2.0 * diametroCm).round().clamp(0, somaCm);
+    final desconto = formaSelecionada?.descontoDobra ?? 0.0;
+    comprimentoDeCorte = (somaCm - desconto * diametroCm).round().clamp(0, somaCm);
   }
 
   PosicaoCreateModel() : id = HashService.get;

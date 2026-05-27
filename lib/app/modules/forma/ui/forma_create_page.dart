@@ -498,20 +498,45 @@ class _SimulacaoCorte extends StatefulWidget {
 
 class _SimulacaoCorteState extends State<_SimulacaoCorte> {
   BitolaModel? _bitolaSelecionada;
+  late TextEditingController _descontoCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.formulario.recalcularDesconto();
+    _descontoCtrl = TextEditingController(
+      text: widget.formulario.descontoDobra.toStringAsFixed(2),
+    );
+  }
+
+  @override
+  void didUpdateWidget(_SimulacaoCorte oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Atualizar controller se o valor mudou por auto-cálculo
+    widget.formulario.recalcularDesconto();
+    if (!widget.formulario.descontoManual) {
+      final novoTexto = widget.formulario.descontoDobra.toStringAsFixed(2);
+      if (_descontoCtrl.text != novoTexto) {
+        _descontoCtrl.text = novoTexto;
+      }
+    }
+  }
 
   @override
   void dispose() {
+    _descontoCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final fator = widget.formulario.fatorDobra;
+    final desconto = widget.formulario.descontoDobra;
     final dMm = _bitolaSelecionada?.diametro ?? 0.0;
     final dCm = dMm / 10.0;
-    final desconto = fator * 2.0 * dCm; // 2d por dobra de 90°
+    final descontoEmCm = desconto * dCm;
     final refTotal = 100.0;
-    final corteRef = (refTotal - desconto).clamp(0.0, refTotal);
+    final corteRef = (refTotal - descontoEmCm).clamp(0.0, refTotal);
     final dobrasCount = widget.formulario.itens.length <= 1
         ? 0
         : widget.formulario.itens
@@ -532,22 +557,81 @@ class _SimulacaoCorteState extends State<_SimulacaoCorte> {
           Row(children: [
             Icon(Icons.content_cut, size: 16, color: const Color(0xFF0369A1)),
             const SizedBox(width: 8),
-            Text('SIMULAÇÃO DE COMPRIMENTO DE CORTE',
+            Text('DESCONTO DE DOBRA',
                 style: AppCss.minimumBold.setColor(const Color(0xFF0369A1)).setSize(12)),
           ]),
           const SizedBox(height: 16),
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            // Coluna esquerda: informações da forma
+            // Coluna esquerda: informações + campo editável
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               _infoRow('Dobras detectadas', '$dobrasCount dobra${dobrasCount != 1 ? 's' : ''}'),
               const SizedBox(height: 8),
               _infoRow('Fator de dobra', fator.toStringAsFixed(2),
                   sub: '= Σ(ângulo ÷ 90°)'),
+              const SizedBox(height: 16),
+              Text('Desconto de dobra (×d)', style: AppCss.minimumBold.setSize(12)),
+              const SizedBox(height: 4),
+              Text('Multiplicado pelo diâmetro da bitola no corte',
+                  style: AppCss.minimumRegular.setColor(Colors.grey[500]!).setSize(10)),
+              const SizedBox(height: 6),
+              Row(children: [
+                SizedBox(
+                  width: 100,
+                  child: TextField(
+                    controller: _descontoCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[\d.,]')),
+                    ],
+                    style: AppCss.smallBold.setColor(const Color(0xFF0369A1)).setSize(14),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      suffixText: '×d',
+                      suffixStyle: AppCss.minimumRegular.setColor(Colors.grey[500]!).setSize(11),
+                    ),
+                    onChanged: (val) {
+                      final parsed = double.tryParse(val.replaceAll(',', '.'));
+                      if (parsed != null) {
+                        widget.formulario.descontoDobra = parsed;
+                        widget.formulario.descontoManual = true;
+                        setState(() {});
+                      }
+                    },
+                  ),
+                ),
+                if (widget.formulario.descontoManual) ...[
+                  const SizedBox(width: 8),
+                  Tooltip(
+                    message: 'Restaurar auto-cálculo (${(fator * 2).toStringAsFixed(2)})',
+                    child: InkWell(
+                      onTap: () {
+                        widget.formulario.descontoManual = false;
+                        widget.formulario.recalcularDesconto();
+                        _descontoCtrl.text = widget.formulario.descontoDobra.toStringAsFixed(2);
+                        setState(() {});
+                      },
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        width: 30, height: 30,
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Icon(Icons.refresh, size: 16, color: Colors.orange[700]),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text('editado', style: AppCss.minimumRegular.setColor(Colors.orange[700]!).setSize(10)),
+                ],
+              ]),
             ])),
             const SizedBox(width: 24),
             // Coluna direita: simulação com bitola
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Bitola para teste:', style: AppCss.minimumBold.setSize(12)),
+              Text('Bitola para simulação:', style: AppCss.minimumBold.setSize(12)),
               const SizedBox(height: 6),
               Builder(builder: (context) {
                 final bitolas = BackendClient.bitolas.data
@@ -583,9 +667,7 @@ class _SimulacaoCorteState extends State<_SimulacaoCorte> {
               }),
               const SizedBox(height: 12),
               if (dMm > 0) ...[
-                _infoRow('Desconto por dobra (2×d)', '${(2.0 * dCm).toStringAsFixed(2)} cm'),
-                const SizedBox(height: 4),
-                _infoRow('Desconto total', '${desconto.toStringAsFixed(2)} cm',
+                _infoRow('Desconto total', '${desconto.toStringAsFixed(2)} × ${dCm.toStringAsFixed(2)}cm = ${descontoEmCm.toStringAsFixed(2)}cm',
                     color: const Color(0xFFF59E0B)),
                 const SizedBox(height: 8),
                 Container(

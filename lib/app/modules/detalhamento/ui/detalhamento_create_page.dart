@@ -61,6 +61,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
   bool _posicaoModificada = false;
   int _ultimaElemCount = 0; // Para detectar elementos novos via Realtime
   int _ultimaPosCount = 0; // Para detectar posições novas via Realtime
+  DateTime _ultimoSaveComprimento = DateTime.fromMillisecondsSinceEpoch(0); // guard para não sobrescrever edição local
 
   // Scroll controllers para auto-scroll ao adicionar itens
   final ScrollController _elemScrollCtrl = ScrollController();
@@ -721,22 +722,33 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
               final posId = _posicaoSelecionada!.id;
               final posAtualizada = elem.posicoes.where((p) => p.id == posId).firstOrNull;
               if (posAtualizada != null) {
+                final recentementeSalvo = DateTime.now().difference(_ultimoSaveComprimento).inMilliseconds < 2000;
+
+                // SÍNCRONO: preservar dados locais nos objetos da lista ANTES do render
+                if (recentementeSalvo && !identical(posAtualizada, _posicaoSelecionada)) {
+                  posAtualizada.comprimentos
+                    ..clear()
+                    ..addAll(_posicaoSelecionada!.comprimentos);
+                  posAtualizada.comprimentoDeCorte = _posicaoSelecionada!.comprimentoDeCorte;
+                }
+
                 if (posAtualizada.formaSelecionada != null && posAtualizada.formaSelecionada?.id != _formaSelecionada?.id && !_posicaoModificada) {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (!mounted) return;
                     _selecionarPosicao(posAtualizada);
                   });
                 } else if (_formaSelecionada != null) {
+                  // Atualizar referência
+                  _posicaoSelecionada = posAtualizada;
+                  // Atualizar controllers de texto (async, pós-render)
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (!mounted) return;
-                    _posicaoSelecionada = posAtualizada;
                     final qualquerCampoEmFoco = _compFns.any((fn) => fn.hasFocus);
                     for (int k = 0; k < _formaSelecionada!.itens.length && k < _compCtrls.length; k++) {
                       final trecho = _formaSelecionada!.itens[k].trecho;
                       final valor = posAtualizada.comprimentos[trecho];
                       final novoTexto = valor != null ? valor.toString() : '';
-                      // Não sincroniza se o usuário está editando qualquer campo (líder ou follower)
-                      if (novoTexto.isNotEmpty && !qualquerCampoEmFoco && _compCtrls[k].text != novoTexto) {
+                      if (novoTexto.isNotEmpty && !qualquerCampoEmFoco && !recentementeSalvo && _compCtrls[k].text != novoTexto) {
                         _compCtrls[k].text = novoTexto;
                       }
                     }
@@ -1351,6 +1363,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                       _equivalentesTemp = List.from(e.elementosEquivalentes);
                       _eEquiv.text = '';
                       _equivalentesExpandidos = false;
+                      _ultimaPosCount = e.posicoes.length; // evitar auto-scroll
                     });
                     // Auto-selecionar primeira posição do elemento
                     if (e.posicoes.isNotEmpty) {
@@ -1693,8 +1706,10 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                 itemCount: elem.posicoes.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 4),
                 itemBuilder: (_, i) {
-                final p = elem.posicoes[i]; // ordem de inserção
-                final on = _posicaoSelecionada?.id == p.id;
+                final pRaw = elem.posicoes[i]; // ordem de inserção
+                final on = _posicaoSelecionada?.id == pRaw.id;
+                // Usar dados locais (mais recentes) quando é a posição selecionada
+                final p = on && _posicaoSelecionada != null ? _posicaoSelecionada! : pRaw;
                 return InkWell(
                   key: ValueKey(p.id),
                   onTap: () {
@@ -2337,12 +2352,27 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
 
     // Recalcula comprimento de corte
     _posicaoSelecionada!.calcularComprimentoDeCorte();
+
+    // Sincronizar dados de volta para o objeto na lista do form
+    // (podem ser referências diferentes após Realtime sync)
+    if (_elemIdx >= 0 && _elemIdx < detalhamentoCtrl.form.elementos.length) {
+      final elemPosicoes = detalhamentoCtrl.form.elementos[_elemIdx].posicoes;
+      final posNaLista = elemPosicoes.where((p) => p.id == _posicaoSelecionada!.id).firstOrNull;
+      if (posNaLista != null && !identical(posNaLista, _posicaoSelecionada)) {
+        posNaLista.comprimentos
+          ..clear()
+          ..addAll(_posicaoSelecionada!.comprimentos);
+        posNaLista.comprimentoDeCorte = _posicaoSelecionada!.comprimentoDeCorte;
+      }
+    }
+
     // Auto-save: atualizar posição no banco
     final elemId = _elementoDbIds[_elemIdx];
     if (elemId != null && _posicaoSelecionada!.id.length == 36) {
+      _ultimoSaveComprimento = DateTime.now();
       detalhamentoCtrl.adicionarPosicaoAtualizada(_posicaoSelecionada!, elemId);
     }
-    // Atualizar pesos no banco
+    // Atualizar pesos
     setState(() {});
     detalhamentoCtrl.formStream.update();
     _atualizarPesoElementoAtual();
@@ -2579,29 +2609,15 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                                     _compFns[nextFisico].requestFocus();
                                     _compCtrls[nextFisico].selection = TextSelection(baseOffset: 0, extentOffset: _compCtrls[nextFisico].text.length);
                                   } else {
-                                    // Último campo preenchido: salva e limpa para próxima posição
+                                    // Último campo preenchido: salva e mantém selecionado
                                     _salvarComprimento(i, forma);
                                     final posParaSalvar = _posicaoSelecionada;
                                     final elemId = _elementoDbIds[_elemIdx];
                                     if (posParaSalvar != null && elemId != null && posParaSalvar.id.length == 36) {
                                       detalhamentoCtrl.adicionarPosicaoAtualizada(posParaSalvar, elemId);
                                     }
-                                    _atualizarCompCtrls(null);
-                                    setState(() {
-                                      _formaSelecionada = null;
-                                      _posicaoSelecionada = null;
-                                      _posicaoModificada = false;
-                                      _pBitola = null;
-                                      _pForma = null;
-                                    });
-                                    Future.delayed(const Duration(milliseconds: 150), () {
-                                      if (!mounted) return;
-                                      _pNum.text = '';
-                                      _bitolaCtrl.clear();
-                                      _formaCtrl.clear();
-                                      _pQtde.text = '';
-                                      _pNum.focus.requestFocus();
-                                    });
+                                    // Tira o foco do campo sem limpar nada
+                                    FocusScope.of(context).unfocus();
                                   }
                                 },
                               );

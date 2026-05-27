@@ -153,7 +153,25 @@ namespace SpePlugin.Comandos
                 if (nomeElemento == null) break;
 
                 nomeElemento = nomeElemento.Trim().ToUpper();
-                ed.WriteMessage($"\n[OK] Elemento: {nomeElemento}\n");
+
+                // Parsear equivalentes: V101=V102 ou V101, V102, V103
+                var equivalentes = new List<string>();
+                var separadores = new[] { '=', ',' };
+                if (nomeElemento.IndexOfAny(separadores) >= 0)
+                {
+                    var partes = nomeElemento.Split(separadores, System.StringSplitOptions.RemoveEmptyEntries);
+                    nomeElemento = partes[0].Trim();
+                    for (int p = 1; p < partes.Length; p++)
+                    {
+                        var equiv = partes[p].Trim();
+                        if (!string.IsNullOrEmpty(equiv)) equivalentes.Add(equiv);
+                    }
+                }
+
+                if (equivalentes.Count > 0)
+                    ed.WriteMessage($"\n[OK] Elemento: {nomeElemento} = {string.Join(" = ", equivalentes)}\n");
+                else
+                    ed.WriteMessage($"\n[OK] Elemento: {nomeElemento}\n");
 
                 // 3b. Quantidade
                 var opQtd = new PromptIntegerOptions($"\nQuantidade de {nomeElemento} [1]: ");
@@ -267,7 +285,7 @@ namespace SpePlugin.Comandos
                         ["quantidade"] = quantidade,
                         ["peso_total"] = 0,
                         ["detalhamento_id"] = detalhamentoId,
-                        ["elementos_equivalentes"] = new List<string>(),
+                        ["elementos_equivalentes"] = equivalentes,
                     };
 
                     ed.WriteMessage($"\n    POST elemento...");

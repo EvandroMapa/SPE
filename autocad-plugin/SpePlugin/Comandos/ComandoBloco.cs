@@ -105,7 +105,7 @@ namespace SpePlugin.Comandos
             {
                 ed.WriteMessage("\n--------------------------------------");
                 ed.WriteMessage("\n  1. Clique no NOME DO ELEMENTO");
-                ed.WriteMessage("\n  2. Selecione a AREA das posicoes");
+                ed.WriteMessage("\n  2. Arraste sobre o ELEMENTO (Q = quantidade)");
                 ed.WriteMessage("\n  ESC para finalizar.");
                 ed.WriteMessage("\n--------------------------------------\n");
 
@@ -119,56 +119,56 @@ namespace SpePlugin.Comandos
                 }
 
                 nomeElemento = nomeElemento.Trim().ToUpper();
-                ed.WriteMessage($"\n  Elemento: {nomeElemento}\n");
 
-                // 3b. Quantidade do elemento
-                var opQtd = new PromptIntegerOptions($"\n  Quantidade de {nomeElemento} [1]: ");
-                opQtd.DefaultValue = 1;
-                opQtd.LowerLimit = 1;
-                opQtd.UpperLimit = 999;
-                var resQtd = ed.GetInteger(opQtd);
-                int quantidade = resQtd.Status == PromptStatus.OK ? resQtd.Value : 1;
-
-                // 3c. Gravar elemento imediatamente no banco
-                string elementoId = "";
-                var posicoesCriadas = new List<string>();
-
-                try
+                // Parsear equivalentes: V101=V102 ou V101, V102, V103
+                var equivalentes = new List<string>();
+                var separadores = new[] { '=', ',' };
+                if (nomeElemento.IndexOfAny(separadores) >= 0)
                 {
-                    var elemMap = new Dictionary<string, object?>
+                    var partes = nomeElemento.Split(separadores, System.StringSplitOptions.RemoveEmptyEntries);
+                    nomeElemento = partes[0].Trim();
+                    for (int p = 1; p < partes.Length; p++)
                     {
-                        ["nome"] = nomeElemento,
-                        ["quantidade"] = quantidade,
-                        ["peso_total"] = 0,
-                        ["detalhamento_id"] = detalhamentoId,
-                        ["elementos_equivalentes"] = new List<string>(),
-                    };
+                        var equiv = partes[p].Trim();
+                        if (!string.IsNullOrEmpty(equiv)) equivalentes.Add(equiv);
+                    }
+                }
 
-                    elementoId = client!.CriarElemento(elemMap);
-                    client.TocarDetalhamento(detalhamentoId);
+                if (equivalentes.Count > 0)
+                    ed.WriteMessage($"\n  Elemento: {nomeElemento} = {string.Join(" = ", equivalentes)}\n");
+                else
+                    ed.WriteMessage($"\n  Elemento: {nomeElemento}\n");
 
-                    if (string.IsNullOrEmpty(elementoId))
+                // 3b. Arrastar sobre o elemento (quantidade padrão 1, Q para alterar)
+                int quantidade = 1;
+
+                var opPt1 = new PromptPointOptions($"\n  Arraste sobre {nomeElemento} ou 'Q' para quantidade: ");
+                opPt1.Keywords.Add("Quantidade", "Quantidade", "Quantidade(Q)");
+                opPt1.AllowNone = false;
+
+                PromptPointResult resPt1;
+                while (true)
+                {
+                    resPt1 = ed.GetPoint(opPt1);
+                    if (resPt1.Status == PromptStatus.Keyword && resPt1.StringResult == "Quantidade")
                     {
-                        ed.WriteMessage("\n  [ERRO] Elemento nao retornou ID!");
+                        var opQtd = new PromptIntegerOptions($"\n  Quantidade de {nomeElemento} [1]: ");
+                        opQtd.DefaultValue = 1;
+                        opQtd.LowerLimit = 1;
+                        opQtd.UpperLimit = 999;
+                        var resQtd = ed.GetInteger(opQtd);
+                        quantidade = resQtd.Status == PromptStatus.OK ? resQtd.Value : 1;
+                        ed.WriteMessage($"\n  Quantidade: {quantidade}\n");
+                        // Volta para o prompt de arraste
                         continue;
                     }
-                    ed.WriteMessage($"\n  [✓] Elemento gravado: {nomeElemento}\n");
-                }
-                catch (System.Exception ex)
-                {
-                    ed.WriteMessage($"\n  [ERRO] Falha ao gravar elemento: {ex.Message}\n");
-                    continue;
+                    break;
                 }
 
-                // 3d. Arrastar sobre o elemento para capturar posições
-                ed.WriteMessage($"\n  Arraste uma janela sobre {nomeElemento}:");
-
-                var opPt1 = new PromptPointOptions($"\n  Primeiro canto: ");
-                var resPt1 = ed.GetPoint(opPt1);
+                // 3c. Se cancelou o arraste, volta ao loop
                 if (resPt1.Status != PromptStatus.OK)
                 {
-                    ed.WriteMessage("  [!] Cancelado — apagando elemento.\n");
-                    try { client!.ExcluirElemento(elementoId); client.TocarDetalhamento(detalhamentoId); } catch { }
+                    ed.WriteMessage("  [!] Cancelado.\n");
                     continue;
                 }
 
@@ -176,8 +176,7 @@ namespace SpePlugin.Comandos
                 var resPt2 = ed.GetCorner(opPt2);
                 if (resPt2.Status != PromptStatus.OK)
                 {
-                    ed.WriteMessage("  [!] Cancelado — apagando elemento.\n");
-                    try { client!.ExcluirElemento(elementoId); client.TocarDetalhamento(detalhamentoId); } catch { }
+                    ed.WriteMessage("  [!] Cancelado.\n");
                     continue;
                 }
 
@@ -193,8 +192,39 @@ namespace SpePlugin.Comandos
 
                 if (resSel.Status != PromptStatus.OK || resSel.Value.Count == 0)
                 {
-                    ed.WriteMessage("  [!] Nenhum texto na area — apagando elemento.\n");
-                    try { client!.ExcluirElemento(elementoId); client.TocarDetalhamento(detalhamentoId); } catch { }
+                    ed.WriteMessage("  [!] Nenhum texto na area.\n");
+                    continue;
+                }
+
+                // 3d. Gravar elemento no banco (só após confirmar seleção válida)
+                string elementoId = "";
+                var posicoesCriadas = new List<string>();
+
+                try
+                {
+                    var elemMap = new Dictionary<string, object?>
+                    {
+                        ["nome"] = nomeElemento,
+                        ["quantidade"] = quantidade,
+                        ["peso_total"] = 0,
+                        ["detalhamento_id"] = detalhamentoId,
+                        ["elementos_equivalentes"] = equivalentes,
+                    };
+
+                    elementoId = client!.CriarElemento(elemMap);
+                    client.TocarDetalhamento(detalhamentoId);
+
+                    if (string.IsNullOrEmpty(elementoId))
+                    {
+                        ed.WriteMessage("\n  [ERRO] Elemento nao retornou ID!");
+                        continue;
+                    }
+                    var equivStr = equivalentes.Count > 0 ? $" ({nomeElemento}={string.Join("=", equivalentes)})" : "";
+                    ed.WriteMessage($"\n  [✓] Elemento gravado: {nomeElemento}{equivStr} (qtd: {quantidade})\n");
+                }
+                catch (System.Exception ex)
+                {
+                    ed.WriteMessage($"\n  [ERRO] Falha ao gravar elemento: {ex.Message}\n");
                     continue;
                 }
 

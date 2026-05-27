@@ -211,6 +211,7 @@ class DetalhamentoController {
   // ── Posição: atualizar (comprimentos) ────────────────────
   Future<void> adicionarPosicaoAtualizada(PosicaoCreateModel posCreate, String elementoId) async {
     try {
+      BackendClient.detalhamentos.pausarFetch();
       final posModel = posCreate.toPosicaoModel();
       await BackendClient.detalhamentos.atualizarPosicao(posModel, elementoId);
     } catch (e) {
@@ -242,12 +243,14 @@ class DetalhamentoController {
     final detalhamentoId = form.id;
     if (detalhamentoId.length != 36) return;
     try {
+      BackendClient.detalhamentos.pausarFetch();
       await BackendClient.detalhamentos.atualizarPesoTotal(detalhamentoId, pesoTotal);
     } catch (_) {}
   }
 
   Future<void> atualizarPesoElemento(String elementoId, double pesoTotal) async {
     try {
+      BackendClient.detalhamentos.pausarFetch();
       await BackendClient.detalhamentos.atualizarPesoElemento(elementoId, pesoTotal);
     } catch (_) {}
   }

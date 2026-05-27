@@ -28,7 +28,7 @@ class DetalhamentoSupabaseCollection {
       for (final p in rows) {
         final detalhamentoId = p['id'] as String;
         final elementosRaw = List<Map<String, dynamic>>.from(
-          await SupabaseService.client.from('elementos').select().eq('detalhamento_id', detalhamentoId),
+          await SupabaseService.client.from('elementos').select().eq('detalhamento_id', detalhamentoId).order('created_at', ascending: true),
         );
         final elementoIds = elementosRaw.map((e) => e['id'] as String).toList();
         List<Map<String, dynamic>> posicoesRaw = [];
@@ -58,11 +58,19 @@ class DetalhamentoSupabaseCollection {
 
   bool _isListen = false;
   Timer? _debounceTimer;
+  /// Pausa o fetch automático do Realtime por um período curto após saves locais
+  DateTime _ultimoSaveLocal = DateTime.fromMillisecondsSinceEpoch(0);
+  void pausarFetch() { _ultimoSaveLocal = DateTime.now(); }
+
   Future<void> listen() async {
     if (_isListen) return; _isListen = true;
     SupabaseService.client.from(name).stream(primaryKey: ['id']).listen((data) {
       _debounceTimer?.cancel();
-      _debounceTimer = Timer(const Duration(milliseconds: 500), () { fetch(); });
+      _debounceTimer = Timer(const Duration(milliseconds: 500), () {
+        // Ignora fetch se houve save local nos últimos 3 segundos
+        if (DateTime.now().difference(_ultimoSaveLocal).inMilliseconds < 3000) return;
+        fetch();
+      });
     });
   }
 

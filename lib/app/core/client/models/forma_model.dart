@@ -11,6 +11,9 @@ class FormaModel {
   /// Soma dos ângulos de dobra em equivalentes de 90°.
   /// Ex: 4 dobras 90° = 4.0 | 1 dobra 45° = 0.5
   final double fatorDobra;
+  /// Desconto de dobra: multiplicador × diâmetro para calcular corte.
+  /// Gerado = fatorDobra × 2, mas editável manualmente.
+  final double descontoDobra;
 
   FormaModel({
     required this.id,
@@ -20,6 +23,7 @@ class FormaModel {
     required this.itens,
     required this.rotacao,
     this.fatorDobra = 0.0,
+    this.descontoDobra = 0.0,
   });
 
   /// Calcula fatorDobra a partir dos itens da forma.
@@ -48,6 +52,7 @@ class FormaModel {
       imagem: map['imagem'] ?? '',
       rotacao: (map['rotacao'] ?? 0).toDouble(),
       fatorDobra: (map['fator_dobra'] as num?)?.toDouble() ?? 0.0,
+      descontoDobra: (map['desconto_dobra'] as num?)?.toDouble() ?? 0.0,
       itens: (map['itens'] as List? ?? [])
           .map((e) => FormaItemModel.fromMap(e as Map<String, dynamic>))
           .toList(),
@@ -62,6 +67,7 @@ class FormaModel {
       'rotacao': rotacao,
       'itens': itens.map((e) => e.toMap()).toList(),
       'fator_dobra': fatorDobra,
+      'desconto_dobra': descontoDobra,
     };
     if (id.isNotEmpty && id.length == 36) {
       map['id'] = id;

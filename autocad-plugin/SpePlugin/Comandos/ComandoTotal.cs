@@ -23,6 +23,7 @@ namespace SpePlugin.Comandos
             public int Quantidade { get; set; } = 1;
             public List<ExtratorTexto.PosicaoParseada> Posicoes { get; set; } = new();
             public List<ObjectId> ObjectIdsPosicoes { get; set; } = new();
+            public List<string> Equivalentes { get; set; } = new();
             public ObjectId ObjectIdNome { get; set; }
             public Point3d Pt1 { get; set; }
             public Point3d Pt2 { get; set; }
@@ -177,28 +178,51 @@ namespace SpePlugin.Comandos
                 }
 
                 nomeElemento = nomeElemento.Trim().ToUpper();
-                ed.WriteMessage($"\n  Elemento: {nomeElemento}");
 
-                // ─── Quantidade ───
-                var opQtd = new PromptIntegerOptions($"\n  Quantidade de {nomeElemento} [1]: ");
-                opQtd.DefaultValue = 1;
-                opQtd.LowerLimit = 1;
-                opQtd.UpperLimit = 999;
-                var resQtd = ed.GetInteger(opQtd);
-
-                if (resQtd.Status == PromptStatus.Cancel)
+                // Parsear equivalentes: V101=V102 ou V101, V102, V103
+                var equivalentes = new List<string>();
+                var separadores = new[] { '=', ',' };
+                if (nomeElemento.IndexOfAny(separadores) >= 0)
                 {
-                    if (PerguntarCancelarOuRefazer(ed)) return;
-                    continue;
+                    var partes = nomeElemento.Split(separadores, System.StringSplitOptions.RemoveEmptyEntries);
+                    nomeElemento = partes[0].Trim();
+                    for (int p = 1; p < partes.Length; p++)
+                    {
+                        var equiv = partes[p].Trim();
+                        if (!string.IsNullOrEmpty(equiv)) equivalentes.Add(equiv);
+                    }
                 }
 
-                int quantidade = resQtd.Status == PromptStatus.OK ? resQtd.Value : 1;
+                if (equivalentes.Count > 0)
+                    ed.WriteMessage($"\n  Elemento: {nomeElemento} = {string.Join(" = ", equivalentes)}");
+                else
+                    ed.WriteMessage($"\n  Elemento: {nomeElemento}");
 
-                // ─── Arrastar janela sobre as posições ───
-                ed.WriteMessage($"\n  Arraste janela sobre {nomeElemento}:\n");
+                // ─── Arrastar sobre o elemento (quantidade padrão 1, Q para alterar) ───
+                int quantidade = 1;
 
-                var opPt1 = new PromptPointOptions($"\n  Primeiro canto: ");
-                var resPt1 = ed.GetPoint(opPt1);
+                var opPt1 = new PromptPointOptions($"\n  Arraste sobre {nomeElemento} ou 'Q' para quantidade: ");
+                opPt1.Keywords.Add("Quantidade", "Quantidade", "Quantidade(Q)");
+                opPt1.AllowNone = false;
+
+                PromptPointResult resPt1;
+                while (true)
+                {
+                    resPt1 = ed.GetPoint(opPt1);
+                    if (resPt1.Status == PromptStatus.Keyword && resPt1.StringResult == "Quantidade")
+                    {
+                        var opQtd = new PromptIntegerOptions($"\n  Quantidade de {nomeElemento} [1]: ");
+                        opQtd.DefaultValue = 1;
+                        opQtd.LowerLimit = 1;
+                        opQtd.UpperLimit = 999;
+                        var resQtd = ed.GetInteger(opQtd);
+                        quantidade = resQtd.Status == PromptStatus.OK ? resQtd.Value : 1;
+                        ed.WriteMessage($"\n  Quantidade: {quantidade}\n");
+                        continue;
+                    }
+                    break;
+                }
+
                 if (resPt1.Status == PromptStatus.Cancel)
                 {
                     if (PerguntarCancelarOuRefazer(ed)) return;
@@ -295,6 +319,7 @@ namespace SpePlugin.Comandos
                     Posicoes = posicoes,
                     ObjectIdsPosicoes = objectIds,
                     ObjectIdNome = nomeObjId,
+                    Equivalentes = equivalentes,
                     Pt1 = resPt1.Value,
                     Pt2 = resPt2.Value,
                 });
@@ -419,7 +444,7 @@ namespace SpePlugin.Comandos
                         ["quantidade"] = elem.Quantidade,
                         ["peso_total"] = 0,
                         ["detalhamento_id"] = detalhamentoId,
-                        ["elementos_equivalentes"] = new List<string>(),
+                        ["elementos_equivalentes"] = elem.Equivalentes,
                     };
 
                     ed.WriteMessage($"\n  [{elemAtual}/{elemTotal}] {elem.Nome}...");

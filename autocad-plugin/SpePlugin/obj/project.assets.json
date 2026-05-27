@@ -13,11 +13,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "D:\\DESENVOLVIMENTO\\SPE\\autocad-plugin\\SpePlugin\\SpePlugin.csproj",
+      "projectUniqueName": "d:\\DESENVOLVIMENTO\\SPE\\autocad-plugin\\SpePlugin\\SpePlugin.csproj",
       "projectName": "SpePlugin",
-      "projectPath": "D:\\DESENVOLVIMENTO\\SPE\\autocad-plugin\\SpePlugin\\SpePlugin.csproj",
+      "projectPath": "d:\\DESENVOLVIMENTO\\SPE\\autocad-plugin\\SpePlugin\\SpePlugin.csproj",
       "packagesPath": "C:\\Users\\evandromapa\\.nuget\\packages\\",
-      "outputPath": "D:\\DESENVOLVIMENTO\\SPE\\autocad-plugin\\SpePlugin\\obj\\",
+      "outputPath": "d:\\DESENVOLVIMENTO\\SPE\\autocad-plugin\\SpePlugin\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\evandromapa\\AppData\\Roaming\\NuGet\\NuGet.Config"

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:acoplan/app/core/client/models/forma_model.dart';
 import 'package:acoplan/app/core/client/models/trecho_variavel_config.dart';
 import 'package:acoplan/app/core/services/hash_service.dart';
 
@@ -216,6 +217,15 @@ class PosicaoModel {
   final int multiplicador;
   final double comprimentoDeCorte;
   final int ordem; // índice para ordenação persistida
+  /// Snapshot do descontoDobra da forma no momento do salvamento.
+  /// null = registro antigo (usa valor atual da forma como fallback).
+  final double? descontoDobraSnapshot;
+  /// Snapshot completo da forma (código, itens, rotação, ângulos) no momento do salvamento.
+  /// null = registro antigo. Permite reconstituir o desenho em relatórios futuros.
+  final Map<String, dynamic>? formaSnapshot;
+
+  /// Reconstrói a FormaModel a partir do snapshot, ou null se não houver.
+  FormaModel? get formaDoSnapshot => FormaModel.fromSnapshot(formaSnapshot);
 
   PosicaoModel({
     required this.id,
@@ -231,6 +241,8 @@ class PosicaoModel {
     this.multiplicador = 1,
     this.comprimentoDeCorte = 0,
     this.ordem = 0,
+    this.descontoDobraSnapshot,
+    this.formaSnapshot,
   });
 
   factory PosicaoModel.empty() => PosicaoModel(
@@ -244,6 +256,8 @@ class PosicaoModel {
         comprimentos: {},
         variaveis: {},
         variaveisConfig: {},
+        descontoDobraSnapshot: null,
+        formaSnapshot: null,
       );
 
   factory PosicaoModel.fromSupabaseMap(Map<String, dynamic> map) {
@@ -268,6 +282,10 @@ class PosicaoModel {
       multiplicador: int.tryParse(map['multiplicador']?.toString() ?? '1') ?? 1,
       comprimentoDeCorte: double.tryParse(map['comprimento_de_corte']?.toString() ?? '0') ?? 0.0,
       ordem: int.tryParse(map['ordem']?.toString() ?? '0') ?? 0,
+      descontoDobraSnapshot: (map['desconto_dobra_snapshot'] as num?)?.toDouble(),
+      formaSnapshot: map['forma_snapshot'] != null
+          ? Map<String, dynamic>.from(map['forma_snapshot'] as Map)
+          : null,
     );
   }
 
@@ -285,6 +303,8 @@ class PosicaoModel {
       'multiplicador': multiplicador,
       'elemento_id': elementoId,
       'comprimento_de_corte': double.parse(comprimentoDeCorte.toStringAsFixed(1)),
+      'desconto_dobra_snapshot': descontoDobraSnapshot,
+      'forma_snapshot': formaSnapshot,
     };
     if (ordem > 0) map['ordem'] = ordem;
     if (id.length == 36) {
@@ -307,6 +327,8 @@ class PosicaoModel {
       'variaveis_config': variaveisConfig.map((k, v) => MapEntry(k, v.toMap())),
       'multiplicador': multiplicador,
       'comprimento_de_corte': comprimentoDeCorte,
+      'desconto_dobra_snapshot': descontoDobraSnapshot,
+      'forma_snapshot': formaSnapshot,
     };
     if (ordem > 0) map['ordem'] = ordem;
     return map;

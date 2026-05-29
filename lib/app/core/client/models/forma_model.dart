@@ -74,6 +74,20 @@ class FormaModel {
     }
     return map;
   }
+
+  /// Serializa todos os dados da forma (incluindo desenho) para snapshot histórico.
+  /// Sempre inclui o id — use para preservar o estado no momento do detalhamento.
+  Map<String, dynamic> toSnapshot() {
+    final map = toSupabaseMap();
+    if (id.isNotEmpty) map['id'] = id;
+    return map;
+  }
+
+  /// Reconstrói uma FormaModel a partir de um snapshot armazenado.
+  static FormaModel? fromSnapshot(Map<String, dynamic>? snapshot) {
+    if (snapshot == null || snapshot.isEmpty) return null;
+    return FormaModel.fromSupabaseMap(snapshot);
+  }
 }
 
 class FormaItemModel {

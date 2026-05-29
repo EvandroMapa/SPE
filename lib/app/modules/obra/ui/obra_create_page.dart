@@ -1,4 +1,3 @@
-import 'package:acoplan/app/core/client/backend_client.dart';
 import 'package:acoplan/app/core/client/models/cliente_model.dart';
 import 'package:acoplan/app/core/components/app_drop_down.dart';
 import 'package:acoplan/app/core/components/app_field.dart';
@@ -23,7 +22,14 @@ class ObraCreatePage extends StatefulWidget {
   final ObraModel? obra;
   final EnderecoModel? endereco;
   final List<ObraModel> obrasIrmas;
-  const ObraCreatePage({this.obra, this.endereco, this.obrasIrmas = const [], super.key});
+  final String? clienteId;
+  const ObraCreatePage({
+    this.obra,
+    this.endereco,
+    this.obrasIrmas = const [],
+    this.clienteId,
+    super.key,
+  });
 
   @override
   State<ObraCreatePage> createState() => _ObraCreatePageState();
@@ -37,7 +43,12 @@ class _ObraCreatePageState extends State<ObraCreatePage> {
 
   @override
   void initState() {
-    obraCtrl.init(widget.obra, widget.endereco, obrasIrmas: widget.obrasIrmas);
+    obraCtrl.init(
+      widget.obra,
+      widget.endereco,
+      obrasIrmas: widget.obrasIrmas,
+      clienteId: widget.clienteId,
+    );
     _initialSnapshot = _snapshot(obraCtrl.form);
     super.initState();
   }
@@ -173,69 +184,7 @@ class _ObraCreatePageState extends State<ObraCreatePage> {
           ),
         ),
         const H(24),
-        if (form.isEdit) _buildDeleteButton(),
       ],
-    );
-  }
-
-  Widget _buildDeleteButton() {
-    return InkWell(
-      onTap: () async {
-        // Verificar se a obra tem projeto vinculado
-        final obraId = widget.obra?.id ?? '';
-        final temProjeto = BackendClient.detalhamentos.data
-            .any((d) => d.obraId == obraId);
-        if (temProjeto) {
-          if (!mounted) return;
-          showDialog(
-            context: context,
-            builder: (context) => AlertDialog(
-              icon: Icon(Icons.info_outline, size: 40, color: Colors.orange[700]),
-              title: Text('Exclusão Bloqueada', textAlign: TextAlign.center, style: AppCss.mediumBold),
-              content: Text(
-                'Esta obra não pode ser excluída pois possui projetos (detalhamentos) vinculados.\n\nExclua os projetos antes de excluir a obra.',
-                style: AppCss.smallRegular,
-                textAlign: TextAlign.center,
-              ),
-              actionsAlignment: MainAxisAlignment.center,
-              actions: [
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryMain),
-                  onPressed: () => Navigator.pop(context),
-                  child: Text('Entendi', style: AppCss.smallBold.setColor(Colors.white)),
-                ),
-              ],
-            ),
-          );
-          return;
-        }
-        if (!await showConfirmDialog(
-          'Excluir obra?',
-          'Todos os dados da obra serão apagados do sistema',
-        )) {
-          return;
-        }
-        Navigator.pop(context, obraDeleteObj);
-      },
-      child: Container(
-        height: 54,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.error.withAlpha(100), width: 1.0),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.delete_outline, color: AppColors.error),
-            const SizedBox(width: 8),
-            Text(
-              'EXCLUIR OBRA',
-              style: AppCss.mediumBold.setColor(AppColors.error).setSize(14),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

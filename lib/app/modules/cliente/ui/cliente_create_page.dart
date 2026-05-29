@@ -9,6 +9,7 @@ import 'package:acoplan/app/core/dialogs/confirm_dialog.dart';
 import 'package:acoplan/app/core/enums/obra_status.dart';
 import 'package:acoplan/app/core/models/text_controller.dart';
 import 'package:acoplan/app/core/services/notification_service.dart';
+import 'package:acoplan/app/core/services/supabase_service.dart';
 import 'package:acoplan/app/core/utils/app_colors.dart';
 import 'package:acoplan/app/core/utils/app_css.dart';
 import 'package:acoplan/app/core/utils/global_resource.dart';
@@ -19,6 +20,7 @@ import 'package:acoplan/app/modules/obra/ui/obra_create_page.dart';
 import 'package:cpf_cnpj_validator/cnpj_validator.dart';
 import 'package:cpf_cnpj_validator/cpf_validator.dart';
 import 'package:flutter/material.dart';
+import 'package:overlay_support/overlay_support.dart';
 
 enum _ClienteSection { dadosGerais, obras }
 
@@ -47,8 +49,12 @@ class _ClienteCreatePageState extends State<ClienteCreatePage> {
   _ClienteSection _selected = _ClienteSection.dadosGerais;
   String _initialSnapshot = '';
 
-  String _snapshot(ClienteCreateModel form) =>
-      '${form.nome.text}|${form.telefone.text}|${form.cpf.text}|${form.endereco?.name}|${form.obras.length}';
+  String _snapshot(ClienteCreateModel form) {
+    // Para clientes existentes, obras são gerenciadas independentemente
+    // e não devem marcar o formulário do cliente como "dirty"
+    final obrasKey = widget.cliente != null ? '' : '|${form.obras.length}';
+    return '${form.nome.text}|${form.telefone.text}|${form.cpf.text}|${form.endereco?.name}$obrasKey';
+  }
 
   @override
   void initState() {
@@ -417,11 +423,19 @@ class _ClienteCreatePageState extends State<ClienteCreatePage> {
           AppMultipleRegisters<ObraModel>(
             icon: Icons.business_outlined,
             title: 'Gerenciar Obras',
-            createPage: ObraCreatePage(endereco: form.endereco, obrasIrmas: form.obras),
+            createPage: ObraCreatePage(
+              endereco: form.endereco,
+              obrasIrmas: form.obras,
+              clienteId: widget.cliente?.id,
+            ),
             onEdit: (obraForm) async {
               ObraModel? obra = await push(
                 context,
-                ObraCreatePage(obra: obraForm, obrasIrmas: form.obras),
+                ObraCreatePage(
+                  obra: obraForm,
+                  obrasIrmas: form.obras,
+                  clienteId: widget.cliente?.id,
+                ),
               );
               if (obra != null) {
                 final i =
@@ -433,6 +447,85 @@ class _ClienteCreatePageState extends State<ClienteCreatePage> {
                 }
               }
               clienteCtrl.formStream.update();
+            },
+            onDelete: (obraForm) async {
+              // Proteção: verifica detalhamentos vinculados
+              final temProjeto = BackendClient.detalhamentos.data
+                  .any((d) => d.obraId == obraForm.id);
+              if (temProjeto) {
+                if (!context.mounted) return;
+                showDialog(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    icon: Icon(Icons.info_outline, size: 40, color: Colors.orange[700]),
+                    title: Text('Exclusão Bloqueada',
+                        textAlign: TextAlign.center, style: AppCss.mediumBold),
+                    content: Text(
+                      'Esta obra não pode ser excluída pois possui projetos (detalhamentos) vinculados.\n\nExclua os projetos antes de excluir a obra.',
+                      style: AppCss.smallRegular,
+                      textAlign: TextAlign.center,
+                    ),
+                    actionsAlignment: MainAxisAlignment.center,
+                    actions: [
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primaryMain),
+                        onPressed: () => Navigator.pop(ctx),
+                        child: Text('Entendi',
+                            style: AppCss.smallBold.setColor(Colors.white)),
+                      ),
+                    ],
+                  ),
+                );
+                return;
+              }
+              // Confirmação
+              if (!context.mounted) return;
+              final confirmar = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Excluir Obra'),
+                  content: Text(
+                      'Deseja realmente excluir a obra "${obraForm.descricao}"?\nEsta ação não poderá ser desfeita.'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('Cancelar'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.error,
+                        foregroundColor: Colors.white,
+                      ),
+                      child: const Text('Excluir'),
+                    ),
+                  ],
+                ),
+              );
+              if (confirmar == true) {
+                // Se cliente já existe no banco → excluir obra diretamente no Supabase
+                final clienteExiste = widget.cliente != null &&
+                    (widget.cliente!.id.length == 36);
+                if (clienteExiste) {
+                  try {
+                    await SupabaseService.client
+                        .from('obras')
+                        .delete()
+                        .eq('id', obraForm.id);
+                    await BackendClient.clientes.fetch();
+                  } catch (e) {
+                    NotificationService.showNegative(
+                      'Erro ao excluir',
+                      e.toString(),
+                      position: NotificationPosition.bottom,
+                    );
+                    return;
+                  }
+                }
+                form.obras.removeWhere((o) => o.id == obraForm.id);
+                clienteCtrl.formStream.update();
+              }
             },
             onAdd: (e) {
               form.obras.add(e);

@@ -3,6 +3,7 @@ import 'package:acoplan/app/core/client/models/cliente_model.dart';
 import 'package:acoplan/app/core/models/app_stream.dart';
 import 'package:acoplan/app/core/models/endereco_model.dart';
 import 'package:acoplan/app/core/services/notification_service.dart';
+import 'package:acoplan/app/core/services/supabase_service.dart';
 import 'package:acoplan/app/modules/obra/obra_view_model.dart';
 import 'package:flutter/material.dart';
 import 'package:overlay_support/overlay_support.dart';
@@ -22,8 +23,17 @@ class ObraController {
   /// Obras irmãs (do mesmo cliente) para validação local de duplicidade
   List<ObraModel> _obrasIrmas = [];
 
-  void init(ObraModel? obra, EnderecoModel? enderecoModel, {List<ObraModel> obrasIrmas = const []}) {
+  /// ID do cliente pai (UUID = já existe no banco; outro = cliente novo)
+  String? _clienteId;
+
+  void init(
+    ObraModel? obra,
+    EnderecoModel? enderecoModel, {
+    List<ObraModel> obrasIrmas = const [],
+    String? clienteId,
+  }) {
     _obrasIrmas = obrasIrmas;
+    _clienteId = clienteId;
     formStream.add(
       obra != null ? ObraCreateModel.edit(obra) : ObraCreateModel(),
     );
@@ -36,10 +46,39 @@ class ObraController {
   Future<void> onConfirm(value) async {
     try {
       onValid();
-      Navigator.pop(value, formStream.value.toObraModel());
+
+      final obra = formStream.value.toObraModel();
+
+      // Cliente já existe no banco → salva obra diretamente no Supabase
+      if (_clienteId != null && _clienteId!.length == 36) {
+        ObraModel salva;
+        if (form.isEdit) {
+          // Atualiza obra existente
+          final map = obra.toSupabaseMap(_clienteId!);
+          await SupabaseService.client.from('obras').upsert(map);
+          salva = obra;
+        } else {
+          // Insere nova obra e pega o UUID gerado pelo banco
+          final map = obra.toSupabaseMap(_clienteId!);
+          map.remove('id'); // banco gera com gen_random_uuid()
+          final inserted = await SupabaseService.client
+              .from('obras')
+              .insert(map)
+              .select()
+              .single();
+          salva = ObraModel.fromSupabaseMap(inserted);
+        }
+        // Atualiza o cache local
+        await BackendClient.clientes.fetch();
+        Navigator.pop(value, salva);
+      } else {
+        // Cliente ainda não salvo → apenas retorna o modelo local
+        Navigator.pop(value, obra);
+      }
+
       NotificationService.showPositive(
         'Obra ${form.isEdit ? 'Editada' : 'Adicionada'}',
-        'Operação realizada com sucesso',
+        'Salvo com sucesso',
         position: NotificationPosition.bottom,
       );
     } catch (e) {

@@ -81,13 +81,20 @@ class PosicaoCreateModel {
   int multiplicador = 1;
   double comprimentoDeCorte = 0;
   int ordem = 0; // índice para ordenação persistida
+  /// Snapshot do descontoDobra capturado no momento em que a forma foi selecionada.
+  /// null = registro antigo (fallback para o valor atual da forma).
+  double? descontoDobraSnapshot;
+  /// Snapshot completo da forma (desenho, ângulos, rotação) no momento da seleção.
+  /// null = registro antigo. Usado em relatórios futuros.
+  Map<String, dynamic>? formaSnapshot;
 
   /// Recalcula comprimentoDeCorte usando descontoDobra da forma e diâmetro da bitola.
+  /// Usa o snapshot armazenado; se null (registro antigo), usa o valor atual da forma.
   /// Fórmula: soma_trechos − descontoDobra × diâmetro_cm
   void calcularComprimentoDeCorte() {
     final somaCm = comprimentos.values.fold(0, (s, v) => s + v);
     final diametroCm = (bitolaSelecionada?.diametro ?? 0) / 10.0;
-    final desconto = formaSelecionada?.descontoDobra ?? 0.0;
+    final desconto = descontoDobraSnapshot ?? formaSelecionada?.descontoDobra ?? 0.0;
     final resultado = somaCm - desconto * diametroCm;
     // 1 casa decimal, não pode ser negativo nem maior que a soma
     comprimentoDeCorte = double.parse(resultado.clamp(0, somaCm.toDouble()).toStringAsFixed(1));
@@ -104,6 +111,11 @@ class PosicaoCreateModel {
     multiplicador = modelo.multiplicador;
     comprimentoDeCorte = (modelo.comprimentoDeCorte as num).toDouble();
     ordem = modelo.ordem;
+    // Restaura o snapshot armazenado — preserva o valor histórico da forma
+    descontoDobraSnapshot = modelo.descontoDobraSnapshot;
+    formaSnapshot = modelo.formaSnapshot != null
+        ? Map<String, dynamic>.from(modelo.formaSnapshot!)
+        : null;
   }
 
   PosicaoModel toPosicaoModel() => PosicaoModel(
@@ -120,5 +132,7 @@ class PosicaoCreateModel {
         multiplicador: multiplicador,
         comprimentoDeCorte: comprimentoDeCorte,
         ordem: ordem,
+        descontoDobraSnapshot: descontoDobraSnapshot,
+        formaSnapshot: formaSnapshot,
       );
 }

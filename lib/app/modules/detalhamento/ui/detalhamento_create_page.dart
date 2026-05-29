@@ -2253,6 +2253,8 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
       // Se trocou a forma, zera os comprimentos e variáveis
       if (posExistente.formaSelecionada?.codigo != _pForma!.codigo) {
         posExistente.formaSelecionada = _pForma;
+        posExistente.descontoDobraSnapshot = _pForma!.descontoDobra;
+        posExistente.formaSnapshot = _pForma!.toSnapshot();
         posExistente.comprimentos.clear();
         posExistente.variaveis.clear();
       }
@@ -2290,6 +2292,8 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
     n.posicao.text = _pNum.text;
     n.bitolaSelecionada = _pBitola;
     n.formaSelecionada = _pForma;
+    n.descontoDobraSnapshot = _pForma!.descontoDobra;
+    n.formaSnapshot = _pForma!.toSnapshot();
     n.qtde.text = _pQtde.text.isEmpty ? '1' : _pQtde.text;
     n.calcularComprimentoDeCorte();
     elem.posicoes.add(n);
@@ -3887,6 +3891,8 @@ class _PreparacaoFullscreenDialogState extends State<_PreparacaoFullscreenDialog
 
               final formaCodigo = posMap['forma_codigo']?.toString() ?? '';
               pos.formaSelecionada = BackendClient.formas.data.where((f) => f.codigo.toLowerCase() == formaCodigo.toLowerCase()).firstOrNull;
+              pos.descontoDobraSnapshot = pos.formaSelecionada?.descontoDobra;
+              pos.formaSnapshot = pos.formaSelecionada?.toSnapshot();
 
               final comprimentosMap = posMap['comprimentos'] as Map? ?? {};
               for (final entry in comprimentosMap.entries) {

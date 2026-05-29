@@ -291,6 +291,8 @@ class DetalhamentoIaController {
 
           final formaCodigo = posMap['forma_codigo']?.toString() ?? '';
           pos.formaSelecionada = BackendClient.formas.data.where((f) => f.codigo.toLowerCase() == formaCodigo.toLowerCase()).firstOrNull;
+          pos.descontoDobraSnapshot = pos.formaSelecionada?.descontoDobra;
+          pos.formaSnapshot = pos.formaSelecionada?.toSnapshot();
 
           final comprimentosMap = posMap['comprimentos'] as Map? ?? {};
           for (final entry in comprimentosMap.entries) {
@@ -382,6 +384,8 @@ class DetalhamentoIaController {
 
           final formaCodigo = posMap['forma_codigo']?.toString() ?? '';
           pos.formaSelecionada = BackendClient.formas.data.where((f) => f.codigo.toLowerCase() == formaCodigo.toLowerCase()).firstOrNull;
+          pos.descontoDobraSnapshot = pos.formaSelecionada?.descontoDobra;
+          pos.formaSnapshot = pos.formaSelecionada?.toSnapshot();
 
           final comprimentosMap = posMap['comprimentos'] as Map? ?? {};
           for (final entry in comprimentosMap.entries) {

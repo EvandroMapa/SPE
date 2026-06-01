@@ -100,6 +100,12 @@ class FormaItemModel {
   /// Grupo de simetria: '' = sem vínculo, 'A'/'B'/'C'/'D' = trechos espelhados.
   /// Trechos do mesmo grupo compartilham o comprimento na digitação.
   String grupoSimetria;
+  /// Se true, o comprimento deste trecho é sugerido automaticamente no detalhamento
+  /// usando a fórmula: floor(diâmetro_bitola_mm) cm. Ex: ø12,5mm → 12cm.
+  bool ancoragemAutomatica;
+  /// Se true, desenha uma linha perpendicular (divisória) no ponto final deste trecho
+  /// — puramente visual, aparece no preview e no PDF.
+  bool linhaDivisoria;
   FocusNode focusNode = FocusNode();
   late TextEditingController anguloController;
 
@@ -120,6 +126,8 @@ class FormaItemModel {
     required this.orientacao,
     this.tipo = 'linear',
     this.grupoSimetria = '',
+    this.ancoragemAutomatica = false,
+    this.linhaDivisoria = false,
   }) {
     _angulo = angulo;
     anguloController = TextEditingController(text: angulo.toInt().toString());
@@ -133,6 +141,8 @@ class FormaItemModel {
       orientacao: map['orientacao'] ?? 'Horário',
       tipo: map['tipo'] ?? 'linear',
       grupoSimetria: map['grupo_simetria'] ?? '',
+      ancoragemAutomatica: map['ancoragem_automatica'] as bool? ?? false,
+      linhaDivisoria: map['linha_divisoria'] as bool? ?? false,
     );
   }
 
@@ -144,6 +154,8 @@ class FormaItemModel {
       'orientacao': orientacao,
       'tipo': tipo,
       'grupo_simetria': grupoSimetria,
+      'ancoragem_automatica': ancoragemAutomatica,
+      'linha_divisoria': linhaDivisoria,
     };
   }
 

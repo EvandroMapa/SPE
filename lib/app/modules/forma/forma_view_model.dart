@@ -54,6 +54,8 @@ class FormaCriarModel {
               orientacao: e.orientacao,
               tipo: e.tipo,
               grupoSimetria: e.grupoSimetria,
+              ancoragemAutomatica: e.ancoragemAutomatica,
+              linhaDivisoria: e.linhaDivisoria,
             ))
         .toList();
   }

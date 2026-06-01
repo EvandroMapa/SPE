@@ -66,28 +66,54 @@ class FormaPainter extends CustomPainter {
       }
     }
 
-    // Vértices
-    if (mostrarVertices) {
-    for (var i = 0; i < pts.length; i++) {
-      final isDragging = i == sel;
-      final isExtremidade = i == 0 || i == pts.length - 1;
-      final isAtivo = isExtremidade && i == ativo && !isDragging;
+    // Linhas divisórias perpendiculares no ponto FINAL de cada trecho marcado
+    if (itens.isNotEmpty) {
+      final divisoriaPaint = Paint()
+        ..color = AppColors.primaryMain
+        ..strokeWidth = 2
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round;
 
-      if (isDragging) {
-        canvas.drawCircle(pts[i], 11, Paint()..color = Colors.orange.withValues(alpha: 0.3));
-        canvas.drawCircle(pts[i], 7, Paint()..color = Colors.orange);
-      } else if (isAtivo) {
-        canvas.drawCircle(pts[i], 11, Paint()..color = Colors.green.withValues(alpha: 0.25));
-        canvas.drawCircle(pts[i], 7, Paint()..color = Colors.green);
-        canvas.drawCircle(pts[i], 11,
-            Paint()
-              ..color = Colors.green
-              ..strokeWidth = 2
-              ..style = PaintingStyle.stroke);
-      } else {
-        canvas.drawCircle(pts[i], 7, Paint()..color = AppColors.primaryMain);
+      for (var i = 0; i < pts.length - 1 && i < itens.length; i++) {
+        if (!itens[i].linhaDivisoria) continue;
+        final p1 = pts[i];
+        final p2 = pts[i + 1]; // ponto final do trecho
+        final dx = p2.dx - p1.dx;
+        final dy = p2.dy - p1.dy;
+        final len = math.sqrt(dx * dx + dy * dy);
+        if (len < 1) continue;
+        // Normal perpendicular (rotação 90°)
+        final nx = -dy / len;
+        final ny =  dx / len;
+        const half = 25.0; // 25px de cada lado = 50px total
+        canvas.drawLine(
+          Offset(p2.dx + nx * half, p2.dy + ny * half),
+          Offset(p2.dx - nx * half, p2.dy - ny * half),
+          divisoriaPaint,
+        );
       }
     }
+
+    // Vértices
+    if (mostrarVertices) {
+      for (var i = 0; i < pts.length; i++) {
+        final isDragging = i == sel;
+        final isExtremidade = i == 0 || i == pts.length - 1;
+        final isAtivo = isExtremidade && i == ativo && !isDragging;
+
+        if (isDragging) {
+          canvas.drawCircle(pts[i], 11, Paint()..color = Colors.orange.withValues(alpha: 0.3));
+          canvas.drawCircle(pts[i], 7, Paint()..color = Colors.orange);
+        } else if (isAtivo) {
+          canvas.drawCircle(pts[i], 11, Paint()..color = Colors.green.withValues(alpha: 0.25));
+          canvas.drawCircle(pts[i], 7, Paint()..color = Colors.green);
+          canvas.drawCircle(pts[i], 11,
+              Paint()
+                ..color = Colors.green
+                ..strokeWidth = 2
+                ..style = PaintingStyle.stroke);
+        }
+      }
     }
 
     // Legendas

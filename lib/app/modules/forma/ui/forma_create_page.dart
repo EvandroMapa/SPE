@@ -12,11 +12,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:acoplan/app/modules/forma/ui/forma_preview_widget.dart';
 
-class FormaCreatePage extends StatelessWidget {
-  FormaCreatePage({super.key});
+class FormaCreatePage extends StatefulWidget {
+  const FormaCreatePage({super.key});
 
+  @override
+  State<FormaCreatePage> createState() => _FormaCreatePageState();
+}
+
+class _FormaCreatePageState extends State<FormaCreatePage> {
+  int _selectedTab = 0;
   final FocusNode _focoBotaoAdicionar = FocusNode();
   final GlobalKey<FormaPreviewState> _previewKey = GlobalKey<FormaPreviewState>();
+
+  @override
+  void dispose() {
+    _focoBotaoAdicionar.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,90 +44,182 @@ class FormaCreatePage extends StatelessWidget {
               style: AppCss.mediumBold.setColor(Colors.white),
             ),
           ),
-          body: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ── Linha Superior: Código e Descrição ──────────────────────────
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(
-                      width: 150,
-                      child: _buildField('Código', formulario.codigo, Icons.tag, apenasNumeros: true),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: _buildField('Descrição', formulario.descricao, Icons.description_outlined),
-                    ),
-                  ],
-                ),
-                const H(32),
-
-                // ── Conteúdo Principal: Trechos (Esq) e Desenho (Dir) ────────────
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Coluna da Esquerda: Trechos
-                    Expanded(
-                      flex: 1,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text('Itens / Trechos', style: AppCss.mediumBold),
-                              IconButton(
-                                focusNode: _focoBotaoAdicionar,
-                                onPressed: () {
-                                  _previewKey.currentState?.prepararAdicionarTrecho();
-                                  formaCtrl.adicionarItem();
-                                },
-                                icon: const Icon(Icons.add, size: 20),
-                                color: AppColors.primaryMain,
-                                tooltip: 'Adicionar Trecho',
-                                style: IconButton.styleFrom(
-                                  backgroundColor: AppColors.primaryMain.withValues(alpha: 0.1),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const H(16),
-                          _buildItensTable(formulario),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 32),
-                    // Coluna da Direita: Desenho
-                    Expanded(
-                      flex: 1,
-                      child: _buildImagePicker(context, formulario),
-                    ),
-                  ],
-                ),
-                const H(24),
-                _SimulacaoCorte(formulario: formulario),
-                const H(24),
-
-                // ── Botão Salvar ──────────────────────────────────────────────
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: () => formaCtrl.confirmar(context),
-                    child: const Text('SALVAR CADASTRO'),
+          body: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildSidebar(),
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  child: KeyedSubtree(
+                    key: ValueKey(_selectedTab),
+                    child: _buildContent(formulario),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         );
       },
     );
   }
 
+  // ── Sidebar ──────────────────────────────────────────────────────────────────
+  Widget _buildSidebar() {
+    return Container(
+      width: 60,
+      decoration: const BoxDecoration(
+        color: Color(0xFFF1F5F9),
+        border: Border(right: BorderSide(color: Color(0xFFE2E8F0))),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 12),
+          _buildSidebarItem(0, Icons.format_shapes_rounded, 'Edição da Forma'),
+          _buildSidebarItem(1, Icons.content_cut_rounded, 'Simulação de Corte'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSidebarItem(int index, IconData icon, String tooltip) {
+    final selected = _selectedTab == index;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      child: Tooltip(
+        message: tooltip,
+        preferBelow: false,
+        waitDuration: const Duration(milliseconds: 300),
+        child: GestureDetector(
+          onTap: () => setState(() => _selectedTab = index),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: selected
+                  ? AppColors.primaryMain.withValues(alpha: 0.10)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: selected
+                    ? AppColors.primaryMain.withValues(alpha: 0.20)
+                    : Colors.transparent,
+              ),
+            ),
+            child: Icon(
+              icon,
+              size: 18,
+              color: selected ? AppColors.primaryMain : Colors.grey[400],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Content Router ───────────────────────────────────────────────────────────
+  Widget _buildContent(FormaCriarModel formulario) {
+    switch (_selectedTab) {
+      case 0:
+        return _buildTabEdicao(formulario);
+      case 1:
+        return _buildTabSimulacao(formulario);
+      default:
+        return _buildTabEdicao(formulario);
+    }
+  }
+
+  // ── Aba 0: Edição da Forma ───────────────────────────────────────────────────
+  Widget _buildTabEdicao(FormaCriarModel formulario) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Linha Superior: Código e Descrição ──────────────────────────
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 150,
+                child: _buildField('Código', formulario.codigo, Icons.tag, apenasNumeros: true),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildField('Descrição', formulario.descricao, Icons.description_outlined),
+              ),
+            ],
+          ),
+          const H(32),
+
+          // ── Conteúdo Principal: Trechos (Esq) e Desenho (Dir) ────────────
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Coluna da Esquerda: Trechos
+              Expanded(
+                flex: 1,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Itens / Trechos', style: AppCss.mediumBold),
+                        IconButton(
+                          focusNode: _focoBotaoAdicionar,
+                          onPressed: () {
+                            _previewKey.currentState?.prepararAdicionarTrecho();
+                            formaCtrl.adicionarItem();
+                          },
+                          icon: const Icon(Icons.add, size: 20),
+                          color: AppColors.primaryMain,
+                          tooltip: 'Adicionar Trecho',
+                          style: IconButton.styleFrom(
+                            backgroundColor: AppColors.primaryMain.withValues(alpha: 0.1),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const H(16),
+                    _buildItensTable(formulario),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 32),
+              // Coluna da Direita: Desenho
+              Expanded(
+                flex: 1,
+                child: _buildImagePicker(context, formulario),
+              ),
+            ],
+          ),
+          const H(24),
+
+          // ── Botão Salvar ──────────────────────────────────────────────
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton(
+              onPressed: () => formaCtrl.confirmar(context),
+              child: const Text('SALVAR CADASTRO'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Aba 1: Simulação de Corte ────────────────────────────────────────────────
+  Widget _buildTabSimulacao(FormaCriarModel formulario) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: _SimulacaoCorte(formulario: formulario),
+    );
+  }
+
+  // ── Field Helper ─────────────────────────────────────────────────────────────
   Widget _buildField(String label, dynamic controller, IconData icon, {bool apenasNumeros = false}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -125,8 +229,8 @@ class FormaCreatePage extends StatelessWidget {
         TextField(
           controller: controller.controller,
           keyboardType: apenasNumeros ? TextInputType.number : TextInputType.text,
-          inputFormatters: apenasNumeros 
-              ? [FilteringTextInputFormatter.digitsOnly] 
+          inputFormatters: apenasNumeros
+              ? [FilteringTextInputFormatter.digitsOnly]
               : [],
           decoration: InputDecoration(
             prefixIcon: Icon(icon, size: 20),
@@ -136,8 +240,7 @@ class FormaCreatePage extends StatelessWidget {
     );
   }
 
-
-
+  // ── Image Picker ──────────────────────────────────────────────────────────────
   Widget _buildImagePicker(BuildContext context, FormaCriarModel formulario) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -301,6 +404,7 @@ class FormaCreatePage extends StatelessWidget {
     );
   }
 
+  // ── Itens Table ───────────────────────────────────────────────────────────────
   Widget _buildItensTable(FormaCriarModel formulario) {
     if (formulario.itens.isEmpty) {
       return Container(
@@ -323,9 +427,9 @@ class FormaCreatePage extends StatelessWidget {
       children: [
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF1F5F9),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+          decoration: const BoxDecoration(
+            color: Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
           ),
           child: Row(
             children: [
@@ -334,6 +438,14 @@ class FormaCreatePage extends StatelessWidget {
               Expanded(child: Text('Ângulo', style: AppCss.minimumBold)),
               Expanded(child: Text('Orientação', style: AppCss.minimumBold)),
               SizedBox(width: 64, child: Center(child: Text('Grupo', style: AppCss.minimumBold))),
+              SizedBox(width: 36, child: Center(child: Tooltip(
+                message: 'Ancoragem automática: comprimento = 10 × diâmetro da bitola',
+                child: Icon(Icons.anchor_rounded, size: 14, color: Colors.grey[500]),
+              ))),
+              SizedBox(width: 36, child: Center(child: Tooltip(
+                message: 'Linha divisória: linha perpendicular no fim do trecho (visual)',
+                child: Icon(Icons.horizontal_rule_rounded, size: 14, color: Colors.grey[500]),
+              ))),
               const SizedBox(width: 40),
             ],
           ),
@@ -428,7 +540,7 @@ class FormaCreatePage extends StatelessWidget {
                       ),
                     ),
                   ),
-                  // ── Dropdown Grupo de Simetria ───────────────────
+                  // ── Dropdown Grupo de Simetria ─────────────────────────
                   SizedBox(
                     width: 64,
                     child: Center(
@@ -438,6 +550,90 @@ class FormaCreatePage extends StatelessWidget {
                           item.grupoSimetria = g;
                           formaCtrl.formularioStream.update();
                         },
+                      ),
+                    ),
+                  ),
+                  // ── Toggle Ancoragem Automática ─────────────────────────
+                  SizedBox(
+                    width: 36,
+                    child: Center(
+                      child: Tooltip(
+                        message: item.ancoragemAutomatica
+                            ? 'Ancoragem ativa: comprimento = floor(diâm. mm) cm'
+                            : 'Ativar ancoragem automática (10×diâm. em cm)',
+                        preferBelow: false,
+                        waitDuration: const Duration(milliseconds: 300),
+                        child: GestureDetector(
+                          onTap: () {
+                            item.ancoragemAutomatica = !item.ancoragemAutomatica;
+                            formaCtrl.formularioStream.update();
+                          },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 150),
+                            width: 28, height: 28,
+                            decoration: BoxDecoration(
+                              color: item.ancoragemAutomatica
+                                  ? AppColors.primaryMain.withValues(alpha: 0.12)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: item.ancoragemAutomatica
+                                    ? AppColors.primaryMain
+                                    : Colors.grey.shade300,
+                                width: item.ancoragemAutomatica ? 1.5 : 1.0,
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.anchor_rounded,
+                              size: 14,
+                              color: item.ancoragemAutomatica
+                                  ? AppColors.primaryMain
+                                  : Colors.grey[400],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  // ── Toggle Linha Divisória ──
+                  SizedBox(
+                    width: 36,
+                    child: Center(
+                      child: Tooltip(
+                        message: item.linhaDivisoria
+                            ? 'Linha divisória ativa no fim deste trecho'
+                            : 'Ativar linha divisória perpendicular no fim do trecho',
+                        preferBelow: false,
+                        waitDuration: const Duration(milliseconds: 300),
+                        child: GestureDetector(
+                          onTap: () {
+                            item.linhaDivisoria = !item.linhaDivisoria;
+                            formaCtrl.formularioStream.update();
+                          },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 150),
+                            width: 28, height: 28,
+                            decoration: BoxDecoration(
+                              color: item.linhaDivisoria
+                                  ? AppColors.primaryMain.withValues(alpha: 0.12)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: item.linhaDivisoria
+                                    ? AppColors.primaryMain
+                                    : Colors.grey.shade300,
+                                width: item.linhaDivisoria ? 1.5 : 1.0,
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.horizontal_rule_rounded,
+                              size: 14,
+                              color: item.linhaDivisoria
+                                  ? AppColors.primaryMain
+                                  : Colors.grey[400],
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -454,6 +650,7 @@ class FormaCreatePage extends StatelessWidget {
     );
   }
 }
+
 
 /// Botão pequeno para trocar posição (rótulo) do trecho no desenho.
 class _TrocaBtn extends StatelessWidget {

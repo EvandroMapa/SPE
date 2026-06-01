@@ -89,18 +89,36 @@ set "CONTENTS_DIR=%BUNDLE_DIR%\Contents"
 
 if not exist "%CONTENTS_DIR%" mkdir "%CONTENTS_DIR%"
 
-:: Copiar DLLs
+:: Copiar DLLs e dependencias NuGet
 if "%TEM_2025%"=="1" if defined DLL_2025 (
     copy /Y "%DLL_2025%" "%CONTENTS_DIR%\SpePlugin.dll" >nul
-    echo     [OK] DLL 2025 copiada
+    :: Copiar dependencias da mesma pasta (ex: System.Text.Json.dll, etc.)
+    for %%f in ("%~dp0SpePlugin\bin\Release\net8.0-windows\*.dll") do (
+        if /I not "%%~nxf"=="SpePlugin.dll" (
+            copy /Y "%%f" "%CONTENTS_DIR%\" >nul 2>nul
+        )
+    )
+    echo     [OK] DLL 2025 e dependencias copiadas
 )
 
 if "%TEM_2022%"=="1" if defined DLL_2022 (
     copy /Y "%DLL_2022%" "%CONTENTS_DIR%\SpePlugin2022.dll" >nul
-    echo     [OK] DLL 2022 copiada
+    :: Copiar todas as dependencias NuGet da pasta net48 (System.Text.Json, etc.)
+    set "SRC_DIR2022="
+    if exist "%~dp0SpePlugin\bin\Release\net48\SpePlugin.dll" (
+        set "SRC_DIR2022=%~dp0SpePlugin\bin\Release\net48"
+    ) else (
+        set "SRC_DIR2022=%~dp0"
+    )
+    for %%f in ("%SRC_DIR2022%\*.dll") do (
+        if /I not "%%~nxf"=="SpePlugin.dll" (
+            copy /Y "%%f" "%CONTENTS_DIR%\" >nul 2>nul
+        )
+    )
+    echo     [OK] DLL 2022 e dependencias copiadas
 )
 
-:: Criar PackageContents.xml com ambas versoes
+:: Criar PackageContents.xml - somente com entradas para DLLs instaladas
 (
 echo ^<?xml version="1.0" encoding="utf-8"?^>
 echo ^<ApplicationPackage
@@ -113,19 +131,32 @@ echo   Author="SPE"^>
 echo   ^<CompanyDetails Name="SPE" /^>
 echo   ^<Components^>
 echo     ^<RuntimeRequirements OS="Win64" Platform="AutoCAD" /^>
-echo     ^<ComponentEntry AppName="SpePlugin" Version="2.0"
-echo       ModuleName="./Contents/SpePlugin.dll"
-echo       AppDescription="SPE - Captura de Armaduras"
-echo       SeriesMin="R25.0"
-echo       LoadOnAutoCADStartup="True" /^>
-echo     ^<ComponentEntry AppName="SpePlugin2022" Version="2.0"
-echo       ModuleName="./Contents/SpePlugin2022.dll"
-echo       AppDescription="SPE - Captura de Armaduras"
-echo       SeriesMin="R24.0" SeriesMax="R24.3"
-echo       LoadOnAutoCADStartup="True" /^>
+) > "%BUNDLE_DIR%\PackageContents.xml"
+
+if "%TEM_2025%"=="1" if defined DLL_2025 (
+    (
+    echo     ^<ComponentEntry AppName="SpePlugin" Version="2.0"
+    echo       ModuleName="./Contents/SpePlugin.dll"
+    echo       AppDescription="SPE - Captura de Armaduras"
+    echo       SeriesMin="R25.0"
+    echo       LoadOnAutoCADStartup="True" /^>
+    ) >> "%BUNDLE_DIR%\PackageContents.xml"
+)
+
+if "%TEM_2022%"=="1" if defined DLL_2022 (
+    (
+    echo     ^<ComponentEntry AppName="SpePlugin2022" Version="2.0"
+    echo       ModuleName="./Contents/SpePlugin2022.dll"
+    echo       AppDescription="SPE - Captura de Armaduras"
+    echo       SeriesMin="R24.0" SeriesMax="R24.3"
+    echo       LoadOnAutoCADStartup="True" /^>
+    ) >> "%BUNDLE_DIR%\PackageContents.xml"
+)
+
+(
 echo   ^</Components^>
 echo ^</ApplicationPackage^>
-) > "%BUNDLE_DIR%\PackageContents.xml"
+) >> "%BUNDLE_DIR%\PackageContents.xml"
 
 echo     [OK] PackageContents.xml criado
 

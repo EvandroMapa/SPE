@@ -1,0 +1,74 @@
+============================================================
+  SPE Plugin para AutoCAD - Instalador
+  Sistema de Projetos Estruturais
+============================================================
+
+REQUISITOS
+----------
+  - AutoCAD 2022, 2023, 2024 ou 2025 instalado
+  - Windows 64-bit
+  - Conexao com a internet
+
+
+COMO INSTALAR
+-------------
+  1. Clique com o botao direito em "instalar.bat"
+  2. Selecione "Executar como administrador"
+  3. Aguarde a mensagem: "Instalacao concluida!"
+  4. Feche e reabra o AutoCAD
+
+
+COMO USAR
+---------
+  Dentro do AutoCAD, utilize os comandos abaixo
+  digitando-os na barra de comandos:
+
+  SPE_NOVO    -> Inicia um novo detalhamento
+                 (seleciona cliente e obra)
+
+  SPE_ELEM    -> Define o elemento estrutural
+                 (ex: V101, P1, L1)
+
+  SPE_POS     -> Captura uma armadura clicando
+                 no texto do desenho
+
+  SPE_ENVIAR  -> Envia tudo para a plataforma SPE
+                 (aparece no app em tempo real!)
+
+  SPE_STATUS  -> Mostra os dados coletados
+  SPE_LIMPAR  -> Cancela e limpa a sessao atual
+
+
+FLUXO TIPICO
+------------
+  1. SPE_NOVO    -> escolha o cliente e a obra
+  2. SPE_ELEM    -> digite "V101"
+  3. SPE_POS     -> clique em cada texto de armadura
+  4. SPE_ELEM    -> digite "P1" (proximo elemento)
+  5. SPE_POS     -> clique nas armaduras do P1
+  6. SPE_ENVIAR  -> confirme o envio
+
+
+PROBLEMAS FREQUENTES
+--------------------
+  Plugin nao aparece no AutoCAD?
+  -> Verifique se executou o instalar.bat
+     como administrador.
+  -> Certifique-se de ter fechado e reaberto
+     o AutoCAD apos a instalacao.
+
+  AutoCAD nao foi detectado?
+  -> Confira se o AutoCAD esta instalado em:
+     C:\Program Files\Autodesk\AutoCAD 20XX
+
+  Erro ao enviar dados?
+  -> Verifique a conexao com a internet.
+  -> Entre em contato com o suporte.
+
+
+SUPORTE
+-------
+  Em caso de duvidas ou problemas, entre em
+  contato com a equipe SPE.
+
+============================================================

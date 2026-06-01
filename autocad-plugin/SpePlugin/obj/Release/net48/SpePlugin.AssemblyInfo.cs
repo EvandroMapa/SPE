@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("SpePlugin")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+8a9a89494242b67c51c1da12fbabac236bf1a802")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+4207185e8363dcf96c9447f8729aa81da5bad213")]
 [assembly: System.Reflection.AssemblyProductAttribute("SpePlugin")]
 [assembly: System.Reflection.AssemblyTitleAttribute("SpePlugin")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

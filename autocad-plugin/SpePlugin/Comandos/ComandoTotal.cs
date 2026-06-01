@@ -364,18 +364,6 @@ namespace SpePlugin.Comandos
                             trMark.AddNewlyCreatedDBObject(linha1, true);
                             btr.AppendEntity(linha2);
                             trMark.AddNewlyCreatedDBObject(linha2, true);
-
-                            var midPt = new Point3d(
-                                (p1.X + p2.X) / 2, Math.Max(p1.Y, p2.Y) + 50, 0);
-                            var label = new DBText();
-                            label.TextString = $"\u2713 {nomeElemento} importado";
-                            label.Height = 30;
-                            label.ColorIndex = (short)corIdx;
-                            label.Position = midPt;
-                            label.HorizontalMode = TextHorizontalMode.TextCenter;
-                            label.AlignmentPoint = midPt;
-                            btr.AppendEntity(label);
-                            trMark.AddNewlyCreatedDBObject(label, true);
                         }
 
                         trMark.Commit();

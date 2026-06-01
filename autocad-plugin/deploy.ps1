@@ -43,7 +43,7 @@ if ($tem2022) {
 }
 
 # 3. Deploy para o bundle
-Write-Host "[3/3] Deploy..." -ForegroundColor Yellow
+Write-Host "[3/4] Deploy para o bundle..." -ForegroundColor Yellow
 if (Test-Path $bundleDir) {
     try {
         Copy-Item "$projetoDir\bin\Release\net8.0-windows\SpePlugin.dll" "$bundleDir\SpePlugin.dll" -Force
@@ -51,7 +51,11 @@ if (Test-Path $bundleDir) {
 
         if ($tem2022 -and (Test-Path "$projetoDir\bin\Release\net48\SpePlugin.dll")) {
             Copy-Item "$projetoDir\bin\Release\net48\SpePlugin.dll" "$bundleDir\SpePlugin2022.dll" -Force
-            Write-Host "  [OK] DLL 2022 copiada para o bundle" -ForegroundColor Green
+            # Copiar todas as dependencias NuGet do net48
+            Get-ChildItem "$projetoDir\bin\Release\net48\*.dll" |
+                Where-Object { $_.Name -ne "SpePlugin.dll" } |
+                ForEach-Object { Copy-Item $_.FullName "$bundleDir\" -Force }
+            Write-Host "  [OK] DLL 2022 + dependencias copiadas para o bundle" -ForegroundColor Green
         }
     } catch {
         Write-Host "  [!] Nao conseguiu copiar (AutoCAD aberto?)" -ForegroundColor Yellow
@@ -60,7 +64,31 @@ if (Test-Path $bundleDir) {
     Write-Host "  Bundle nao encontrado. Rode 'instalar.bat' primeiro." -ForegroundColor Yellow
 }
 
+# 4. Atualizar pasta dist/ com todas as DLLs
+Write-Host "[4/4] Atualizando dist/..." -ForegroundColor Yellow
+$distDir = "d:\DESENVOLVIMENTO\SPE\autocad-plugin\dist"
+
+if (-not (Test-Path $distDir)) { New-Item -ItemType Directory -Path $distDir | Out-Null }
+
+# DLL 2025
+Copy-Item "$projetoDir\bin\Release\net8.0-windows\SpePlugin.dll" "$distDir\SpePlugin.dll" -Force
+Write-Host "  [OK] SpePlugin.dll atualizada no dist/" -ForegroundColor Green
+
+# DLL 2022 + dependencias NuGet
+if ($tem2022 -and (Test-Path "$projetoDir\bin\Release\net48\SpePlugin.dll")) {
+    Copy-Item "$projetoDir\bin\Release\net48\SpePlugin.dll" "$distDir\SpePlugin2022.dll" -Force
+    Get-ChildItem "$projetoDir\bin\Release\net48\*.dll" |
+        Where-Object { $_.Name -ne "SpePlugin.dll" } |
+        ForEach-Object {
+            Copy-Item $_.FullName "$distDir\" -Force
+            Write-Host "  [OK] $($_.Name) copiada para dist/" -ForegroundColor Gray
+        }
+    Write-Host "  [OK] SpePlugin2022.dll + deps atualizadas no dist/" -ForegroundColor Green
+}
+
 Write-Host ""
 Write-Host "=== Deploy concluido! ===" -ForegroundColor Cyan
+Write-Host "  Bundle: $bundleDir" -ForegroundColor White
+Write-Host "  Dist:   $distDir" -ForegroundColor White
 Write-Host "  Feche e reabra o AutoCAD." -ForegroundColor White
 Write-Host ""

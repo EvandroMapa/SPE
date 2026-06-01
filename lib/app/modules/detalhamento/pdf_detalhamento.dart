@@ -532,6 +532,28 @@ class PdfDetalhamento {
                   }
                 }
                 canvas.strokePath();
+
+                // Linhas divisórias perpendiculares no ponto FINAL dos trechos marcados
+                for (var i = 0; i < itens.length && i < display.length - 1; i++) {
+                  if (!itens[i].linhaDivisoria) continue;
+                  final p1 = display[i];
+                  final p2 = display[i + 1];
+                  final dx = p2.x - p1.x;
+                  final dy = p2.y - p1.y;
+                  final len = math.sqrt(dx * dx + dy * dy);
+                  if (len < 1) continue;
+                  // Normal perpendicular
+                  final nx = -dy / len;
+                  final ny =  dx / len;
+                  const half = 10.0; // 10pt de cada lado no PDF
+                  canvas.setStrokeColor(PdfColors.blueGrey900);
+                  canvas.setLineWidth(1.0);
+                  canvas.drawLine(
+                    p2.x + nx * half, p2.y + ny * half,
+                    p2.x - nx * half, p2.y - ny * half,
+                  );
+                  canvas.strokePath();
+                }
               }
             )
           ),

@@ -60,12 +60,33 @@ class PedidoTecnicoSupabaseCollection {
 
   // ── CRUD ──────────────────────────────────────────────
 
-  /// Cria o pedido e seus vínculos de elementos. Retorna o UUID gerado.
-  Future<String> criar(PedidoTecnicoModel model) async {
+  /// Cria o pedido e seus vínculos de elementos. Retorna o modelo completo gerado.
+  Future<PedidoTecnicoModel> criar(PedidoTecnicoModel model) async {
     final proximoCodigo = data.isEmpty
         ? 1
         : data.map((p) => p.codigo).reduce((a, b) => a > b ? a : b) + 1;
-    final m = model.copyWith(codigo: proximoCodigo);
+        
+    // Calcular o sequencial correto baseado apenas na obra selecionada
+    final pedidosDaObra = data.where((p) => p.obraId == model.obraId).toList();
+    int maxSeq = 0;
+    for (final p in pedidosDaObra) {
+      final parts = p.identificador.split('.');
+      if (parts.length > 1) {
+        final numStr = parts.last;
+        final seq = int.tryParse(numStr) ?? 0;
+        if (seq > maxSeq) maxSeq = seq;
+      }
+    }
+    
+    // O modelo original já tem o prefixo na string antes do '.'
+    final prefixo = model.identificador.split('.').first; 
+    final seqStr = (maxSeq + 1).toString().padLeft(3, '0');
+    final identificadorCorreto = '$prefixo.$seqStr';
+
+    final m = model.copyWith(
+      codigo: proximoCodigo,
+      identificador: identificadorCorreto,
+    );
     final inserted = await SupabaseService.client
         .from(name)
         .insert(m.toSupabaseMap())
@@ -80,7 +101,10 @@ class PedidoTecnicoSupabaseCollection {
           .insert(elem.toSupabaseMap(pedidoId));
     }
     await fetch();
-    return pedidoId;
+    return PedidoTecnicoModel.fromSupabaseMap(
+      inserted,
+      model.elementos.map((e) => e.toMap()).toList() // Passamos map apenas pra não quebrar parser, though fromSupabaseMap expects DB keys
+    );
   }
 
   /// Atualiza dados gerais do pedido (sem alterar elementos)
@@ -144,6 +168,35 @@ class PedidoTecnicoSupabaseCollection {
       if (!pedido.isAberto) continue;
       for (final elem in pedido.elementos) {
         mapa['${elem.elementoId}_${elem.elementoNome}'] = pedido;
+      }
+    }
+    return mapa;
+  }
+
+  /// Retorna mapa: elementoId -> Lista de PedidoTecnicoModel (pedidos abertos)
+  Map<String, List<PedidoTecnicoModel>> get elementosEmPedidosAbertos {
+    final mapa = <String, List<PedidoTecnicoModel>>{};
+    for (final pedido in data) {
+      if (!pedido.isAberto) continue;
+      for (final elem in pedido.elementos) {
+        final chave = '${elem.elementoId}_${elem.elementoNome}';
+        mapa.putIfAbsent(chave, () => []).add(pedido);
+      }
+    }
+    return mapa;
+  }
+
+  /// Retorna a quantidade total solicitada de cada elemento considerando 
+  /// todos os pedidos abertos (exceto o pedido atual, se fornecido).
+  Map<String, int> quantidadesAlocadas(String? pedidoIgnoradoId) {
+    final mapa = <String, int>{};
+    for (final pedido in data) {
+      if (!pedido.isAberto) continue;
+      if (pedidoIgnoradoId != null && pedido.id == pedidoIgnoradoId) continue;
+      
+      for (final elem in pedido.elementos) {
+        final chave = '${elem.elementoId}_${elem.elementoNome}';
+        mapa[chave] = (mapa[chave] ?? 0) + elem.quantidadeSolicitada;
       }
     }
     return mapa;

@@ -2247,12 +2247,18 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
     final cod = _bitolaCtrl.text.trim();
     if (cod.isEmpty) { setState(() => _pBitola = null); return false; }
     final match = BackendClient.bitolas.data.where((b) =>
-        b.nome.toLowerCase() == cod.toLowerCase() || b.descricao.toLowerCase() == cod.toLowerCase()).firstOrNull;
+        b.nome.toLowerCase() == cod.toLowerCase() ||
+        b.descricao.toLowerCase() == cod.toLowerCase() ||
+        b.codigoStr == cod).firstOrNull;
     setState(() {
       _pBitola = match;
       if (match != null && _posicaoSelecionada != null) _posicaoModificada = true;
     });
     if (match == null) return false;
+    // Atualiza o campo com o nome da bitola (caso tenha digitado código numérico)
+    if (_bitolaCtrl.text != match.nome) {
+      _bitolaCtrl.text = match.nome;
+    }
     // Aplica ancoragem automática nos trechos marcados (campos já zerados ao trocar bitola)
     Future.microtask(() => _aplicarAncoragemAutomatica());
     return true;
@@ -2746,6 +2752,19 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
       return forma.itens[i].trecho;
     });
 
+    final itensPreview = forma.itens.map((it) {
+      return FormaItemModel(
+        trecho: it.trecho,
+        comprimento: it.comprimento,
+        angulo: it.angulo,
+        orientacao: it.orientacao,
+        tipo: it.tipo,
+        grupoSimetria: it.grupoSimetria,
+        ancoragemAutomatica: it.ancoragemAutomatica,
+        linhaDivisoria: it.linhaDivisoria,
+      );
+    }).toList();
+
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       _hdr('FORMA ${forma.codigo}', Icons.architecture_outlined, null),
       // Desenho (altura fixa) com container decorado
@@ -2761,7 +2780,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(12),
           child: FormaPreviewWidget(
-            itens: forma.itens, height: 230,
+            itens: itensPreview, height: 230,
             mostrarLegenda: true,
             rotacaoExterna: forma.rotacao,
             legendasCustom: legendasCustom,
@@ -2964,15 +2983,21 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                                              baseOffset: 0, extentOffset: _compCtrls[nextIdx].text.length);
                                        }
                                      } else {
+                                       // Ultimo trecho: salvar e preparar nova posicao
                                        final posParaSalvar = _posicaoSelecionada;
                                        final elemId = _elementoDbIds[_elemIdx];
                                        if (posParaSalvar != null && elemId != null && posParaSalvar.id.length == 36) {
                                          detalhamentoCtrl.adicionarPosicaoAtualizada(posParaSalvar, elemId);
                                        }
-                                       if (posParaSalvar != null && _posicaoFocadaId != posParaSalvar.id) {
-                                         setState(() => _posicaoFocadaId = posParaSalvar.id);
-                                       }
-                                       FocusScope.of(context).unfocus();
+                                       setState(() {
+                                         _limparPos();
+                                         _posicaoSelecionada = null;
+                                         _posicaoFocadaId = null;
+                                       });
+                                       Future.delayed(const Duration(milliseconds: 80), () {
+                                         if (!mounted) return;
+                                         _pNum.focus.requestFocus();
+                                       });
                                      }
                                    });
                                  },

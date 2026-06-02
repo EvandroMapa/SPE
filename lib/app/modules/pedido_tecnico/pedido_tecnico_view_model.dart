@@ -30,7 +30,7 @@ class PedidoTecnicoCreateModel {
   /// Gera o identificador: prefixo.001
   String _gerarIdentificador(int codigo) {
     final prefixo = obraPrefixo.isNotEmpty ? obraPrefixo : obraNome;
-    final seq = codigo.toString().padLeft(3, '0');
+    final seq = (codigo > 0 ? codigo : 1).toString().padLeft(3, '0');
     return '$prefixo.$seq';
   }
 
@@ -133,8 +133,8 @@ class ElementoDetalhamentoViewModel {
   final ElementoModel elemento;
   final DisponibilidadeElemento disponibilidade;
 
-  /// Código do pedido que ocupa este elemento (se em pedido)
-  final int? codigoPedidoOcupante;
+  /// Identificador do pedido que ocupa este elemento (se em pedido)
+  final String? identificadorPedidoOcupante;
 
   bool get estaDisponivel =>
       disponibilidade == DisponibilidadeElemento.disponivel;
@@ -142,6 +142,6 @@ class ElementoDetalhamentoViewModel {
   ElementoDetalhamentoViewModel({
     required this.elemento,
     required this.disponibilidade,
-    this.codigoPedidoOcupante,
+    this.identificadorPedidoOcupante,
   });
 }

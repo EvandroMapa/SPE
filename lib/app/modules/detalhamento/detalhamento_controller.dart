@@ -231,6 +231,15 @@ class DetalhamentoController {
   // ── Excluir detalhamento inteiro ─────────────────────────────
   Future<void> onDelete(BuildContext context, DetalhamentoModel detalhamento) async {
     try {
+      final estaVinculado = await BackendClient.detalhamentos.estaVinculadoAPedido(detalhamento.id);
+      if (estaVinculado) {
+        NotificationService.showNegative(
+          'Ação bloqueada',
+          'Este detalhamento não pode ser excluído pois possui elementos vinculados a um ou mais Pedidos Técnicos.',
+        );
+        return;
+      }
+      
       await BackendClient.detalhamentos.delete(detalhamento);
       NotificationService.showPositive('Sucesso', 'Detalhamento excluído');
     } catch (e) {

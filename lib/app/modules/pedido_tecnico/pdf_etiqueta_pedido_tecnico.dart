@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:acoplan/app/core/client/models/forma_model.dart';
 import 'package:acoplan/app/core/client/models/pedido_tecnico_model.dart';
 import 'package:acoplan/app/core/client/models/detalhamento_model.dart';
+import 'package:acoplan/app/core/client/models/trecho_variavel_config.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
@@ -40,11 +41,25 @@ class PdfEtiquetaPedidoTecnico {
       if (elemDetalhamento == null) continue;
       for (final pos in elemDetalhamento.posicoes) {
         final formaDef = formasCadastradas.where((f) => f.codigo == pos.formaCodigo).firstOrNull;
+        // Etiqueta principal
         pdf.addPage(pw.Page(
           pageFormat: _formato,
           margin: pw.EdgeInsets.zero,
           build: (_) => _buildEtiqueta(pedido: pedido, elem: elem, elemDetalhamento: elemDetalhamento, pos: pos, formaDef: formaDef),
         ));
+
+        // Se tem trecho variável → UMA etiqueta extra com lista de medidas
+        final temVar = pos.variaveis.values.any((v) => v) && pos.variaveisConfig.isNotEmpty;
+        if (temVar) {
+          pdf.addPage(pw.Page(
+            pageFormat: _formato,
+            margin: pw.EdgeInsets.zero,
+            build: (_) => _buildEtiquetaMedidas(
+              pedido: pedido, elem: elem, elemDetalhamento: elemDetalhamento,
+              pos: pos,
+            ),
+          ));
+        }
       }
     }
     return pdf.save();
@@ -107,7 +122,7 @@ class PdfEtiquetaPedidoTecnico {
               pw.SizedBox(width: 8),
               pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.center, children: [
                 pw.Text('QTDE', style: _sTarjaLabel),
-                pw.Text('${elem.elementoQuantidade} pc', style: _sTarjaValor),
+                pw.Text('${elem.quantidadeSolicitada}', style: _sTarjaValor),
               ]),
             ]),
           ),
@@ -119,7 +134,7 @@ class PdfEtiquetaPedidoTecnico {
               pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceAround, children: [
                 _col('POS', '${pos.posicao}', fontSize: 15),
                 pw.Container(width: 0.8, height: 28, color: _corPreto),
-                _col('PEÇAS', '${pos.qtde} pc'),
+                _col('QTDE', '${pos.qtde}'),
                 pw.Container(width: 0.8, height: 28, color: _corPreto),
                 _col('BITOLA', bitolaStr),
                 pw.Container(width: 0.8, height: 28, color: _corPreto),
@@ -143,32 +158,22 @@ class PdfEtiquetaPedidoTecnico {
           ),
           pw.SizedBox(height: 3),
 
-          // 5 ── TRECHOS
-          if (pos.comprimentos.isNotEmpty) ...[
-            _boxBranca(radius: 5, vPad: 3,
-              child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-                pw.Text('TRECHOS  (* = variável)', style: _sLabel),
-                pw.SizedBox(height: 2),
-                pw.Text(trechosStr, style: _sTrechoLinha),
-                ..._variaveisExpandidas(pos),
-              ]),
-            ),
-            pw.SizedBox(height: 3),
-          ],
 
-          // 6 ── DESENHO — altura fixa para garantir caber no box
-          pw.Container(
-            height: 175,
-            decoration: pw.BoxDecoration(
-              color: _corBranco,
-              borderRadius: pw.BorderRadius.circular(5),
-              border: pw.Border.all(color: _corPreto, width: 0.8),
-            ),
-            child: pw.Padding(
-              padding: const pw.EdgeInsets.all(5),
-              child: formaDef == null || formaDef.itens.isEmpty
-                  ? pw.Center(child: pw.Text('SEM DESENHO', style: _sMiniBold))
-                  : _buildDesenhoForma(formaDef, pos.comprimentos),
+
+          // 6 ── DESENHO — expande para ocupar espaço restante
+          pw.Expanded(
+            child: pw.Container(
+              decoration: pw.BoxDecoration(
+                color: _corBranco,
+                borderRadius: pw.BorderRadius.circular(5),
+                border: pw.Border.all(color: _corPreto, width: 0.8),
+              ),
+              child: pw.Padding(
+                padding: const pw.EdgeInsets.all(5),
+                child: formaDef == null || formaDef.itens.isEmpty
+                    ? pw.Center(child: pw.Text('SEM DESENHO', style: _sMiniBold))
+                    : _buildDesenhoForma(formaDef, pos.comprimentos, variaveis: pos.variaveis, variaveisConfig: pos.variaveisConfig),
+              ),
             ),
           ),
 
@@ -228,15 +233,17 @@ class PdfEtiquetaPedidoTecnico {
   }
 
   // ── Desenho da forma — labels desenhados NO canvas para coordenadas corretas
-  static pw.Widget _buildDesenhoForma(FormaModel forma, Map<String, int> medidas) {
+  static pw.Widget _buildDesenhoForma(FormaModel forma, Map<String, int> medidas, {Map<String, bool> variaveis = const {}, Map<String, TrechoVariavelConfig> variaveisConfig = const {}}) {
     if (forma.itens.isEmpty) return pw.SizedBox();
 
+    // Usar comprimentos ORIGINAIS da forma para geometria fiel ao cadastro
     final itens = forma.itens.map((it) => FormaItemModel(
       trecho: it.trecho,
-      comprimento: medidas[it.trecho] ?? it.comprimento,
+      comprimento: it.comprimento,
       angulo: it.angulo,
       orientacao: it.orientacao,
       tipo: it.tipo,
+      linhaDivisoria: it.linhaDivisoria,
     )).toList();
 
     // Calcular pontos no espaço modelo
@@ -278,47 +285,52 @@ class PdfEtiquetaPedidoTecnico {
       if (p.y < mnY) mnY = p.y; if (p.y > mxY) mxY = p.y;
     }
 
-    // Tamanho fixo — deve ser menor que o container (175pt) menos padding(5*2) e border(~2)
-    const double cW = 213;
-    const double cH = 161;
+    return pw.LayoutBuilder(
+      builder: (context, constraints) {
+        final cW = constraints!.maxWidth > 0 ? constraints.maxWidth : 200.0;
+        final cH = constraints.maxHeight > 0 ? constraints.maxHeight : 150.0;
 
-    final pad = math.min(cW, cH) * 0.18;
+    final pad = math.min(cW, cH) * 0.12;
       final dw = cW - pad * 2, dh = cH - pad * 2;
       final lw = mxX - mnX, lh = mxY - mnY;
       final esc = (lw == 0 && lh == 0) ? 1.0 : math.min(dw / (lw == 0 ? 1 : lw), dh / (lh == 0 ? 1 : lh));
       final ox = (cW - lw * esc) / 2 - mnX * esc;
       final oy = (cH - lh * esc) / 2 - mnY * esc;
 
-      // Canvas PDF: y=0 em baixo, y cresce para cima
-      // Mapeamos modelo (y up) → canvas (y up): sem inversão
-      PdfPoint toCanvas(PdfPoint p) => PdfPoint(p.x * esc + ox, p.y * esc + oy);
-      final display = pts.map(toCanvas).toList();
+      // Canvas: Y-flip (modelo y-up → canvas y-down)
+      PdfPoint toTela(PdfPoint p) => PdfPoint(p.x * esc + ox, cH - (p.y * esc + oy));
+      final display = pts.map(toTela).toList();
 
-      // Centróide no espaço canvas
-      final centX = display.map((p) => p.x).reduce((a, b) => a + b) / display.length;
-      final centY = display.map((p) => p.y).reduce((a, b) => a + b) / display.length;
+      // Labels: sem Y-flip (para pw.Positioned y-down)
+      PdfPoint toWidget(PdfPoint p) => PdfPoint(p.x * esc + ox, p.y * esc + oy);
 
-      // Dados dos labels: calculados em espaço canvas
+      // Dados dos labels: calculados em espaço widget (para pw.Positioned)
       final labels = <({double x, double y, String texto})>[];
-      for (var i = 0; i < display.length - 1; i++) {
-        final p1 = display[i], p2 = display[i + 1];
-        final midX = (p1.x + p2.x) / 2;
-        final midY = (p1.y + p2.y) / 2;
-        final dx = p2.x - p1.x, dy = p2.y - p1.y;
+      for (var i = 0; i < pts.length - 1; i++) {
+        final w1 = toWidget(pts[i]), w2 = toWidget(pts[i + 1]);
+        final midX = (w1.x + w2.x) / 2;
+        final midY = (w1.y + w2.y) / 2;
+        final dx = w2.x - w1.x, dy = w2.y - w1.y;
         final len = math.sqrt(dx * dx + dy * dy);
         if (len < 1) continue;
-        // Perpendicular no espaço canvas (y up)
-        final nx1 = -dy / len, ny1 = dx / len;
-        final nx2 = dy / len, ny2 = -dx / len;
-        final outX = midX - centX, outY = midY - centY;
-        final dot1 = nx1 * outX + ny1 * outY;
-        final dirX = dot1 >= 0 ? nx1 : nx2;
-        final dirY = dot1 >= 0 ? ny1 : ny2;
-        final isCirculo = i < itens.length && itens[i].tipo == 'circulo';
-        final dist = isCirculo ? 14.0 : 11.0;
-        final lx = (midX + dirX * dist).clamp(2.0, cW - 14.0);
-        final ly = (midY + dirY * dist).clamp(4.0, cH - 2.0);
-        labels.add((x: lx, y: ly, texto: itens[i].comprimento.toString()));
+        final trecho = itens[i].trecho;
+        final isVar = variaveis[trecho] ?? false;
+        String label;
+        if (isVar) {
+          final config = variaveisConfig[trecho] ?? variaveisConfig.values.firstOrNull;
+          if (config != null && config.inicial > 0 && config.final_ > 0) {
+            label = '${config.inicial} var ${config.final_}';
+          } else {
+            label = (medidas[trecho] ?? itens[i].comprimento).toString();
+          }
+        } else {
+          label = (medidas[trecho] ?? itens[i].comprimento).toString();
+        }
+        final boxW = label.length * 2.5 + 5;
+        const boxH = 7.0;
+        final lx = (midX - boxW / 2).clamp(1.0, cW - boxW);
+        final ly = (midY - boxH / 2).clamp(1.0, cH - boxH);
+        labels.add((x: lx, y: ly, texto: label));
       }
 
       return pw.SizedBox(
@@ -330,7 +342,7 @@ class PdfEtiquetaPedidoTecnico {
               painter: (canvas, size) {
                 // Traços
                 canvas.setStrokeColor(_corPreto);
-                canvas.setLineWidth(2.0);
+                canvas.setLineWidth(1.4);
                 canvas.setLineJoin(PdfLineJoin.round);
                 canvas.setLineCap(PdfLineCap.round);
                 for (var i = 0; i < display.length - 1; i++) {
@@ -351,18 +363,187 @@ class PdfEtiquetaPedidoTecnico {
                   }
                 }
                 canvas.strokePath();
+
+                // Linhas divisórias
+                for (var i = 0; i < display.length - 1 && i < itens.length; i++) {
+                  if (!itens[i].linhaDivisoria) continue;
+                  final p1d = display[i];
+                  final p2d = display[i + 1];
+                  final ddx = p2d.x - p1d.x;
+                  final ddy = p2d.y - p1d.y;
+                  final dlen = math.sqrt(ddx * ddx + ddy * ddy);
+                  if (dlen < 1) continue;
+                  final nx = -ddy / dlen;
+                  final ny =  ddx / dlen;
+                  const half = 8.0;
+                  canvas.setStrokeColor(_corPreto);
+                  canvas.setLineWidth(1.0);
+                  canvas.drawLine(
+                    p2d.x + nx * half, p2d.y + ny * half,
+                    p2d.x - nx * half, p2d.y - ny * half,
+                  );
+                  canvas.strokePath();
+                }
               },
             ),
           ),
-          // Labels via pw.Positioned — em canvas PDF y=0 embaixo; top = cH - canvasY
+          // Labels com box escuro e texto branco
           for (final lbl in labels)
             pw.Positioned(
-              left: lbl.x.clamp(1.0, cW - 14.0),
-              top: (cH - lbl.y - 4).clamp(1.0, cH - 10.0),
-              child: pw.Text(lbl.texto,
-                  style: pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold, color: _corPreto)),
+              left: lbl.x,
+              top: lbl.y,
+              child: pw.Container(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 2, vertical: 0.5),
+                decoration: pw.BoxDecoration(
+                  color: _corPreto,
+                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(2)),
+                ),
+                child: pw.Text(lbl.texto,
+                    style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: _corBranco)),
+              ),
             ),
         ]),
       );
+      },
+    );
+  }
+
+  // ── Etiqueta de MEDIDAS (lista completa das medidas variáveis) ──────────
+  static pw.Widget _buildEtiquetaMedidas({
+    required PedidoTecnicoModel pedido,
+    required PedidoTecnicoElementoModel elem,
+    required ElementoModel elemDetalhamento,
+    required PosicaoModel pos,
+  }) {
+    final id = pedido.identificador.isNotEmpty ? pedido.identificador : 'PT ${pedido.codigo.toString().padLeft(3, '0')}';
+
+    // Montar lista de medidas expandidas por trecho variável
+    final medidasPorTrecho = <String, List<int>>{};
+    for (final entry in pos.variaveis.entries.where((e) => e.value)) {
+      final trecho = entry.key;
+      final config = pos.variaveisConfig[trecho]
+          ?? pos.variaveisConfig.values.firstOrNull;
+      if (config != null && config.inicial > 0) {
+        medidasPorTrecho[trecho] = config.medidasExpandidas(pos.multiplicador);
+      }
+    }
+
+    return pw.Padding(
+      padding: const pw.EdgeInsets.all(7),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+        children: [
+          // 1 ── IDENTIFICADOR + badge MEDIDAS
+          _boxPreta(radius: 6, vPad: 5,
+            child: pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+              pw.Text(id, style: _sTarjaId),
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: pw.BoxDecoration(color: _corBranco, borderRadius: pw.BorderRadius.circular(4)),
+                child: pw.Text('MEDIDAS VARIÁVEIS', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: _corPreto)),
+              ),
+            ]),
+          ),
+          pw.SizedBox(height: 3),
+
+          // 2 ── ELEMENTO + QTDE
+          _boxPreta(radius: 5, vPad: 4,
+            child: pw.Row(children: [
+              pw.Expanded(child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+                pw.Text('ELEMENTO', style: _sTarjaLabel),
+                pw.Text(elem.elementoNome.isEmpty ? '-' : elem.elementoNome, style: _sTarjaGrande, maxLines: 1),
+              ])),
+              pw.Container(width: 0.8, height: 24, color: _corBranco),
+              pw.SizedBox(width: 8),
+              pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.center, children: [
+                pw.Text('QTDE', style: _sTarjaLabel),
+                pw.Text('${elem.quantidadeSolicitada}', style: _sTarjaValor),
+              ]),
+            ]),
+          ),
+          pw.SizedBox(height: 3),
+
+          // 3 ── POSIÇÃO
+          _boxBranca(radius: 5, vPad: 4,
+            child: pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceAround, children: [
+              _col('POS', '${pos.posicao}', fontSize: 15),
+              pw.Container(width: 0.8, height: 28, color: _corPreto),
+              _col('BITOLA', pos.bitolaNome.split('-').first.trim()),
+              pw.Container(width: 0.8, height: 28, color: _corPreto),
+              _col('FORMA', pos.formaCodigo),
+              pw.Container(width: 0.8, height: 28, color: _corPreto),
+              _col('PEÇAS', '${pos.qtde}'),
+            ]),
+          ),
+          pw.SizedBox(height: 3),
+
+          // 4 ── LISTA DE MEDIDAS — expande para ocupar espaço restante
+          pw.Expanded(
+            child: pw.Container(
+              width: double.infinity,
+              padding: const pw.EdgeInsets.all(8),
+              decoration: pw.BoxDecoration(
+                color: _corBranco,
+                borderRadius: pw.BorderRadius.circular(5),
+                border: pw.Border.all(color: _corPreto, width: 0.8),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  ...medidasPorTrecho.entries.map((entry) {
+                    final trecho = entry.key;
+                    final medidas = entry.value;
+                    final mult = pos.multiplicador;
+                    return pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Row(children: [
+                          pw.Container(
+                            padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                            decoration: pw.BoxDecoration(color: _corPreto, borderRadius: pw.BorderRadius.circular(3)),
+                            child: pw.Text(trecho, style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: _corBranco)),
+                          ),
+                          pw.SizedBox(width: 6),
+                          pw.Text(
+                            mult > 1 ? '×$mult' : '',
+                            style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold, color: _corPreto),
+                          ),
+                        ]),
+                        pw.SizedBox(height: 3),
+                        pw.Wrap(
+                          spacing: 4,
+                          runSpacing: 3,
+                          children: medidas.asMap().entries.map((m) {
+                            return pw.Container(
+                              padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                              decoration: pw.BoxDecoration(
+                                border: pw.Border.all(color: _corPreto, width: 0.5),
+                                borderRadius: pw.BorderRadius.circular(3),
+                              ),
+                              child: pw.Text(
+                                '${m.value}',
+                                style: const pw.TextStyle(fontSize: 7),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                        pw.SizedBox(height: 5),
+                      ],
+                    );
+                  }),
+                ],
+              ),
+            ),
+          ),
+
+          // 5 ── RODAPÉ
+          pw.SizedBox(height: 3),
+          pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+            pw.Text('Pos ${pos.posicao}  •  ${pos.qtde} peças', style: _sMini),
+            pw.Text(id, style: _sMiniBold),
+          ]),
+        ],
+      ),
+    );
   }
 }

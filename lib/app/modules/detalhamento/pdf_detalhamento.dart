@@ -192,31 +192,30 @@ class PdfDetalhamento {
                           // Separador
                           pw.Container(
                             width: 1,
-                            height: 90,
+                            height: 120,
                             color: PdfColors.grey300,
-                            margin: const pw.EdgeInsets.symmetric(horizontal: 16),
+                            margin: const pw.EdgeInsets.only(left: 16),
                           ),
-                          // Direita: Forma
+                          // Título vertical "Forma X"
+                          pw.Container(
+                            height: 120,
+                            width: 60,
+                            alignment: pw.Alignment.center,
+                            child: pw.Transform.rotateBox(
+                              angle: 3.14159 / 2,
+                              child: pw.Text('Forma $formaStr', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: PdfColors.grey400)),
+                            ),
+                          ),
+                          // Direita: Desenho (usa toda a altura)
                           pw.Expanded(
                             flex: 4,
                             child: pw.Container(
-                              height: 90,
+                              height: 120,
                               alignment: pw.Alignment.center,
-                              child: pw.Column(
-                                mainAxisAlignment: pw.MainAxisAlignment.center,
-                                children: [
-                                  pw.Text('Forma $formaStr', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.grey800)),
-                                  pw.SizedBox(height: 4),
-                                  pw.Container(
-                                    height: 70,
-                                    width: double.infinity,
-                                    margin: const pw.EdgeInsets.symmetric(horizontal: 4),
-                                    child: formaDef == null || formaDef.itens.isEmpty
-                                        ? pw.Center(child: pw.Text('SEM DESENHO', style: pw.TextStyle(fontSize: 8, color: PdfColors.grey500)))
-                                        : _buildDesenhoForma(formaDef, pos.comprimentos),
-                                  ),
-                                ],
-                              ),
+                              margin: const pw.EdgeInsets.only(right: 4),
+                              child: formaDef == null || formaDef.itens.isEmpty
+                                  ? pw.Center(child: pw.Text('SEM DESENHO', style: pw.TextStyle(fontSize: 8, color: PdfColors.grey500)))
+                                  : _buildDesenhoForma(formaDef, pos.comprimentos),
                             ),
                           )
                         ],
@@ -378,15 +377,15 @@ class PdfDetalhamento {
   static pw.Widget _buildDesenhoForma(FormaModel forma, Map<String, int> medidas) {
     if (forma.itens.isEmpty) return pw.SizedBox();
 
-    // 1. Aplicar medidas e gerar pontos de modelo
+    // 1. Usar comprimentos originais da forma para geometria
     final itens = forma.itens.map((it) {
-      final m = medidas[it.trecho] ?? it.comprimento;
       return FormaItemModel(
         trecho: it.trecho,
-        comprimento: m,
+        comprimento: it.comprimento,
         angulo: it.angulo,
         orientacao: it.orientacao,
         tipo: it.tipo,
+        linhaDivisoria: it.linhaDivisoria,
       );
     }).toList();
 
@@ -404,10 +403,7 @@ class PdfDetalhamento {
       a += it.orientacao == 'Horário' ? it.angulo : -it.angulo;
     }
 
-    // 2. Bounding Box e Escala (tamanho fixo do container: 110 x 70)
-    const double width = 110;
-    const double height = 70;
-
+    // Bounding Box
     List<PdfPoint> ptsBox = List.from(pts);
     for (var i = 0; i < itens.length && i < pts.length - 1; i++) {
       if (itens[i].tipo == 'circulo') {
@@ -437,8 +433,12 @@ class PdfDetalhamento {
       if (p.y < mnY) mnY = p.y; if (p.y > mxY) mxY = p.y;
     }
 
-    // Padding maior para as legendas não ficarem cortadas nas bordas
-    final pad = math.min(width, height) * 0.22;
+    return pw.LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints!.maxWidth > 0 ? constraints.maxWidth : 200.0;
+        final height = constraints.maxHeight > 0 ? constraints.maxHeight : 120.0;
+
+    final pad = math.min(width, height) * 0.18;
     final dw = width - pad * 2;
     final dh = height - pad * 2;
     final lw = mxX - mnX, lh = mxY - mnY;
@@ -450,48 +450,41 @@ class PdfDetalhamento {
     PdfPoint toTela(PdfPoint p) => PdfPoint(p.x * esc + ox, height - (p.y * esc + oy));
     final display = pts.map(toTela).toList();
 
-    // 3. Criar os widgets de Legenda posicionados
-    final centX = display.map((p) => p.x).reduce((a, b) => a + b) / display.length;
-    final centY = display.map((p) => p.y).reduce((a, b) => a + b) / display.length;
+    // 3. Criar os widgets de Legenda posicionados no ponto médio de cada segmento
+    PdfPoint toWidget(PdfPoint p) => PdfPoint(p.x * esc + ox, p.y * esc + oy);
 
     final legendas = <pw.Widget>[];
-    for (var i = 0; i < display.length - 1; i++) {
-       final p1 = display[i];
-       final p2 = display[i+1];
-       final midX = (p1.x + p2.x) / 2;
-       final midY = (p1.y + p2.y) / 2;
+    for (var i = 0; i < pts.length - 1; i++) {
+       final w1 = toWidget(pts[i]);
+       final w2 = toWidget(pts[i + 1]);
+       final midX = (w1.x + w2.x) / 2;
+       final midY = (w1.y + w2.y) / 2;
 
-       final dx = p2.x - p1.x;
-       final dy = p2.y - p1.y;
+       final dx = w2.x - w1.x;
+       final dy = w2.y - w1.y;
        final len = math.sqrt(dx * dx + dy * dy);
        if (len < 1) continue;
 
-       // Duas normais perpendiculares ao segmento
-       final nx1 = -dy / len;  final ny1 = dx / len;
-       final nx2 =  dy / len;  final ny2 = -dx / len;
-
-       // Dot com vetor centróide→mid: escolhe a normal que aponta para FORA (positivo)
-       final outX = midX - centX;
-       final outY = midY - centY;
-       final dot1 = nx1 * outX + ny1 * outY;
-       final dirX = dot1 >= 0 ? nx1 : nx2;
-       final dirY = dot1 >= 0 ? ny1 : ny2;
-
-       final isCirculo = i < itens.length && itens[i].tipo == 'circulo';
-       final dist = isCirculo ? 13.0 : 10.0;
-
-       // toTela já produz coordenadas de tela (y=0 no topo, y cresce para baixo).
-       // pw.Positioned.top usa a mesma convenção → topY = posição direta, sem inversão.
-       final lx = (midX + dirX * dist - 5).clamp(0.5, width - 13.0);
-       final topY = (midY + dirY * dist - 3).clamp(0.5, height - 9.0);
+       final label = (medidas[itens[i].trecho] ?? itens[i].comprimento).toString();
+       final boxW = label.length * 5.0 + 7;
+       const boxH = 12.0;
+       final lx = (midX - boxW / 2).clamp(0.5, width - boxW);
+       final topY = (midY - boxH / 2).clamp(0.5, height - boxH);
        legendas.add(
          pw.Positioned(
            left: lx,
            top: topY,
-           child: pw.Text(
-             itens[i].comprimento.toString(),
-             style: pw.TextStyle(fontSize: 5, fontWeight: pw.FontWeight.bold, color: PdfColors.blueGrey800)
-           )
+           child: pw.Container(
+             padding: const pw.EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+             decoration: pw.BoxDecoration(
+               color: PdfColors.blueGrey900,
+               borderRadius: const pw.BorderRadius.all(pw.Radius.circular(2.5)),
+             ),
+             child: pw.Text(
+               label,
+               style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+             ),
+           ),
          )
        );
     }
@@ -506,7 +499,7 @@ class PdfDetalhamento {
             child: pw.CustomPaint(
               painter: (canvas, size) {
                 canvas.setStrokeColor(PdfColors.blueGrey900);
-                canvas.setLineWidth(1.5);
+                canvas.setLineWidth(1.4);
                 canvas.setLineJoin(PdfLineJoin.round);
                 canvas.setLineCap(PdfLineCap.round);
 
@@ -547,7 +540,7 @@ class PdfDetalhamento {
                   final ny =  dx / len;
                   const half = 10.0; // 10pt de cada lado no PDF
                   canvas.setStrokeColor(PdfColors.blueGrey900);
-                  canvas.setLineWidth(1.0);
+                  canvas.setLineWidth(0.5);
                   canvas.drawLine(
                     p2.x + nx * half, p2.y + ny * half,
                     p2.x - nx * half, p2.y - ny * half,
@@ -560,6 +553,8 @@ class PdfDetalhamento {
           ...legendas,
         ]
       )
+    );
+      },
     );
   }
 }

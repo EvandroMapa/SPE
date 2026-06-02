@@ -38,40 +38,62 @@ class PedidoTecnicoController {
   // ── Retorna elementos do detalhamento com disponibilidade ─
   List<ElementoDetalhamentoViewModel> elementosComDisponibilidade(
       DetalhamentoModel detalhamento) {
-    final ocupados = BackendClient.pedidosTecnicos.elementosEmPedidoAberto;
-    // Se estamos editando um pedido, desconsiderar os elementos do próprio pedido
+    final ocupados = BackendClient.pedidosTecnicos.elementosEmPedidosAbertos;
+    final alocados = BackendClient.pedidosTecnicos.quantidadesAlocadas(form.id);
     final pedidoAtualId = form.id;
 
     final lista = <ElementoDetalhamentoViewModel>[];
 
     for (final elem in detalhamento.elementos) {
       for (final nome in elem.todosNomes) {
-        // Clonar o elemento com o nome específico e remover equivalentes
-        final elemClonado = ElementoModel(
-          id: elem.id,
-          nome: nome,
-          quantidade: elem.quantidade,
-          pesoTotal: elem.pesoTotal,
-          posicoes: elem.posicoes,
-          elementosEquivalentes: const [],
-        );
-
         final chave = '${elem.id}_$nome';
-        final pedidoOcupante = ocupados[chave];
-        final pertenceAoPedidoAtual =
-            pedidoAtualId != null && pedidoOcupante?.id == pedidoAtualId;
+        final qtdAlocada = alocados[chave] ?? 0;
+        final qtdRestante = elem.quantidade - qtdAlocada;
 
-        if (pedidoOcupante != null && !pertenceAoPedidoAtual) {
-          lista.add(ElementoDetalhamentoViewModel(
-            elemento: elemClonado,
-            disponibilidade: DisponibilidadeElemento.emPedido,
-            codigoPedidoOcupante: pedidoOcupante.codigo,
-          ));
-        } else {
+        // 1. Tile de Disponível (para a quantidade livre ou que o pedido atual está manipulando)
+        if (qtdRestante > 0) {
+          final elemClonado = ElementoModel(
+            id: elem.id,
+            nome: nome,
+            quantidade: qtdRestante,
+            pesoTotal: elem.quantidade > 0 ? (elem.pesoTotal / elem.quantidade) * qtdRestante : 0.0,
+            posicoes: elem.posicoes,
+            elementosEquivalentes: const [],
+          );
           lista.add(ElementoDetalhamentoViewModel(
             elemento: elemClonado,
             disponibilidade: DisponibilidadeElemento.disponivel,
           ));
+        }
+
+        // 2. Tiles Bloqueados (um para cada OUTRO pedido que segurou pedaços desse elemento)
+        final pedidosOcupantes = ocupados[chave] ?? [];
+        for (final p in pedidosOcupantes) {
+          if (pedidoAtualId != null && p.id == pedidoAtualId) continue;
+          
+          int qtdeNoPedido = 0;
+          for (final eNoPedido in p.elementos) {
+            if ('${eNoPedido.elementoId}_${eNoPedido.elementoNome}' == chave) {
+              qtdeNoPedido = eNoPedido.quantidadeSolicitada;
+              break;
+            }
+          }
+
+          if (qtdeNoPedido > 0) {
+            final elemClonado = ElementoModel(
+              id: elem.id,
+              nome: nome,
+              quantidade: qtdeNoPedido,
+              pesoTotal: elem.quantidade > 0 ? (elem.pesoTotal / elem.quantidade) * qtdeNoPedido : 0.0,
+              posicoes: elem.posicoes,
+              elementosEquivalentes: const [],
+            );
+            lista.add(ElementoDetalhamentoViewModel(
+              elemento: elemClonado,
+              disponibilidade: DisponibilidadeElemento.emPedido,
+              identificadorPedidoOcupante: p.identificador,
+            ));
+          }
         }
       }
     }
@@ -80,21 +102,15 @@ class PedidoTecnicoController {
   }
 
   // ── Salvar (criar ou atualizar) ───────────────────────
-  Future<bool> salvar() async {
+  Future<bool> salvar({bool auto = false}) async {
     if (form.detalhamentoId.isEmpty) {
-      NotificationService.showNegative(
-        'Selecione um detalhamento',
-        'Escolha o detalhamento antes de gerar o pedido',
-        position: NotificationPosition.bottom,
-      );
-      return false;
-    }
-    if (form.elementosSelecionados.isEmpty) {
-      NotificationService.showNegative(
-        'Nenhum elemento selecionado',
-        'Selecione ao menos um elemento para o pedido',
-        position: NotificationPosition.bottom,
-      );
+      if (!auto) {
+        NotificationService.showNegative(
+          'Selecione um detalhamento',
+          'Escolha o detalhamento antes de gerar o pedido',
+          position: NotificationPosition.bottom,
+        );
+      }
       return false;
     }
     try {
@@ -103,26 +119,36 @@ class PedidoTecnicoController {
         await BackendClient.pedidosTecnicos.atualizar(model);
         await BackendClient.pedidosTecnicos
             .atualizarElementos(model.id, model.elementos);
-        NotificationService.showPositive(
-          'Pedido atualizado',
-          '${model.elementos.length} elemento(s) no pedido ${model.codigo}',
-          position: NotificationPosition.bottom,
-        );
+        if (!auto) {
+          NotificationService.showPositive(
+            'Pedido atualizado',
+            '${model.elementos.length} elemento(s) no pedido ${model.codigo}',
+            position: NotificationPosition.bottom,
+          );
+        }
       } else {
-        await BackendClient.pedidosTecnicos.criar(model);
-        NotificationService.showPositive(
-          'Pedido criado',
-          '${model.elementos.length} elemento(s) cadastrado(s)',
-          position: NotificationPosition.bottom,
-        );
+        final createdModel = await BackendClient.pedidosTecnicos.criar(model);
+        form.id = createdModel.id;
+        form.codigo = createdModel.codigo;
+        form.identificador = createdModel.identificador;
+        formStream.update();
+        if (!auto) {
+          NotificationService.showPositive(
+            'Pedido criado',
+            '${model.elementos.length} elemento(s) cadastrado(s)',
+            position: NotificationPosition.bottom,
+          );
+        }
       }
       return true;
     } catch (e) {
-      NotificationService.showNegative(
-        'Erro ao salvar',
-        e.toString(),
-        position: NotificationPosition.bottom,
-      );
+      if (!auto) {
+        NotificationService.showNegative(
+          'Erro ao salvar',
+          e.toString(),
+          position: NotificationPosition.bottom,
+        );
+      }
       return false;
     }
   }

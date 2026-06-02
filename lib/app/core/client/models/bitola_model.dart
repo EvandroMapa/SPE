@@ -10,6 +10,9 @@ class BitolaModel {
   final int sortIndex;
   final double diametro; // mm — ex: 12.5 para vergalhão ø12,5mm
 
+  /// Código numérico derivado do diâmetro (trunca decimal): 4.2→4, 12.5→12
+  int get codigo => diametro.toInt();
+
   factory BitolaModel.empty() => BitolaModel(
         id: HashService.get,
         nome: '',
@@ -31,6 +34,7 @@ class BitolaModel {
   });
 
   String get label => '$nome - $descricao';
+  String get codigoStr => codigo.toString();
 
   Map<String, dynamic> toMap() {
     return {

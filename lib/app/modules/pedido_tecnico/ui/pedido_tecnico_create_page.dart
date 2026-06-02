@@ -43,6 +43,7 @@ class _PedidoTecnicoCreatePageState
   String _chave(ElementoModel e) => '${e.id}_${e.nome}';
 
   bool _salvando = false;
+  bool _bloqueadosExpandido = false;
 
   @override
   void initState() {
@@ -51,6 +52,7 @@ class _PedidoTecnicoCreatePageState
 
     // Se editando, restaurar seleções
     if (widget.pedido != null) {
+      _sel = _Sec.elementos;
       final p = widget.pedido!;
       _obsCtrl.text = p.observacao;
       _clienteSel = BackendClient.clientes.data
@@ -112,7 +114,10 @@ class _PedidoTecnicoCreatePageState
 
   void _gerarPdf({required bool completo}) async {
     if (widget.pedido == null) return;
-    final pedido = widget.pedido!;
+    // Buscar pedido atualizado do cache (widget.pedido é estático)
+    final pedido = BackendClient.pedidosTecnicos.data
+        .where((p) => p.id == widget.pedido!.id)
+        .firstOrNull ?? widget.pedido!;
     final det = BackendClient.detalhamentos.data
         .where((p) => p.id == pedido.detalhamentoId)
         .firstOrNull;
@@ -131,8 +136,14 @@ class _PedidoTecnicoCreatePageState
   }
 
   void _gerarEtiqueta() async {
-    if (widget.pedido == null) return;
-    final pedido = widget.pedido!;
+    if (widget.pedido == null) {
+      NotificationService.showNegative('Pedido não salvo', 'Salve o pedido antes de gerar etiquetas.', position: NotificationPosition.bottom);
+      return;
+    }
+    // Buscar pedido atualizado do cache (widget.pedido é estático)
+    final pedido = BackendClient.pedidosTecnicos.data
+        .where((p) => p.id == widget.pedido!.id)
+        .firstOrNull ?? widget.pedido!;
     final det = BackendClient.detalhamentos.data
         .where((p) => p.id == pedido.detalhamentoId)
         .firstOrNull;
@@ -214,14 +225,88 @@ class _PedidoTecnicoCreatePageState
         .toList();
   }
 
+  bool get _hasUnsavedChanges {
+    final form = pedidoTecnicoCtrl.form;
+    if (form.isEdit) {
+      return _obsCtrl.text.trim() != (widget.pedido?.observacao ?? '');
+    } else {
+      return _clienteSel != null ||
+          _obraSel != null ||
+          _detalhamentoSel != null ||
+          _obsCtrl.text.trim().isNotEmpty;
+    }
+  }
+
+  Future<void> _promptUnsavedChanges() async {
+    final form = pedidoTecnicoCtrl.form;
+    final isEdit = form.isEdit;
+
+    final result = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+            SizedBox(width: 8),
+            Text('Alterações não salvas'),
+          ],
+        ),
+        content: Text(
+          isEdit 
+            ? 'Você alterou a observação. Deseja salvar antes de sair?'
+            : 'Você iniciou um novo pedido mas não selecionou elementos.\nDeseja salvar este pedido vazio antes de sair?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 0), // Cancelar
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 1), // Sair sem salvar
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Sair sem salvar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, 2), // Salvar e sair
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryMain,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Salvar e sair'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == 1) {
+      if (mounted) pop(context);
+    } else if (result == 2) {
+      await _autoSalvarPedido();
+      if (mounted) pop(context);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return AppScaffold(
+    return PopScope(
+      canPop: !_hasUnsavedChanges && !_salvando,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        if (_salvando) return; // ignora o voltar se estiver salvando
+        await _promptUnsavedChanges();
+      },
+      child: AppScaffold(
       resizeAvoid: true,
       backgroundColor: AppColors.neutralLightest,
       appBar: AppBar(
         leading: IconButton(
-          onPressed: () => pop(context),
+          onPressed: () async {
+            if (_hasUnsavedChanges) {
+              await _promptUnsavedChanges();
+            } else {
+              pop(context);
+            }
+          },
           icon: Icon(Icons.arrow_back, color: AppColors.white),
         ),
         title: StreamOut(
@@ -231,7 +316,7 @@ class _PedidoTecnicoCreatePageState
             children: [
               Text(
                 form.isEdit
-                    ? widget.pedido!.identificador.isNotEmpty ? widget.pedido!.identificador : 'PT ${form.codigo}'
+                    ? form.identificador?.isNotEmpty == true ? form.identificador! : 'PT ${form.codigo}'
                     : 'Novo Pedido Técnico',
                 style: AppCss.largeBold.setColor(AppColors.white),
               ),
@@ -289,26 +374,62 @@ class _PedidoTecnicoCreatePageState
             : null,
         elevation: 2,
       ),
-      body: StreamOut(
-        stream: pedidoTecnicoCtrl.formStream.listen,
-        builder: (_, form) => Row(
-          children: [
-            _sidebar(form),
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                child: KeyedSubtree(
-                  key: ValueKey(_sel),
-                  child: _sel == _Sec.dadosGerais
-                      ? _dadosGerais(form)
-                      : _elementosView(form),
+      body: Stack(
+        children: [
+          StreamOut(
+            stream: pedidoTecnicoCtrl.formStream.listen,
+            builder: (_, form) => Row(
+              children: [
+                _sidebar(form),
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    child: KeyedSubtree(
+                      key: ValueKey(_sel),
+                      child: _sel == _Sec.dadosGerais
+                          ? _dadosGerais(form)
+                          : _elementosView(form),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_salvando)
+            Positioned.fill(
+              child: Container(
+                color: Colors.white.withValues(alpha: 0.6),
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.1),
+                          blurRadius: 20,
+                        )
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const CircularProgressIndicator(),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Salvando alterações...',
+                          style: AppCss.mediumBold.setColor(AppColors.primaryMain),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
-          ],
-        ),
+        ],
       ),
-    );
+    ));
   }
 
   // ═══ SIDEBAR ═══════════════════════════════════════════
@@ -366,8 +487,7 @@ class _PedidoTecnicoCreatePageState
       );
     }
 
-    final elementosHabilitado =
-        form.isEdit || _detalhamentoSel != null;
+    final elementosHabilitado = form.isEdit;
 
     return Container(
       width: 60,
@@ -380,7 +500,7 @@ class _PedidoTecnicoCreatePageState
         children: [
           Tooltip(
             message: form.isEdit
-                ? 'Pedido ${form.codigo}'
+                ? (form.identificador?.isNotEmpty == true ? form.identificador! : 'Pedido ${form.codigo}')
                 : 'Novo Pedido',
             preferBelow: false,
             child: Container(
@@ -511,6 +631,7 @@ class _PedidoTecnicoCreatePageState
                 label: 'Cliente',
                 item: _clienteSel,
                 itens: clientes,
+                disable: form.isEdit,
                 itemLabel: (e) => e?.nome ?? 'Selecione um cliente',
                 onSelect: (e) => setState(() {
                   _clienteSel = e;
@@ -525,6 +646,7 @@ class _PedidoTecnicoCreatePageState
                 label: 'Obra',
                 item: _obraSel,
                 itens: obras,
+                disable: form.isEdit,
                 itemLabel: (e) => e?.descricao ?? 'Selecione uma obra',
                 onSelect: (e) => setState(() {
                   _obraSel = e;
@@ -538,6 +660,7 @@ class _PedidoTecnicoCreatePageState
                 label: 'Detalhamento',
                 item: _detalhamentoSel,
                 itens: detalhamentos,
+                disable: form.isEdit,
                 itemLabel: (e) =>
                     e != null ? 'Detalhamento ${e.codigo}' : 'Selecione um detalhamento',
                 onSelect: (e) => setState(() {
@@ -569,7 +692,12 @@ class _PedidoTecnicoCreatePageState
         const SizedBox(height: 16),
         InkWell(
           onTap: _detalhamentoSel != null
-              ? () => setState(() => _sel = _Sec.elementos)
+              ? () async {
+                  if (!form.isEdit) {
+                    await _autoSalvarPedido();
+                  }
+                  setState(() => _sel = _Sec.elementos);
+                }
               : null,
           child: Container(
             height: 44,
@@ -582,7 +710,9 @@ class _PedidoTecnicoCreatePageState
             ),
             child: Center(
               child: Text(
-                'CONTINUAR → SELECIONAR ELEMENTOS',
+                form.isEdit 
+                    ? 'CONTINUAR → SELECIONAR ELEMENTOS'
+                    : 'SALVAR DADOS E CONTINUAR →',
                 style: AppCss.minimumBold
                     .setColor(Colors.white)
                     .setSize(13)
@@ -611,6 +741,12 @@ class _PedidoTecnicoCreatePageState
     final selecionados = <ElementoDetalhamentoViewModel>[];
 
     for (final vm in elementosVm) {
+      // Tiles bloqueados (em outro pedido) SEMPRE vão para a lista de bloqueados
+      if (!vm.estaDisponivel) {
+        bloqueados.add(vm);
+        continue;
+      }
+
       final qtdeSel = _elementosSelecionados['${vm.elemento.id}_${vm.elemento.nome}'];
       if (qtdeSel != null) {
         selecionados.add(vm);
@@ -619,11 +755,7 @@ class _PedidoTecnicoCreatePageState
           disponiveis.add(vm);
         }
       } else {
-        if (vm.estaDisponivel) {
-          disponiveis.add(vm);
-        } else {
-          bloqueados.add(vm);
-        }
+        disponiveis.add(vm);
       }
     }
 
@@ -757,6 +889,7 @@ class _PedidoTecnicoCreatePageState
                         }
                       }
                     });
+                    _autoSalvarPedido();
                   },
                   borderRadius: BorderRadius.circular(8),
                   child: Container(
@@ -843,17 +976,51 @@ class _PedidoTecnicoCreatePageState
                     if (totalBloq > 0) ...[
                       if (totalDisp > 0 || totalParciais > 0)
                         const SizedBox(height: 10),
-                      _secaoHeader(
-                        icone: Icons.lock_outline,
-                        cor: Colors.orange,
-                        titulo: 'Em outro Pedido',
-                        contador: totalBloq,
+                      InkWell(
+                        onTap: () => setState(() => _bloqueadosExpandido = !_bloqueadosExpandido),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+                          child: Row(
+                            children: [
+                              AnimatedRotation(
+                                turns: _bloqueadosExpandido ? 0.25 : 0,
+                                duration: const Duration(milliseconds: 200),
+                                child: const Icon(Icons.chevron_right, size: 16, color: Colors.orange),
+                              ),
+                              const SizedBox(width: 4),
+                              const Icon(Icons.lock_outline, size: 15, color: Colors.orange),
+                              const SizedBox(width: 6),
+                              Text(
+                                'EM OUTRO(S) PEDIDO(S)',
+                                style: AppCss.minimumBold
+                                    .setColor(Colors.orange)
+                                    .setSize(11)
+                                    .setLetterSpacing(0.8),
+                              ),
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  '$totalBloq',
+                                  style: AppCss.minimumBold.setColor(Colors.orange).setSize(11),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                      const SizedBox(height: 6),
-                      ...bloqueados.map((vm) => Padding(
-                            padding: const EdgeInsets.only(bottom: 5),
-                            child: _tileBloqueado(vm),
-                          )),
+                      if (_bloqueadosExpandido) ...[
+                        const SizedBox(height: 6),
+                        ...bloqueados.map((vm) => Padding(
+                              padding: const EdgeInsets.only(bottom: 5),
+                              child: _tileBloqueado(vm),
+                            )),
+                      ],
                     ],
                   ],
                 ),
@@ -976,8 +1143,10 @@ class _PedidoTecnicoCreatePageState
               ),
               if (selecionados.isNotEmpty)
                 InkWell(
-                  onTap: () =>
-                      setState(() => _elementosSelecionados.clear()),
+                  onTap: () {
+                    setState(() => _elementosSelecionados.clear());
+                    _autoSalvarPedido();
+                  },
                   borderRadius: BorderRadius.circular(8),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
@@ -1083,64 +1252,6 @@ class _PedidoTecnicoCreatePageState
                 ),
                 const SizedBox(height: 10),
               ],
-              InkWell(
-                onTap: (totalSelecionados > 0 && !_salvando)
-                    ? _gerarPedido
-                    : null,
-                borderRadius: BorderRadius.circular(12),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  height: 44,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: _salvando
-                        ? AppColors.primaryMain.withValues(alpha: 0.70)
-                        : totalSelecionados > 0
-                            ? AppColors.primaryMain
-                            : Colors.grey[300],
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: (totalSelecionados > 0 && !_salvando)
-                        ? [
-                            BoxShadow(
-                              color: AppColors.primaryMain
-                                  .withValues(alpha: 0.30),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
-                            ),
-                          ]
-                        : [],
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      if (_salvando)
-                        const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
-                        )
-                      else
-                        const Icon(Icons.save_outlined,
-                            color: Colors.white, size: 18),
-                      const SizedBox(width: 8),
-                      Text(
-                        _salvando
-                            ? 'SALVANDO...'
-                            : form.isEdit
-                                ? 'SALVAR PEDIDO'
-                                : 'GERAR PEDIDO TÉCNICO',
-                        style: AppCss.minimumBold
-                            .setColor(Colors.white)
-                            .setSize(13)
-                            .setLetterSpacing(0.8),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
             ],
           ),
         ),
@@ -1187,6 +1298,7 @@ class _PedidoTecnicoCreatePageState
           setState(() {
             _elementosSelecionados[_chave(elem)] = elem.quantidade;
           });
+          _autoSalvarPedido();
         }
       },
       borderRadius: BorderRadius.circular(10),
@@ -1337,6 +1449,7 @@ class _PedidoTecnicoCreatePageState
                       ),
                     ],
                   ),
+
                 ],
               ),
             ),
@@ -1352,6 +1465,7 @@ class _PedidoTecnicoCreatePageState
     int? qtdeInicial,
     int? qtdeMaxima,
     bool somarAoExistente = false,
+    bool isEdicao = false,
   }) async {
     final max = qtdeMaxima ?? elem.quantidade;
     int qtde = qtdeInicial ?? _elementosSelecionados[_chave(elem)] ?? elem.quantidade;
@@ -1372,9 +1486,11 @@ class _PedidoTecnicoCreatePageState
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      somarAoExistente
-                          ? 'Adicionar ao pedido'
-                          : 'Quantidade a produzir',
+                      isEdicao
+                          ? 'Alterar quantidade'
+                          : (somarAoExistente
+                              ? 'Adicionar ao pedido'
+                              : 'Quantidade a produzir'),
                       style: AppCss.smallBold.setSize(16),
                     ),
                   ),
@@ -1390,9 +1506,11 @@ class _PedidoTecnicoCreatePageState
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    somarAoExistente
-                        ? '$max peça(s) restante(s) de ${elem.quantidade}'
-                        : 'Total no detalhamento: ${elem.quantidade}',
+                    isEdicao
+                        ? 'Total no detalhamento: ${elem.quantidade}'
+                        : (somarAoExistente
+                            ? '$max peça(s) restante(s) de ${elem.quantidade}'
+                            : 'Total no detalhamento: ${elem.quantidade}'),
                     style: AppCss.minimumRegular
                         .setColor(Colors.grey[500]!)
                         .setSize(12),
@@ -1493,9 +1611,11 @@ class _PedidoTecnicoCreatePageState
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10)),
                   ),
-                  child: Text(somarAoExistente
-                      ? 'Adicionar $qtde'
-                      : 'Produzir $qtde'),
+                  child: Text(isEdicao
+                      ? 'Salvar $qtde'
+                      : (somarAoExistente
+                          ? 'Adicionar $qtde'
+                          : 'Produzir $qtde')),
                 ),
               ],
             );
@@ -1512,6 +1632,7 @@ class _PedidoTecnicoCreatePageState
           _elementosSelecionados[_chave(elem)] = resultado;
         }
       });
+      _autoSalvarPedido();
     }
   }
 
@@ -1548,7 +1669,7 @@ class _PedidoTecnicoCreatePageState
   Widget _tileBloqueado(ElementoDetalhamentoViewModel vm) {
     final elem = vm.elemento;
     return Tooltip(
-      message: 'Em uso no Pedido Técnico ${vm.codigoPedidoOcupante}',
+      message: 'Em uso no Pedido Técnico ${vm.identificadorPedidoOcupante}',
       preferBelow: false,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
@@ -1594,7 +1715,7 @@ class _PedidoTecnicoCreatePageState
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
-                            'PT ${vm.codigoPedidoOcupante}',
+                            '${vm.identificadorPedidoOcupante}',
                             style: AppCss.minimumBold
                                 .setColor(Colors.orange)
                                 .setSize(10),
@@ -1630,11 +1751,8 @@ class _PedidoTecnicoCreatePageState
 
     return InkWell(
       onTap: () {
-        if (elem.quantidade > 1) {
-          _mostrarDialogQuantidade(elem);
-        } else {
-          setState(() => _elementosSelecionados.remove(_chave(elem)));
-        }
+        setState(() => _elementosSelecionados.remove(_chave(elem)));
+        _autoSalvarPedido();
       },
       borderRadius: BorderRadius.circular(10),
       child: Container(
@@ -1655,9 +1773,12 @@ class _PedidoTecnicoCreatePageState
       child: Row(
         children: [
           InkWell(
-            onTap: () => setState(() {
-              _elementosSelecionados.remove(_chave(elem));
-            }),
+            onTap: () {
+              setState(() {
+                _elementosSelecionados.remove(_chave(elem));
+              });
+              _autoSalvarPedido();
+            },
             borderRadius: BorderRadius.circular(8),
             child: Tooltip(
               message: 'Remover do pedido',
@@ -1764,11 +1885,19 @@ class _PedidoTecnicoCreatePageState
     );
   }
 
-  Future<void> _gerarPedido() async {
+  bool _needsSave = false;
+
+  Future<void> _autoSalvarPedido() async {
     final detalhamento = _detalhamentoSel;
-    if (detalhamento == null || _salvando) return;
+    if (detalhamento == null) return;
+    
+    if (_salvando) {
+      _needsSave = true;
+      return;
+    }
 
     setState(() => _salvando = true);
+    _needsSave = false;
 
     try {
       final form = pedidoTecnicoCtrl.form;
@@ -1800,10 +1929,12 @@ class _PedidoTecnicoCreatePageState
 
       pedidoTecnicoCtrl.formStream.update();
 
-      final ok = await pedidoTecnicoCtrl.salvar();
-      if (ok && mounted) pop(context);
+      await pedidoTecnicoCtrl.salvar(auto: true);
     } finally {
       if (mounted) setState(() => _salvando = false);
+      if (_needsSave) {
+        _autoSalvarPedido();
+      }
     }
   }
 }

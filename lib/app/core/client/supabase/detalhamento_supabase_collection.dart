@@ -172,6 +172,7 @@ class DetalhamentoSupabaseCollection {
   Future<void> atualizarPosicao(PosicaoModel posicao, String elementoId) async {
     final map = posicao.toSupabaseMap(elementoId);
     await SupabaseService.client.from('posicoes').update(map).eq('id', posicao.id);
+    await fetch();
   }
 
   Future<void> excluirPosicao(String posicaoId) async {

@@ -283,6 +283,18 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
       if (_editandoPosicao && !_posicaoModificada) {
         setState(() => _posicaoModificada = true);
       }
+      // Se a qtde muda e tem variáveis, zerar medidas (precisa gerar novamente)
+      if (_posicaoSelecionada != null && _editandoPosicao) {
+        final novaQtde = int.tryParse(_pQtde.text) ?? 0;
+        final qtdeAtual = int.tryParse(_posicaoSelecionada!.qtde.text) ?? 0;
+        if (novaQtde != qtdeAtual && _posicaoSelecionada!.variaveisConfig.isNotEmpty) {
+          for (final config in _posicaoSelecionada!.variaveisConfig.values) {
+            config.medidas.clear();
+            config.distribuicao = 'linear';
+          }
+          setState(() => _variavelModificada = false);
+        }
+      }
     });
     _bitolaCtrl.addListener(() {
       if (_editandoPosicao && !_posicaoModificada) {
@@ -3456,7 +3468,9 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                         }
                       }, onChanged: (v) {
                         _posicaoSelecionada!.multiplicador = v.clamp(1, 100);
-                        setState(() => _variavelModificada = true);
+                        config.medidas.clear();
+                        config.distribuicao = 'linear';
+                        setState(() => _variavelModificada = false);
                       })),
                       const SizedBox(width: 8),
                       Expanded(
@@ -3505,6 +3519,9 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                         final habilitado = config.inicial > 0 && config.final_ > 0 && qtde > 0 && config.distribuicao != 'manual';
                         return InkWell(
                           onTap: habilitado ? () {
+                            // Sync multiplicador do controller para o modelo
+                            final multVal = (int.tryParse(_varMultCtrl.text) ?? 1).clamp(1, 100);
+                            _posicaoSelecionada!.multiplicador = multVal;
                             _recalcularVariavel(config, qtde, trechoConfig);
                             setState(() => _variavelModificada = true);
                           } : null,

@@ -48,13 +48,23 @@ class PdfEtiquetaPedidoTecnico {
           build: (_) => _buildEtiqueta(pedido: pedido, elem: elem, elemDetalhamento: elemDetalhamento, pos: pos, formaDef: formaDef),
         ));
 
-        // Se tem trecho variável → UMA etiqueta extra com lista de medidas
+        // Se tem trecho variável → DUAS etiquetas extras
         final temVar = pos.variaveis.values.any((v) => v) && pos.variaveisConfig.isNotEmpty;
         if (temVar) {
+          // Etiqueta 2: trechos variáveis
           pdf.addPage(pw.Page(
             pageFormat: _formato,
             margin: pw.EdgeInsets.zero,
-            build: (_) => _buildEtiquetaMedidas(
+            build: (_) => _buildEtiquetaTrechosVar(
+              pedido: pedido, elem: elem, elemDetalhamento: elemDetalhamento,
+              pos: pos,
+            ),
+          ));
+          // Etiqueta 3: comprimentos + comprimento de corte
+          pdf.addPage(pw.Page(
+            pageFormat: _formato,
+            margin: pw.EdgeInsets.zero,
+            build: (_) => _buildEtiquetaComprimentos(
               pedido: pedido, elem: elem, elemDetalhamento: elemDetalhamento,
               pos: pos,
             ),
@@ -76,7 +86,54 @@ class PdfEtiquetaPedidoTecnico {
     final id = pedido.identificador.isNotEmpty ? pedido.identificador : 'PT ${pedido.codigo.toString().padLeft(3, '0')}';
     final bitolaStr = pos.bitolaNome.split('-').first.trim();
     final compUnit = pos.comprimentos.values.fold<int>(0, (s, v) => s + v);
-    final compCorte = pos.comprimentoDeCorte > 0 ? pos.comprimentoDeCorte : compUnit;
+    final compCorteRaw = pos.comprimentoDeCorte > 0 ? pos.comprimentoDeCorte : compUnit.toDouble();
+
+    // Verificar se tem variáveis para mostrar range
+    final temVar = pos.variaveis.values.any((v) => v) && pos.variaveisConfig.isNotEmpty;
+    String compUnitStr;
+    String compCorteStr;
+    if (temVar) {
+      // Calcular min/max comprimento por peça
+      int compMin = 999999, compMax = 0;
+      final desconto = pos.descontoDobraSnapshot ?? 0;
+      final dCm = (double.tryParse(bitolaStr.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0) / 10.0;
+      for (int peca = 0; peca < pos.qtde; peca++) {
+        int soma = 0;
+        for (final entry in pos.comprimentos.entries) {
+          final trecho = entry.key;
+          final isVar = pos.variaveis[trecho] ?? false;
+          if (isVar) {
+            final config = pos.variaveisConfig[trecho]
+                ?? pos.variaveisConfig.values.firstOrNull;
+            if (config != null && config.inicial > 0 && config.final_ > 0) {
+              final expandidas = config.medidasExpandidas(pos.multiplicador);
+              soma += peca < expandidas.length
+                  ? expandidas[peca]
+                  : (expandidas.isNotEmpty ? expandidas.last : 0);
+            } else {
+              soma += entry.value;
+            }
+          } else {
+            soma += entry.value;
+          }
+        }
+        if (soma < compMin) compMin = soma;
+        if (soma > compMax) compMax = soma;
+      }
+      compUnitStr = compMin == compMax ? '$compMin cm' : '$compMin var $compMax';
+      if (pos.comprimentoDeCorte > 0) {
+        final corteMin = (compMin - desconto * dCm).clamp(0, compMin.toDouble());
+        final corteMax = (compMax - desconto * dCm).clamp(0, compMax.toDouble());
+        final cMinStr = corteMin == corteMin.roundToDouble() ? corteMin.toInt().toString() : corteMin.toStringAsFixed(1);
+        final cMaxStr = corteMax == corteMax.roundToDouble() ? corteMax.toInt().toString() : corteMax.toStringAsFixed(1);
+        compCorteStr = cMinStr == cMaxStr ? '$cMinStr cm' : '$cMinStr var $cMaxStr';
+      } else {
+        compCorteStr = compUnitStr;
+      }
+    } else {
+      compUnitStr = '$compUnit cm';
+      compCorteStr = '${compCorteRaw == compCorteRaw.roundToDouble() ? compCorteRaw.toInt() : compCorteRaw.toStringAsFixed(1)} cm';
+    }
 
     // Trechos: "A=30  B=40  C=86*"
     final trechosStr = pos.comprimentos.entries
@@ -90,7 +147,7 @@ class PdfEtiquetaPedidoTecnico {
         children: [
           // 1 ── IDENTIFICADOR
           _boxPreta(radius: 6, vPad: 5,
-            child: pw.Text(id, style: _sTarjaId),
+            child: pw.Center(child: pw.Text(id, style: _sTarjaId)),
           ),
           pw.SizedBox(height: 3),
 
@@ -134,7 +191,7 @@ class PdfEtiquetaPedidoTecnico {
               pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceAround, children: [
                 _col('POS', '${pos.posicao}', fontSize: 15),
                 pw.Container(width: 0.8, height: 28, color: _corPreto),
-                _col('QTDE', '${pos.qtde}'),
+                _colQtdeMult(pos),
                 pw.Container(width: 0.8, height: 28, color: _corPreto),
                 _col('BITOLA', bitolaStr),
                 pw.Container(width: 0.8, height: 28, color: _corPreto),
@@ -142,7 +199,7 @@ class PdfEtiquetaPedidoTecnico {
               ]),
               pw.Container(margin: const pw.EdgeInsets.symmetric(vertical: 3), height: 0.8, color: _corPreto),
               pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceAround, children: [
-                _col('C. UNITÁRIO', '$compUnit cm'),
+                _col('C. UNITÁRIO', compUnitStr),
                 pw.Container(width: 0.8, height: 22, color: _corPreto),
                 pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.center, children: [
                   pw.Text('C. DE CORTE', style: _sLabel),
@@ -150,7 +207,7 @@ class PdfEtiquetaPedidoTecnico {
                   pw.Container(
                     padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: pw.BoxDecoration(color: _corPreto, borderRadius: pw.BorderRadius.circular(3)),
-                    child: pw.Text('$compCorte cm', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: _corBranco)),
+                    child: pw.Text(compCorteStr, style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: _corBranco)),
                   ),
                 ]),
               ]),
@@ -216,6 +273,21 @@ class PdfEtiquetaPedidoTecnico {
         pw.Text(valor, style: pw.TextStyle(fontSize: fontSize, fontWeight: pw.FontWeight.bold, color: _corPreto)),
       ]);
 
+  /// QTDE com multiplicador: mostra total e abaixo (mult × N) quando mult > 1
+  static pw.Widget _colQtdeMult(PosicaoModel pos) {
+    final mult = pos.multiplicador;
+    final qtde = pos.qtde;
+    return pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.center, children: [
+      pw.Text('QTDE', style: _sLabel),
+      pw.SizedBox(height: 2),
+      pw.Text('$qtde', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: _corPreto)),
+      if (mult > 1) ...[
+        pw.SizedBox(height: 1),
+        pw.Text('($mult x ${qtde ~/ mult})', style: pw.TextStyle(fontSize: 6, color: _corPreto)),
+      ],
+    ]);
+  }
+
   static List<pw.Widget> _variaveisExpandidas(PosicaoModel pos) {
     final result = <pw.Widget>[];
     for (final entry in pos.variaveis.entries.where((e) => e.value)) {
@@ -225,7 +297,7 @@ class PdfEtiquetaPedidoTecnico {
       final medidasStr = expandidas.isNotEmpty ? expandidas.join(', ') : config.medidas.join(', ');
       result.add(pw.SizedBox(height: 2));
       result.add(pw.Text(
-        '${entry.key}* ${pos.multiplicador > 1 ? '×${pos.multiplicador}  ' : ''}→ $medidasStr cm',
+        '${entry.key}* ${pos.multiplicador > 1 ? 'x${pos.multiplicador}  ' : ''}> $medidasStr cm',
         style: _sMini,
       ));
     }
@@ -408,8 +480,8 @@ class PdfEtiquetaPedidoTecnico {
     );
   }
 
-  // ── Etiqueta de MEDIDAS (lista completa das medidas variáveis) ──────────
-  static pw.Widget _buildEtiquetaMedidas({
+  // ── Etiqueta 2: TRECHOS VARIÁVEIS ──────────────────────────────────────
+  static pw.Widget _buildEtiquetaTrechosVar({
     required PedidoTecnicoModel pedido,
     required PedidoTecnicoElementoModel elem,
     required ElementoModel elemDetalhamento,
@@ -417,7 +489,7 @@ class PdfEtiquetaPedidoTecnico {
   }) {
     final id = pedido.identificador.isNotEmpty ? pedido.identificador : 'PT ${pedido.codigo.toString().padLeft(3, '0')}';
 
-    // Montar lista de medidas expandidas por trecho variável
+    // Medidas expandidas por trecho variável
     final medidasPorTrecho = <String, List<int>>{};
     for (final entry in pos.variaveis.entries.where((e) => e.value)) {
       final trecho = entry.key;
@@ -433,37 +505,13 @@ class PdfEtiquetaPedidoTecnico {
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.stretch,
         children: [
-          // 1 ── IDENTIFICADOR + badge MEDIDAS
+          // IDENTIFICADOR
           _boxPreta(radius: 6, vPad: 5,
-            child: pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
-              pw.Text(id, style: _sTarjaId),
-              pw.Container(
-                padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: pw.BoxDecoration(color: _corBranco, borderRadius: pw.BorderRadius.circular(4)),
-                child: pw.Text('MEDIDAS VARIÁVEIS', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: _corPreto)),
-              ),
-            ]),
+            child: pw.Center(child: pw.Text(id, style: _sTarjaId)),
           ),
           pw.SizedBox(height: 3),
 
-          // 2 ── ELEMENTO + QTDE
-          _boxPreta(radius: 5, vPad: 4,
-            child: pw.Row(children: [
-              pw.Expanded(child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-                pw.Text('ELEMENTO', style: _sTarjaLabel),
-                pw.Text(elem.elementoNome.isEmpty ? '-' : elem.elementoNome, style: _sTarjaGrande, maxLines: 1),
-              ])),
-              pw.Container(width: 0.8, height: 24, color: _corBranco),
-              pw.SizedBox(width: 8),
-              pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.center, children: [
-                pw.Text('QTDE', style: _sTarjaLabel),
-                pw.Text('${elem.quantidadeSolicitada}', style: _sTarjaValor),
-              ]),
-            ]),
-          ),
-          pw.SizedBox(height: 3),
-
-          // 3 ── POSIÇÃO
+          // POS / BITOLA / FORMA / QTDE
           _boxBranca(radius: 5, vPad: 4,
             child: pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceAround, children: [
               _col('POS', '${pos.posicao}', fontSize: 15),
@@ -472,19 +520,54 @@ class PdfEtiquetaPedidoTecnico {
               pw.Container(width: 0.8, height: 28, color: _corPreto),
               _col('FORMA', pos.formaCodigo),
               pw.Container(width: 0.8, height: 28, color: _corPreto),
-              _col('PEÇAS', '${pos.qtde}'),
+              _colQtdeMult(pos),
             ]),
           ),
           pw.SizedBox(height: 3),
 
-          // 4 ── LISTA DE MEDIDAS — expande para ocupar espaço restante
+          // Inscrição MEDIDAS VARIÁVEIS
+          pw.Container(
+            width: double.infinity,
+            padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: pw.BoxDecoration(
+              color: _corPreto,
+              borderRadius: const pw.BorderRadius.only(
+                topLeft: pw.Radius.circular(5),
+                topRight: pw.Radius.circular(5),
+              ),
+            ),
+            child: pw.Center(child: pw.Text('MEDIDAS VARIAVEIS', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: _corBranco, letterSpacing: 1))),
+          ),
+
+          // Subtítulo: X peças de cada medida - N medidas
+          pw.Container(
+            width: double.infinity,
+            padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: pw.BoxDecoration(
+              color: _corBranco,
+              border: pw.Border(
+                left: pw.BorderSide(color: _corPreto, width: 0.8),
+                right: pw.BorderSide(color: _corPreto, width: 0.8),
+                bottom: pw.BorderSide(color: _corPreto, width: 0.5),
+              ),
+            ),
+            child: pw.Text(
+              '${pos.multiplicador} peca${pos.multiplicador > 1 ? 's' : ''} de cada medida - ${pos.qtde ~/ pos.multiplicador} medidas',
+              style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: _corPreto),
+              textAlign: pw.TextAlign.center,
+            ),
+          ),
+          // Campo grande — trechos variáveis
           pw.Expanded(
             child: pw.Container(
               width: double.infinity,
-              padding: const pw.EdgeInsets.all(8),
+              padding: const pw.EdgeInsets.all(6),
               decoration: pw.BoxDecoration(
                 color: _corBranco,
-                borderRadius: pw.BorderRadius.circular(5),
+                borderRadius: const pw.BorderRadius.only(
+                  bottomLeft: pw.Radius.circular(5),
+                  bottomRight: pw.Radius.circular(5),
+                ),
                 border: pw.Border.all(color: _corPreto, width: 0.8),
               ),
               child: pw.Column(
@@ -493,22 +576,14 @@ class PdfEtiquetaPedidoTecnico {
                   ...medidasPorTrecho.entries.map((entry) {
                     final trecho = entry.key;
                     final medidas = entry.value;
-                    final mult = pos.multiplicador;
                     return pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
-                        pw.Row(children: [
-                          pw.Container(
-                            padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                            decoration: pw.BoxDecoration(color: _corPreto, borderRadius: pw.BorderRadius.circular(3)),
-                            child: pw.Text(trecho, style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: _corBranco)),
-                          ),
-                          pw.SizedBox(width: 6),
-                          pw.Text(
-                            mult > 1 ? '×$mult' : '',
-                            style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold, color: _corPreto),
-                          ),
-                        ]),
+                        pw.Container(
+                          padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                          decoration: pw.BoxDecoration(color: _corPreto, borderRadius: pw.BorderRadius.circular(3)),
+                          child: pw.Text(trecho, style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: _corBranco)),
+                        ),
                         pw.SizedBox(height: 3),
                         pw.Wrap(
                           spacing: 4,
@@ -527,7 +602,7 @@ class PdfEtiquetaPedidoTecnico {
                             );
                           }).toList(),
                         ),
-                        pw.SizedBox(height: 5),
+                        pw.SizedBox(height: 4),
                       ],
                     );
                   }),
@@ -536,10 +611,191 @@ class PdfEtiquetaPedidoTecnico {
             ),
           ),
 
-          // 5 ── RODAPÉ
+          // RODAPÉ
           pw.SizedBox(height: 3),
           pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
-            pw.Text('Pos ${pos.posicao}  •  ${pos.qtde} peças', style: _sMini),
+            pw.Text('Pos ${pos.posicao}  |  ${pos.qtde} pecas', style: _sMini),
+            pw.Text(id, style: _sMiniBold),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  // ── Etiqueta 3: COMPRIMENTOS + CORTE POR PEÇA ──────────────────────────
+  static pw.Widget _buildEtiquetaComprimentos({
+    required PedidoTecnicoModel pedido,
+    required PedidoTecnicoElementoModel elem,
+    required ElementoModel elemDetalhamento,
+    required PosicaoModel pos,
+  }) {
+    final id = pedido.identificador.isNotEmpty ? pedido.identificador : 'PT ${pedido.codigo.toString().padLeft(3, '0')}';
+
+    // Comprimento total por peça
+    final comprimentosPorPeca = <int>[];
+    for (int peca = 0; peca < pos.qtde; peca++) {
+      int soma = 0;
+      for (final entry in pos.comprimentos.entries) {
+        final trecho = entry.key;
+        final isVar = pos.variaveis[trecho] ?? false;
+        if (isVar) {
+          final config = pos.variaveisConfig[trecho]
+              ?? pos.variaveisConfig.values.firstOrNull;
+          if (config != null && config.inicial > 0 && config.final_ > 0) {
+            final expandidas = config.medidasExpandidas(pos.multiplicador);
+            soma += peca < expandidas.length
+                ? expandidas[peca]
+                : (expandidas.isNotEmpty ? expandidas.last : 0);
+          } else {
+            soma += entry.value;
+          }
+        } else {
+          soma += entry.value;
+        }
+      }
+      comprimentosPorPeca.add(soma);
+    }
+
+    // Desconto de dobra para comprimento de corte
+    final desconto = pos.descontoDobraSnapshot ?? 0;
+    final bitolaStr = pos.bitolaNome.split('-').first.replaceAll(RegExp(r'[^0-9.]'), '');
+    final diametroCm = (double.tryParse(bitolaStr) ?? 0) / 10.0;
+    final temCorte = pos.comprimentoDeCorte > 0;
+
+    return pw.Padding(
+      padding: const pw.EdgeInsets.all(7),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+        children: [
+          // IDENTIFICADOR
+          _boxPreta(radius: 6, vPad: 5,
+            child: pw.Center(child: pw.Text(id, style: _sTarjaId)),
+          ),
+          pw.SizedBox(height: 3),
+
+          // POS / BITOLA / FORMA / QTDE
+          _boxBranca(radius: 5, vPad: 4,
+            child: pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceAround, children: [
+              _col('POS', '${pos.posicao}', fontSize: 15),
+              pw.Container(width: 0.8, height: 28, color: _corPreto),
+              _col('BITOLA', pos.bitolaNome.split('-').first.trim()),
+              pw.Container(width: 0.8, height: 28, color: _corPreto),
+              _col('FORMA', pos.formaCodigo),
+              pw.Container(width: 0.8, height: 28, color: _corPreto),
+              _colQtdeMult(pos),
+            ]),
+          ),
+          pw.SizedBox(height: 3),
+
+          // Inscrição COMPRIMENTOS
+          pw.Container(
+            width: double.infinity,
+            padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: pw.BoxDecoration(
+              color: _corPreto,
+              borderRadius: const pw.BorderRadius.only(
+                topLeft: pw.Radius.circular(5),
+                topRight: pw.Radius.circular(5),
+              ),
+            ),
+            child: pw.Center(child: pw.Text('COMPRIMENTOS', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: _corBranco, letterSpacing: 1))),
+          ),
+
+          // Subtítulo: X peças de cada medida - N medidas
+          pw.Container(
+            width: double.infinity,
+            padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: pw.BoxDecoration(
+              color: _corBranco,
+              border: pw.Border(
+                left: pw.BorderSide(color: _corPreto, width: 0.8),
+                right: pw.BorderSide(color: _corPreto, width: 0.8),
+                bottom: pw.BorderSide(color: _corPreto, width: 0.5),
+              ),
+            ),
+            child: pw.Text(
+              '${pos.multiplicador} peca${pos.multiplicador > 1 ? 's' : ''} de cada medida - ${pos.qtde ~/ pos.multiplicador} medidas',
+              style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: _corPreto),
+              textAlign: pw.TextAlign.center,
+            ),
+          ),
+          // Campo grande — comprimento + corte
+          pw.Expanded(
+            child: pw.Container(
+              width: double.infinity,
+              padding: const pw.EdgeInsets.all(6),
+              decoration: pw.BoxDecoration(
+                color: _corBranco,
+                borderRadius: const pw.BorderRadius.only(
+                  bottomLeft: pw.Radius.circular(5),
+                  bottomRight: pw.Radius.circular(5),
+                ),
+                border: pw.Border.all(color: _corPreto, width: 0.8),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  // Comprimento por peça
+                  pw.Center(child: pw.Text('COMPRIMENTO POR PECA', style: _sLabel)),
+                  pw.SizedBox(height: 3),
+                  pw.Wrap(
+                    spacing: 4,
+                    runSpacing: 3,
+                    children: comprimentosPorPeca.asMap().entries.map((e) {
+                      return pw.Container(
+                        padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        decoration: pw.BoxDecoration(
+                          border: pw.Border.all(color: _corPreto, width: 0.5),
+                          borderRadius: pw.BorderRadius.circular(3),
+                        ),
+                        child: pw.Text(
+                          '${e.value}',
+                          style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+
+                  // Comprimento de corte por peça
+                  if (temCorte) ...[
+                    pw.Container(
+                      margin: const pw.EdgeInsets.symmetric(vertical: 4),
+                      height: 0.5,
+                      color: _corPreto,
+                    ),
+                    pw.Center(child: pw.Text('C. DE CORTE POR PECA', style: _sLabel)),
+                    pw.SizedBox(height: 3),
+                    pw.Wrap(
+                      spacing: 4,
+                      runSpacing: 3,
+                      children: comprimentosPorPeca.asMap().entries.map((e) {
+                        final corte = (e.value - desconto * diametroCm).clamp(0, e.value.toDouble());
+                        final corteStr = corte == corte.roundToDouble()
+                            ? corte.toInt().toString()
+                            : corte.toStringAsFixed(1);
+                        return pw.Container(
+                          padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                          decoration: pw.BoxDecoration(
+                            color: _corPreto,
+                            borderRadius: pw.BorderRadius.circular(3),
+                          ),
+                          child: pw.Text(
+                            corteStr,
+                            style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold, color: _corBranco),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+
+          // RODAPÉ
+          pw.SizedBox(height: 3),
+          pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+            pw.Text('Pos ${pos.posicao}  |  ${pos.qtde} pecas', style: _sMini),
             pw.Text(id, style: _sMiniBold),
           ]),
         ],

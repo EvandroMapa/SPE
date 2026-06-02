@@ -178,7 +178,7 @@ class PdfPedidoTecnico {
                           'Peso Total',
                           pedido.pesoTotal > 0
                               ? '${pedido.pesoTotal.toStringAsFixed(2)} kg'
-                              : '—',
+                              : '-',
                           estLabel,
                           pw.TextStyle(
                             fontSize: 10,
@@ -280,7 +280,7 @@ class PdfPedidoTecnico {
                       _celTbl(
                         elem.pesoTotal > 0
                             ? elem.pesoTotal.toStringAsFixed(2)
-                            : '—',
+                            : '-',
                         pw.TextStyle(
                           fontSize: 9,
                           fontWeight: pw.FontWeight.bold,
@@ -309,7 +309,7 @@ class PdfPedidoTecnico {
                     _celTbl(
                       pedido.pesoTotal > 0
                           ? '${pedido.pesoTotal.toStringAsFixed(2)} kg'
-                          : '—',
+                          : '-',
                       pw.TextStyle(
                         fontSize: 9,
                         fontWeight: pw.FontWeight.bold,
@@ -364,7 +364,7 @@ class PdfPedidoTecnico {
                             ),
                           ),
                           pw.Text(
-                            'Qtde: ${elem.elementoQuantidade}  •  ${elemDetalhamento.posicoes.length} posição(ões)  •  ${elem.pesoTotal > 0 ? '${elem.pesoTotal.toStringAsFixed(2)} kg' : '—'}',
+                            'Qtde: ${elem.elementoQuantidade}  |  ${elemDetalhamento.posicoes.length} posicao(oes)  |  ${elem.pesoTotal > 0 ? '${elem.pesoTotal.toStringAsFixed(2)} kg' : '-'}',
                             style: pw.TextStyle(
                               fontSize: 9,
                               color: PdfColors.grey300,
@@ -411,7 +411,7 @@ class PdfPedidoTecnico {
                                   _celTbl(
                                     pos.comprimentoDeCorte > 0
                                         ? pos.comprimentoDeCorte.toStringAsFixed(1)
-                                        : '—',
+                                        : '-',
                                     estCelula,
                                     align: pw.Alignment.center,
                                   ),

@@ -80,11 +80,19 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
   final _varInicialFn = FocusNode();
   final _varFinalFn = FocusNode();
   final _varMultFn = FocusNode();
+  final _varGerarFn = FocusNode();
+  final _varSalvarFn = FocusNode();
   final _varInicialCtrl = TextEditingController();
   final _varFinalCtrl = TextEditingController();
   final _varMultCtrl = TextEditingController();
   List<FocusNode> _manualFns = [];
   List<TextEditingController> _manualCtrls = [];
+
+  // Estado de edição de variáveis (salvamento manual)
+  bool _editandoVariavel = false;
+  bool _variavelModificada = false;
+  TrechoVariavelConfig? _varConfigBackup;
+  int _varMultBackup = 1;
 
   void _atualizarManualCtrls(List<int> medidas) {
     for (final fn in _manualFns) { fn.dispose(); }
@@ -99,6 +107,26 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
     if (forma == null) { _compCtrls = []; _compFns = []; return; }
     _compCtrls = List.generate(forma.itens.length, (i) {
       final trecho = forma.itens[i].trecho;
+      // Se variável, exibe range; senão, valor numérico
+      final isVar = posicao?.variaveis[trecho] ?? false;
+      if (isVar && posicao != null) {
+        // Busca config própria ou do líder
+        var cfg = posicao.variaveisConfig[trecho];
+        if (cfg == null) {
+          final grupo = forma.itens[i].grupoSimetria;
+          if (grupo.isNotEmpty) {
+            for (final item in forma.itens) {
+              if (item.grupoSimetria == grupo && posicao.variaveisConfig.containsKey(item.trecho)) {
+                cfg = posicao.variaveisConfig[item.trecho];
+                break;
+              }
+            }
+          }
+        }
+        final rangeText = cfg != null && cfg.inicial > 0 && cfg.final_ > 0
+            ? '${cfg.inicial} var ${cfg.final_}' : 'Var.';
+        return TextEditingController(text: rangeText);
+      }
       final valor = posicao?.comprimentos[trecho];
       return TextEditingController(text: valor != null ? valor.toString() : '');
     });
@@ -778,6 +806,9 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                     final qualquerCampoEmFoco = _compFns.any((fn) => fn.hasFocus);
                     for (int k = 0; k < _formaSelecionada!.itens.length && k < _compCtrls.length; k++) {
                       final trecho = _formaSelecionada!.itens[k].trecho;
+                      // Não sobrescreve trechos variáveis (o Builder interno cuida do range)
+                      final isVarK = posAtualizada.variaveis[trecho] ?? false;
+                      if (isVarK) continue;
                       final valor = posAtualizada.comprimentos[trecho];
                       final novoTexto = valor != null ? valor.toString() : '';
                       if (novoTexto.isNotEmpty && !qualquerCampoEmFoco && !recentementeSalvo && _compCtrls[k].text != novoTexto) {
@@ -1019,9 +1050,39 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
   Widget _elemLayout(DetalhamentoCreateModel form) {
     final eSel = _elemIdx >= 0 && _elemIdx < form.elementos.length ? form.elementos[_elemIdx] : null;
     return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      SizedBox(width: 300, child: _col1(form)),
+      SizedBox(
+        width: 300,
+        child: Stack(children: [
+          _col1(form),
+          if (_editandoVariavel)
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: () => _tentarFecharPainelVariavel(),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  color: Colors.black.withValues(alpha: 0.25),
+                ),
+              ),
+            ),
+        ]),
+      ),
       Container(width: 1, color: const Color(0xFFE2E8F0)),
-      SizedBox(width: 300, child: eSel != null ? _col2(eSel) : _empty('Selecione um elemento\npara ver suas posições', Icons.touch_app_outlined)),
+      SizedBox(
+        width: 300,
+        child: Stack(children: [
+          eSel != null ? _col2(eSel) : _empty('Selecione um elemento\npara ver suas posições', Icons.touch_app_outlined),
+          if (_editandoVariavel)
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: () => _tentarFecharPainelVariavel(),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  color: Colors.black.withValues(alpha: 0.25),
+                ),
+              ),
+            ),
+        ]),
+      ),
       Container(width: 1, color: const Color(0xFFE2E8F0)),
       Expanded(child: _col3()),
     ]);
@@ -2492,6 +2553,30 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
 
   /// Verifica se há edição pendente (posição ou elemento) e pergunta se deseja descartar.
   Future<bool> _verificarEdicaoPendente() async {
+    // Verifica edição de variável
+    if (_editandoVariavel && _variavelModificada) {
+      final descartar = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Variáveis com alterações'),
+          content: const Text('As variáveis têm alterações não salvas. Deseja descartar?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Continuar editando'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700], foregroundColor: Colors.white),
+              child: const Text('Descartar'),
+            ),
+          ],
+        ),
+      );
+      if (!(descartar ?? false)) return false;
+      _restaurarBackupVariavel();
+      setState(() { _editandoVariavel = false; _variavelModificada = false; });
+    }
     // Verifica edição de posição
     if (_editandoPosicao && _posicaoModificada) {
       final descartar = await showDialog<bool>(
@@ -2766,32 +2851,48 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
     }).toList();
 
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      _hdr('FORMA ${forma.codigo}', Icons.architecture_outlined, null),
-      // Desenho (altura fixa) com container decorado
-      Container(
-        height: 250,
-        margin: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey[200]!),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: FormaPreviewWidget(
-            itens: itensPreview, height: 230,
-            mostrarLegenda: true,
-            rotacaoExterna: forma.rotacao,
-            legendasCustom: legendasCustom,
-            mostrarVertices: false,
-          ),
+      // Header + desenho com overlay quando editando variável
+      IgnorePointer(
+        ignoring: _editandoVariavel,
+        child: AnimatedOpacity(
+          opacity: _editandoVariavel ? 0.3 : 1.0,
+          duration: const Duration(milliseconds: 200),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            _hdr('FORMA ${forma.codigo}', Icons.architecture_outlined, null),
+            // Desenho (altura fixa) com container decorado
+            Container(
+              height: 250,
+              margin: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey[200]!),
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: FormaPreviewWidget(
+                  itens: itensPreview, height: 230,
+                  mostrarLegenda: true,
+                  rotacaoExterna: forma.rotacao,
+                  legendasCustom: legendasCustom,
+                  mostrarVertices: false,
+                ),
+              ),
+            ),
+          ]),
         ),
       ),
       // ── Metade inferior: trechos (1/3 da largura) ──
       Expanded(
         child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          // Trechos com overlay quando editando variável
+          Expanded(child: IgnorePointer(
+            ignoring: _editandoVariavel,
+            child: AnimatedOpacity(
+              opacity: _editandoVariavel ? 0.3 : 1.0,
+              duration: const Duration(milliseconds: 200),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             // Header com colunas
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -2845,11 +2946,25 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                           }
                         }
 
-                        return Container(
+                        final isTrechoSelecionado = _trechoVarIdx == i;
+                        return GestureDetector(
+                          onTap: isVariavel ? () {
+                            if (!_editandoVariavel) {
+                              _abrirEdicaoVariavel(i, forma, apenasVisualizar: true);
+                            }
+                          } : null,
+                          child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                           decoration: BoxDecoration(
-                            color: isFollower ? Colors.grey[50] : Colors.white,
-                            border: Border(bottom: BorderSide(color: Colors.grey[100]!)),
+                            color: isTrechoSelecionado
+                                ? AppColors.secondary.withValues(alpha: 0.08)
+                                : (isFollower ? Colors.grey[50] : Colors.white),
+                            border: Border(
+                              bottom: BorderSide(color: Colors.grey[100]!),
+                              left: isTrechoSelecionado
+                                  ? BorderSide(color: AppColors.secondary, width: 3)
+                                  : BorderSide.none,
+                            ),
                           ),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.center,
@@ -2897,13 +3012,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                                       varCfg = _posicaoSelecionada!.variaveisConfig[lider.trecho];
                                     }
                                   }
-                                  // Atualiza controller com "X var Y" se variável
-                                  if (varCfg != null && varCfg.inicial > 0 && varCfg.final_ > 0 && i < _compCtrls.length) {
-                                    final varText = '${varCfg.inicial} var ${varCfg.final_}';
-                                    if (_compCtrls[i].text != varText) {
-                                      _compCtrls[i].text = varText;
-                                    }
-                                  }
+                                  // (range atualizado pelo Builder interno)
                                   return Focus(
                                     onKeyEvent: (_, event) {
                                       if (!bloqueado && !_isRO &&
@@ -2928,84 +3037,116 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                                       }
                                       return KeyEventResult.ignored;
                                     },
-                                    child: TextField(
-                                 controller: i < _compCtrls.length ? _compCtrls[i] : null,
-                                 focusNode: i < _compFns.length ? _compFns[i] : null,
-                                 readOnly: bloqueado || _isRO,
-                                 keyboardType: TextInputType.number,
-                                 inputFormatters: isVariavel ? [] : [FilteringTextInputFormatter.digitsOnly],
-                                 style: AppCss.smallBold.setSize(isVariavel ? 10 : 13).setColor(
-                                   isVariavel ? Colors.orange[800]! : (isFollower ? Colors.grey[500]! : Colors.black87)),
-                                 textAlign: TextAlign.center,
-                                 decoration: InputDecoration(
-                                   filled: true,
-                                   fillColor: isVariavel ? Colors.orange.withValues(alpha: 0.08) : (isFollower ? Colors.grey[100] : Colors.grey[50]),
-                                   hintText: isFollower && liderTrecho.isNotEmpty ? '= $liderTrecho' : null,
-                                   hintStyle: AppCss.minimumRegular.setColor(Colors.grey[400]!).setSize(11),
-                                   contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-                                   isDense: true,
-                                   enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: isVariavel ? Colors.orange.withValues(alpha: 0.4) : (isFollower ? Colors.grey[200]! : Colors.grey[300]!))),
-                                   focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: bloqueado ? Colors.grey[300]! : AppColors.primaryMain, width: 1.5)),
-                                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
-                                 ),
-                                 onChanged: isFollower ? null : (val) {
-                                   setState(() {});
-                                   if (grupo.isNotEmpty && i < _compCtrls.length) {
-                                     for (int j = 0; j < forma.itens.length; j++) {
-                                       if (j == i || forma.itens[j].grupoSimetria != grupo) continue;
-                                       if (j < _compCtrls.length && _compCtrls[j].text != val) {
-                                         _compCtrls[j].text = val;
-                                       }
-                                     }
-                                   }
-                                 },
-                                 onSubmitted: (_) {
-                                   _salvarComprimento(i, forma);
-                                   if (isVariavel && !isFollower) {
-                                     setState(() => _trechoVarIdx = i);
-                                     Future.delayed(const Duration(milliseconds: 80), () {
-                                       _varInicialFn.requestFocus();
-                                       if (_varInicialCtrl.text.isNotEmpty) {
-                                         _varInicialCtrl.selection = TextSelection(
-                                             baseOffset: 0, extentOffset: _varInicialCtrl.text.length);
-                                       }
-                                     });
-                                     return;
-                                   }
-                                   Future.delayed(const Duration(milliseconds: 50), () {
-                                     if (!mounted) return;
-                                     final nextFn = _proximoTrechoFisico(forma, i);
-                                     if (nextFn != null) {
-                                       final nextIdx = _compFns.indexOf(nextFn);
-                                       nextFn.requestFocus();
-                                       if (nextIdx >= 0 && nextIdx < _compCtrls.length) {
-                                         _compCtrls[nextIdx].selection = TextSelection(
-                                             baseOffset: 0, extentOffset: _compCtrls[nextIdx].text.length);
-                                       }
-                                     } else {
-                                       // Ultimo trecho: salvar e preparar nova posicao
-                                       final posParaSalvar = _posicaoSelecionada;
-                                       final elemId = _elementoDbIds[_elemIdx];
-                                       if (posParaSalvar != null && elemId != null && posParaSalvar.id.length == 36) {
-                                         detalhamentoCtrl.adicionarPosicaoAtualizada(posParaSalvar, elemId);
-                                       }
-                                       setState(() {
-                                         _limparPos();
-                                         _posicaoSelecionada = null;
-                                         _posicaoFocadaId = null;
-                                       });
-                                       Future.delayed(const Duration(milliseconds: 80), () {
-                                         if (!mounted) return;
-                                         _pNum.focus.requestFocus();
-                                       });
-                                     }
-                                   });
-                                 },
-                               ));
-                              }),
-                            ),
-                                if (forma.itens[i].ancoragemAutomatica)
-                                  Positioned(
+                                    child: Builder(
+                                      builder: (_) {
+                                        // Monta texto do range se variável
+                                        if (isVariavel && i < _compCtrls.length) {
+                                          String cfgTrecho = trecho;
+                                          if (grupo.isNotEmpty) {
+                                            final itensGrp = forma.itens.where((x) => x.grupoSimetria == grupo).toList();
+                                            final lid = itensGrp.reduce((a, b) => a.numeroOrdem < b.numeroOrdem ? a : b);
+                                            cfgTrecho = lid.trecho;
+                                          }
+                                          final cfg = _posicaoSelecionada?.variaveisConfig[cfgTrecho];
+                                          String rangeText = 'Var.';
+                                          if (cfg != null && cfg.inicial > 0 && cfg.final_ > 0) {
+                                            rangeText = '${cfg.inicial} var ${cfg.final_}';
+                                          }
+                                          if (_compCtrls[i].text != rangeText) {
+                                            _compCtrls[i].text = rangeText;
+                                          }
+                                        }
+                                        return TextField(
+                                          controller: i < _compCtrls.length ? _compCtrls[i] : null,
+                                          focusNode: i < _compFns.length ? _compFns[i] : null,
+                                          readOnly: bloqueado || _isRO || isVariavel,
+                                          keyboardType: TextInputType.number,
+                                          inputFormatters: isVariavel ? [] : [FilteringTextInputFormatter.digitsOnly],
+                                          style: AppCss.smallBold.setSize(isVariavel ? 10 : 13).setColor(
+                                            isVariavel ? AppColors.secondaryDark : (isFollower ? Colors.grey[500]! : Colors.black87)),
+                                          textAlign: TextAlign.center,
+                                          decoration: InputDecoration(
+                                            filled: true,
+                                            fillColor: isVariavel ? AppColors.secondary.withValues(alpha: 0.08) : (isFollower ? Colors.grey[100] : Colors.grey[50]),
+                                            hintText: isFollower && liderTrecho.isNotEmpty ? '= $liderTrecho' : null,
+                                            hintStyle: AppCss.minimumRegular.setColor(Colors.grey[400]!).setSize(11),
+                                            contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                                            isDense: true,
+                                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: isVariavel ? AppColors.secondary.withValues(alpha: 0.5) : (isFollower ? Colors.grey[200]! : Colors.grey[300]!))),
+                                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: bloqueado ? Colors.grey[300]! : AppColors.primaryMain, width: 1.5)),
+                                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+                                          ),
+                                          onChanged: isFollower || isVariavel ? null : (val) {
+                                            final v = int.tryParse(val) ?? 0;
+                                            if (v > 0) {
+                                              _posicaoSelecionada?.comprimentos[trecho] = v;
+                                            } else {
+                                              _posicaoSelecionada?.comprimentos.remove(trecho);
+                                            }
+                                            setState(() {});
+                                            if (grupo.isNotEmpty && i < _compCtrls.length) {
+                                              for (int j = 0; j < forma.itens.length; j++) {
+                                                if (j == i || forma.itens[j].grupoSimetria != grupo) continue;
+                                                if (j < _compCtrls.length && _compCtrls[j].text != val) {
+                                                  _compCtrls[j].text = val;
+                                                  if (v > 0) {
+                                                    _posicaoSelecionada?.comprimentos[forma.itens[j].trecho] = v;
+                                                  } else {
+                                                    _posicaoSelecionada?.comprimentos.remove(forma.itens[j].trecho);
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          },
+                                          onSubmitted: (_) {
+                                            _salvarComprimento(i, forma);
+                                            if (isVariavel && !isFollower) {
+                                              setState(() => _trechoVarIdx = i);
+                                              Future.delayed(const Duration(milliseconds: 80), () {
+                                                _varInicialFn.requestFocus();
+                                                if (_varInicialCtrl.text.isNotEmpty) {
+                                                  _varInicialCtrl.selection = TextSelection(
+                                                      baseOffset: 0, extentOffset: _varInicialCtrl.text.length);
+                                                }
+                                              });
+                                              return;
+                                            }
+                                            Future.delayed(const Duration(milliseconds: 50), () {
+                                              if (!mounted) return;
+                                              final nextFn = _proximoTrechoFisico(forma, i);
+                                              if (nextFn != null) {
+                                                final nextIdx = _compFns.indexOf(nextFn);
+                                                nextFn.requestFocus();
+                                                if (nextIdx >= 0 && nextIdx < _compCtrls.length) {
+                                                  _compCtrls[nextIdx].selection = TextSelection(
+                                                      baseOffset: 0, extentOffset: _compCtrls[nextIdx].text.length);
+                                                }
+                                              } else {
+                                                final posParaSalvar = _posicaoSelecionada;
+                                                final elemId = _elementoDbIds[_elemIdx];
+                                                if (posParaSalvar != null && elemId != null && posParaSalvar.id.length == 36) {
+                                                  detalhamentoCtrl.adicionarPosicaoAtualizada(posParaSalvar, elemId);
+                                                }
+                                                setState(() {
+                                                  _limparPos();
+                                                  _posicaoSelecionada = null;
+                                                  _posicaoFocadaId = null;
+                                                });
+                                                Future.delayed(const Duration(milliseconds: 80), () {
+                                                  if (!mounted) return;
+                                                  _pNum.focus.requestFocus();
+                                                });
+                                              }
+                                            });
+                                          },
+                                        );
+                                      },
+                                    ),
+                                  );
+                                }),
+                              ),
+                              if (forma.itens[i].ancoragemAutomatica)
+                                Positioned(
                                     top: 0, right: 0,
                                     child: Tooltip(
                                       message: 'Ancoragem automática',
@@ -3033,8 +3174,21 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                                     value: isVariavel,
                                     activeColor: isFollower ? Colors.grey[400] : AppColors.primaryMain,
                                     onChanged: _isRO || _posicaoSelecionada == null || isFollower ? null : (v) {
+                                      final marcado = v ?? false;
+                                      // Só permite marcar se comprimento > 0 (verifica campo digitado)
+                                      if (marcado) {
+                                        final textoComp = i < _compCtrls.length ? _compCtrls[i].text : '';
+                                        final comp = int.tryParse(textoComp) ?? 0;
+                                        if (comp <= 0) {
+                                          NotificationService.showNegative(
+                                            'Comprimento obrigatório',
+                                            'Preencha o comprimento do trecho antes de marcar como variável',
+                                            position: NotificationPosition.bottom,
+                                          );
+                                          return;
+                                        }
+                                      }
                                       setState(() {
-                                        final marcado = v ?? false;
                                         _posicaoSelecionada!.variaveis[trecho] = marcado;
                                         // Propaga para followers do mesmo grupo
                                         if (grupo.isNotEmpty) {
@@ -3052,65 +3206,90 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                                           if (!_posicaoSelecionada!.variaveisConfig.containsKey(trecho)) {
                                             _posicaoSelecionada!.variaveisConfig[trecho] = TrechoVariavelConfig();
                                           }
+                                          // Entra em modo edição de variável com overlay
+                                          _editandoVariavel = true;
+                                          _variavelModificada = false;
+                                          _varConfigBackup = null; // novo, sem backup
+                                          _varMultBackup = _posicaoSelecionada!.multiplicador;
                                         } else {
                                           _posicaoSelecionada!.variaveisConfig.remove(trecho);
-                                          _posicaoSelecionada!.comprimentos.remove(trecho);
-                                          if (i < _compCtrls.length) _compCtrls[i].text = '';
                                           // Zera followers do grupo
                                           if (grupo.isNotEmpty) {
                                             for (int j = 0; j < forma.itens.length; j++) {
                                               final item = forma.itens[j];
                                               if (item.grupoSimetria == grupo && item.trecho != trecho) {
-                                                _posicaoSelecionada!.comprimentos.remove(item.trecho);
-                                                if (j < _compCtrls.length) _compCtrls[j].text = '';
+                                                // Não zera comprimentos ao desmarcar variável
                                               }
                                             }
                                           }
                                           if (_trechoVarIdx == i) _trechoVarIdx = -1;
+                                          _editandoVariavel = false;
+                                          _variavelModificada = false;
                                         }
                                       });
-                                      // Auto-save
+                                      // Auto-save (marcação/desmarcação do checkbox)
                                       final elemId = _elementoDbIds[_elemIdx];
                                       if (elemId != null && _posicaoSelecionada!.id.length == 36) {
                                         detalhamentoCtrl.adicionarPosicaoAtualizada(_posicaoSelecionada!, elemId);
+                                      }
+                                      // Foca campo inicial ao marcar
+                                      if (v == true) {
+                                        Future.delayed(const Duration(milliseconds: 100), () {
+                                          _varInicialFn.requestFocus();
+                                        });
                                       }
                                     },
                                   ),
                                 ),
                               ),
                             ),
-                            // Botão de abrir painel variável (espaço fixo)
+                            // Botão de ver/editar variável (espaço fixo)
                             SizedBox(
                               width: 24, height: 24,
                               child: isVariavel
-                                  ? GestureDetector(
-                                      onTap: () {
-                                        setState(() => _trechoVarIdx = i);
-                                        Future.delayed(const Duration(milliseconds: 100), () {
-                                          _varInicialFn.requestFocus();
-                                          if (_varInicialCtrl.text.isNotEmpty) {
-                                            _varInicialCtrl.selection = TextSelection(
-                                                baseOffset: 0, extentOffset: _varInicialCtrl.text.length);
-                                          }
-                                        });
-                                      },
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          color: _trechoVarIdx == i
-                                              ? AppColors.primaryMain.withValues(alpha: 0.15)
-                                              : Colors.orange.withValues(alpha: 0.1),
-                                          borderRadius: BorderRadius.circular(4),
-                                          border: Border.all(
-                                            color: _trechoVarIdx == i
-                                                ? AppColors.primaryMain
-                                                : Colors.orange.withValues(alpha: 0.4),
-                                            width: _trechoVarIdx == i ? 1.5 : 1,
+                                  ? Builder(builder: (_) {
+                                      final isSelecionado = _trechoVarIdx == i;
+                                      final isEditando = isSelecionado && _editandoVariavel;
+                                      final isVisualizando = isSelecionado && !_editandoVariavel;
+                                      return Tooltip(
+                                        message: isEditando ? 'Editando variável' : (isVisualizando ? 'Clique para editar' : 'Ver variável'),
+                                        preferBelow: false,
+                                        waitDuration: const Duration(milliseconds: 300),
+                                        child: GestureDetector(
+                                          onTap: () {
+                                            if (isEditando) return;
+                                            if (isVisualizando) {
+                                              _abrirEdicaoVariavel(i, forma);
+                                            } else {
+                                              _abrirEdicaoVariavel(i, forma, apenasVisualizar: true);
+                                            }
+                                          },
+                                          child: Container(
+                                            decoration: BoxDecoration(
+                                              color: isEditando
+                                                  ? AppColors.primaryMain.withValues(alpha: 0.15)
+                                                  : isVisualizando
+                                                      ? AppColors.secondary.withValues(alpha: 0.12)
+                                                      : Colors.orange.withValues(alpha: 0.1),
+                                              borderRadius: BorderRadius.circular(4),
+                                              border: Border.all(
+                                                color: isEditando
+                                                    ? AppColors.primaryMain
+                                                    : isVisualizando
+                                                        ? AppColors.secondary.withValues(alpha: 0.5)
+                                                        : Colors.orange.withValues(alpha: 0.4),
+                                                width: isSelecionado ? 1.5 : 1,
+                                              ),
+                                            ),
+                                            child: Icon(
+                                              isEditando ? Icons.edit : Icons.edit_outlined,
+                                              size: 14,
+                                              color: isEditando ? AppColors.primaryMain : (isVisualizando ? AppColors.secondary : Colors.orange[700]),
+                                            ),
                                           ),
                                         ),
-                                        child: Icon(Icons.unfold_more, size: 14,
-                                            color: _trechoVarIdx == i ? AppColors.primaryMain : Colors.orange[700]),
-                                      ),
-                                    )
+                                      );
+                                    })
                                   : null,
                             ),
                             if (t.tipo == 'circulo') ...[
@@ -3118,12 +3297,15 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                               Icon(Icons.circle_outlined, size: 14, color: Colors.grey[400]),
                             ],
                           ]),
+                        ),
                         );
                         },
                       );
                     }),
             ),
-          ])),
+              ]),
+            ),
+          )),
           // ── Painel de configuração do trecho variável ──
           Expanded(flex: 2, child: _painelVariavel(forma)),
         ]),
@@ -3138,7 +3320,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
         _posicaoSelecionada == null) {
       return Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.unfold_more, size: 32, color: Colors.grey[300]),
+          Icon(Icons.edit_outlined, size: 32, color: Colors.grey[300]),
           const SizedBox(height: 8),
           Text('Marque "Var." e clique ⇕\npara configurar variação',
               textAlign: TextAlign.center,
@@ -3171,258 +3353,416 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
         trechoConfig, () => TrechoVariavelConfig());
     final qtde = int.tryParse(_posicaoSelecionada!.qtde.text) ?? 0;
 
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+    return Container(
+      margin: const EdgeInsets.fromLTRB(4, 4, 4, 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.secondary.withValues(alpha: 0.5), width: 1.5),
+        boxShadow: [
+          BoxShadow(color: AppColors.secondary.withValues(alpha: 0.12), blurRadius: 12, offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       // Header
       Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: Colors.orange.withValues(alpha: 0.06),
-          border: Border(bottom: BorderSide(color: Colors.orange.withValues(alpha: 0.2))),
+          gradient: LinearGradient(
+            colors: [AppColors.secondary.withValues(alpha: 0.15), AppColors.secondary.withValues(alpha: 0.05)],
+          ),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(9)),
+          border: Border(bottom: BorderSide(color: AppColors.secondary.withValues(alpha: 0.25))),
         ),
         child: Row(children: [
-          Icon(Icons.unfold_more, size: 16, color: Colors.orange[700]),
-          const SizedBox(width: 6),
-          Text('$trechoConfig — Variação', style: AppCss.smallBold.setColor(Colors.orange[800]!).setSize(12)),
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: AppColors.secondary.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Icon(Icons.tune, size: 14, color: AppColors.secondaryDark),
+          ),
+          const SizedBox(width: 8),
+          Text('$trechoConfig — Variação', style: AppCss.smallBold.setColor(AppColors.secondaryDark).setSize(12)),
           const Spacer(),
           if (qtde > 0)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha: 0.12),
+                color: AppColors.secondary.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: AppColors.secondary.withValues(alpha: 0.3)),
               ),
-              child: Text('$qtde pç', style: AppCss.minimumBold.setColor(Colors.orange[700]!).setSize(10)),
+              child: Text('$qtde pç', style: AppCss.minimumBold.setColor(AppColors.secondaryDark).setSize(10)),
             ),
         ]),
       ),
 
-      // Campos: Inicial / Final
-      Padding(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-        child: Builder(builder: (_) {
-          // Atualiza controllers com valores atuais
-          if (_varInicialCtrl.text != (config.inicial > 0 ? config.inicial.toString() : '')) {
-            _varInicialCtrl.text = config.inicial > 0 ? config.inicial.toString() : '';
-          }
-          if (_varFinalCtrl.text != (config.final_ > 0 ? config.final_.toString() : '')) {
-            _varFinalCtrl.text = config.final_ > 0 ? config.final_.toString() : '';
-          }
-          final mult = _posicaoSelecionada!.multiplicador;
-          if (_varMultCtrl.text != (mult > 0 ? mult.toString() : '')) {
-            _varMultCtrl.text = mult > 0 ? mult.toString() : '';
-          }
-          return Row(children: [
-            Expanded(child: _varField('Inicial', _varInicialCtrl, focusNode: isFollowerVar ? null : _varInicialFn, nextFocus: isFollowerVar ? null : _varFinalFn, nextCtrl: _varFinalCtrl, readOnly: isFollowerVar || _isRO, onChanged: (v) {
-              config.inicial = v;
-              _recalcularVariavel(config, qtde, trechoConfig);
-            })),
-            const SizedBox(width: 8),
-            Expanded(child: _varField('Final', _varFinalCtrl, focusNode: isFollowerVar ? null : _varFinalFn, nextFocus: isFollowerVar ? null : _varMultFn, nextCtrl: _varMultCtrl, readOnly: isFollowerVar || _isRO, onChanged: (v) {
-              config.final_ = v;
-              _recalcularVariavel(config, qtde, trechoConfig);
-            })),
-          ]);
-        }),
-      ),
-
-      // Multiplicador
-      Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-        child: Row(children: [
-          Expanded(child: _varField('Multiplicador', _varMultCtrl, focusNode: isFollowerVar ? null : _varMultFn, readOnly: isFollowerVar || _isRO, onChanged: (v) {
-            _posicaoSelecionada!.multiplicador = v.clamp(1, 100);
-            // Recalcula todos os trechos variáveis da posição
-            for (final entry in _posicaoSelecionada!.variaveisConfig.entries) {
-              final cfg = entry.value;
-              if (cfg.inicial > 0 && cfg.final_ > 0 && cfg.distribuicao == 'linear') {
-                cfg.gerarLinear(qtde, multiplicador: _posicaoSelecionada!.multiplicador);
-              }
-            }
-            _salvarConfigVariavel(trechoConfig);
-            setState(() {});
-          }, onSubmitExtra: isFollowerVar ? null : () {
-            // Aguarda todos os rebuilds (setState + formStream.update) antes de mover o foco
-            Future.delayed(const Duration(milliseconds: 50), () {
-              if (!mounted) return;
-              final nextFn = _proximoTrechoFisico(forma, _trechoVarIdx);
-              if (nextFn != null) {
-                final nextIdx = _compFns.indexOf(nextFn);
-                nextFn.requestFocus();
-                if (nextIdx >= 0 && nextIdx < _compCtrls.length) {
-                  _compCtrls[nextIdx].selection = TextSelection(
-                      baseOffset: 0, extentOffset: _compCtrls[nextIdx].text.length);
-                }
-              } else {
-                FocusScope.of(context).unfocus();
-              }
-            });
-          })),
-          const SizedBox(width: 8),
-          // Toggle linear/manual
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Distribuição', style: AppCss.minimumRegular.setColor(Colors.grey[500]!).setSize(10)),
-                const SizedBox(height: 4),
-                Row(children: [
-                  _distBtn('Linear', config.distribuicao == 'linear', isFollowerVar || _isRO ? null : () {
-                    config.distribuicao = 'linear';
-                    _recalcularVariavel(config, qtde, trechoConfig);
-                  }),
-                  const SizedBox(width: 4),
-                  _distBtn('Manual', config.distribuicao == 'manual', isFollowerVar || _isRO ? null : () {
-                    setState(() => config.distribuicao = 'manual');
-                    _atualizarManualCtrls(config.medidas);
-                    if (config.medidas.isNotEmpty) {
-                      Future.delayed(const Duration(milliseconds: 150), () {
-                        if (_manualFns.isNotEmpty) {
-                          _manualFns[0].requestFocus();
-                          if (_manualCtrls[0].text.isNotEmpty) {
-                            _manualCtrls[0].selection = TextSelection(
-                                baseOffset: 0, extentOffset: _manualCtrls[0].text.length);
-                          }
-                        }
-                      });
-                    }
-                  }),
-                ]),
-              ],
-            ),
-          ),
-        ]),
-      ),
-
-      // Validação
-      if (qtde > 0 && _posicaoSelecionada!.multiplicador > 1 && qtde % _posicaoSelecionada!.multiplicador != 0)
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
-          child: Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: Colors.red.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Row(children: [
-              Icon(Icons.warning_amber_rounded, size: 14, color: Colors.red[400]),
-              const SizedBox(width: 4),
-              Expanded(child: Text(
-                'Qtde ($qtde) não é divisível por multiplicador (${_posicaoSelecionada!.multiplicador})',
-                style: AppCss.minimumRegular.setColor(Colors.red[600]!).setSize(10),
-              )),
-            ]),
-          ),
-        ),
-
-      const SizedBox(height: 6),
-
-      // Divisor
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: Row(children: [
-          Expanded(child: Divider(color: Colors.grey[200])),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Text(
-              config.medidas.isEmpty
-                  ? 'Preencha inicial e final'
-                  : '${config.medidas.length} medida(s)${_posicaoSelecionada!.multiplicador > 1 ? ' × ${_posicaoSelecionada!.multiplicador}' : ''}',
-              style: AppCss.minimumBold.setColor(Colors.grey[400]!).setSize(10),
-            ),
-          ),
-          Expanded(child: Divider(color: Colors.grey[200])),
-        ]),
-      ),
-
-      const SizedBox(height: 4),
-
-      // Lista de medidas
+      // ── Corpo: duas colunas ──
       Expanded(
-        child: config.medidas.isEmpty
-            ? Center(child: Text('Sem medidas', style: AppCss.minimumRegular.setColor(Colors.grey[300]!)))
-            : ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                itemCount: config.medidas.length,
-                itemBuilder: (_, i) {
-                  final isManual = config.distribuicao == 'manual';
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 2),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: i.isEven ? Colors.grey[50] : Colors.white,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Row(children: [
-                      SizedBox(
-                        width: 28,
-                        child: Text('#${i + 1}',
-                            style: AppCss.minimumRegular.setColor(Colors.grey[400]!).setSize(10)),
-                      ),
-                      if (isManual && !isFollowerVar && !_isRO)
-                        SizedBox(
-                          width: 60,
-                          height: 26,
-                          child: TextField(
-                            controller: i < _manualCtrls.length ? _manualCtrls[i] : null,
-                            focusNode: i < _manualFns.length ? _manualFns[i] : null,
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                            textAlign: TextAlign.center,
-                            style: AppCss.minimumBold.setSize(11),
-                            decoration: InputDecoration(
-                              filled: true,
-                              fillColor: Colors.white,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-                              isDense: true,
-                              enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(4),
-                                  borderSide: BorderSide(color: Colors.grey[300]!)),
-                              focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(4),
-                                  borderSide: const BorderSide(color: Colors.orange, width: 1.5)),
-                            ),
-                            onTap: () {
-                              if (i < _manualCtrls.length && _manualCtrls[i].text.isNotEmpty) {
-                                _manualCtrls[i].selection = TextSelection(
-                                    baseOffset: 0, extentOffset: _manualCtrls[i].text.length);
-                              }
-                            },
-                            onSubmitted: (val) {
-                              final v = int.tryParse(val);
-                              if (v != null && v > 0) {
-                                setState(() => config.medidas[i] = v);
-                                _salvarConfigVariavel(trechoConfig);
-                              }
-                              // Enter → próximo campo
-                              final next = i + 1;
-                              if (next < _manualFns.length) {
-                                _manualFns[next].requestFocus();
-                                Future.microtask(() {
-                                  if (next < _manualCtrls.length && _manualCtrls[next].text.isNotEmpty) {
-                                    _manualCtrls[next].selection = TextSelection(
-                                        baseOffset: 0, extentOffset: _manualCtrls[next].text.length);
-                                  }
+        child: IgnorePointer(
+          ignoring: !_editandoVariavel,
+          child: AnimatedOpacity(
+            opacity: _editandoVariavel ? 1.0 : 0.75,
+            duration: const Duration(milliseconds: 200),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+            // ══════ COLUNA ESQUERDA — Campos de digitação ══════
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Inicial / Final
+                    Builder(builder: (_) {
+                      if (!_varInicialFn.hasFocus && _varInicialCtrl.text != (config.inicial > 0 ? config.inicial.toString() : '')) {
+                        _varInicialCtrl.text = config.inicial > 0 ? config.inicial.toString() : '';
+                      }
+                      if (!_varFinalFn.hasFocus && _varFinalCtrl.text != (config.final_ > 0 ? config.final_.toString() : '')) {
+                        _varFinalCtrl.text = config.final_ > 0 ? config.final_.toString() : '';
+                      }
+                      final mult = _posicaoSelecionada!.multiplicador;
+                      if (!_varMultFn.hasFocus && _varMultCtrl.text != (mult > 0 ? mult.toString() : '')) {
+                        _varMultCtrl.text = mult > 0 ? mult.toString() : '';
+                      }
+                      return Row(children: [
+                        Expanded(child: _varField('Inicial', _varInicialCtrl, focusNode: isFollowerVar ? null : _varInicialFn, nextFocus: isFollowerVar ? null : _varFinalFn, nextCtrl: _varFinalCtrl, readOnly: isFollowerVar || _isRO, onChanged: (v) {
+                          config.inicial = v;
+                          config.medidas.clear();
+                          config.distribuicao = 'linear';
+                          setState(() => _variavelModificada = true);
+                        })),
+                        const SizedBox(width: 8),
+                        Expanded(child: _varField('Final', _varFinalCtrl, focusNode: isFollowerVar ? null : _varFinalFn, nextFocus: isFollowerVar ? null : _varMultFn, nextCtrl: _varMultCtrl, readOnly: isFollowerVar || _isRO, onChanged: (v) {
+                          config.final_ = v;
+                          config.medidas.clear();
+                          config.distribuicao = 'linear';
+                          setState(() => _variavelModificada = true);
+                        })),
+                      ]);
+                    }),
+
+                    const SizedBox(height: 8),
+
+                    // Multiplicador + Distribuição
+                    Row(children: [
+                      Expanded(child: _varField('Multiplicador', _varMultCtrl, focusNode: isFollowerVar ? null : _varMultFn, readOnly: isFollowerVar || _isRO, onSubmitExtra: () {
+                        if (config.inicial > 0 && config.final_ > 0 && qtde > 0 && config.distribuicao != 'manual') {
+                          _recalcularVariavel(config, qtde, trechoConfig);
+                          setState(() => _variavelModificada = true);
+                        }
+                      }, onChanged: (v) {
+                        _posicaoSelecionada!.multiplicador = v.clamp(1, 100);
+                        setState(() => _variavelModificada = true);
+                      })),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Distribuição', style: AppCss.minimumRegular.setColor(Colors.grey[500]!).setSize(10)),
+                            const SizedBox(height: 4),
+                            Row(children: [
+                              _distBtn('Linear', config.distribuicao == 'linear', isFollowerVar || _isRO ? null : () {
+                                setState(() {
+                                  config.distribuicao = 'linear';
+                                  _variavelModificada = true;
                                 });
+                              }),
+                              const SizedBox(width: 4),
+                              _distBtn('Manual', config.distribuicao == 'manual', isFollowerVar || _isRO || config.medidas.isEmpty ? null : () {
+                                setState(() {
+                                  config.distribuicao = 'manual';
+                                  _variavelModificada = true;
+                                });
+                                _atualizarManualCtrls(config.medidas);
+                                if (config.medidas.isNotEmpty) {
+                                  Future.delayed(const Duration(milliseconds: 150), () {
+                                    if (_manualFns.isNotEmpty) {
+                                      _manualFns[0].requestFocus();
+                                      if (_manualCtrls[0].text.isNotEmpty) {
+                                        _manualCtrls[0].selection = TextSelection(
+                                            baseOffset: 0, extentOffset: _manualCtrls[0].text.length);
+                                      }
+                                    }
+                                  });
+                                }
+                              }),
+                            ]),
+                          ],
+                        ),
+                      ),
+                    ]),
+
+                    const SizedBox(height: 10),
+
+                    // Botão Gerar Variáveis
+                    if (!isFollowerVar && !_isRO)
+                      Builder(builder: (_) {
+                        final habilitado = config.inicial > 0 && config.final_ > 0 && qtde > 0 && config.distribuicao != 'manual';
+                        return InkWell(
+                          onTap: habilitado ? () {
+                            _recalcularVariavel(config, qtde, trechoConfig);
+                            setState(() => _variavelModificada = true);
+                          } : null,
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            height: 34,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              gradient: habilitado
+                                  ? LinearGradient(colors: [AppColors.secondaryDark, AppColors.secondary])
+                                  : null,
+                              color: habilitado ? null : Colors.grey[100],
+                              borderRadius: BorderRadius.circular(8),
+                              boxShadow: habilitado
+                                  ? [BoxShadow(color: AppColors.secondary.withValues(alpha: 0.35), blurRadius: 6, offset: const Offset(0, 2))]
+                                  : [],
+                            ),
+                            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                              Icon(Icons.auto_fix_high, color: habilitado ? Colors.white : Colors.grey[400], size: 15),
+                              const SizedBox(width: 6),
+                              Text('Gerar Variáveis',
+                                  style: AppCss.smallBold.setColor(habilitado ? Colors.white : Colors.grey[400]!).setSize(11)),
+                            ]),
+                          ),
+                        );
+                      }),
+
+                    // Validação multiplicador
+                    if (qtde > 0 && _posicaoSelecionada!.multiplicador > 1 && qtde % _posicaoSelecionada!.multiplicador != 0)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(children: [
+                            Icon(Icons.warning_amber_rounded, size: 14, color: Colors.red[400]),
+                            const SizedBox(width: 4),
+                            Expanded(child: Text(
+                              'Qtde ($qtde) não é divisível por multiplicador (${_posicaoSelecionada!.multiplicador})',
+                              style: AppCss.minimumRegular.setColor(Colors.red[600]!).setSize(10),
+                            )),
+                          ]),
+                        ),
+                      ),
+
+                    const Spacer(),
+
+                    // Botões Salvar / Cancelar
+                    if (!isFollowerVar && !_isRO)
+                      Row(children: [
+                        // Cancelar
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => _tentarFecharPainelVariavel(),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              height: 34,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: AppColors.secondary.withValues(alpha: 0.06),
+                                border: Border.all(color: AppColors.secondary.withValues(alpha: 0.4)),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text('Cancelar', style: AppCss.smallBold.setColor(AppColors.secondaryDark).setSize(11)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Salvar Variáveis
+                        Expanded(
+                          flex: 2,
+                          child: Focus(
+                            focusNode: _varSalvarFn,
+                            onKeyEvent: (_, event) {
+                              if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.enter) {
+                                final salvarOk = _variavelModificada && config.medidas.isNotEmpty && !config.medidas.any((m) => m <= 0);
+                                if (salvarOk) {
+                                  _salvarConfigVariavel(trechoConfig);
+                                  setState(() {
+                                    _editandoVariavel = false;
+                                    _variavelModificada = false;
+                                  });
+                                  NotificationService.showPositive('Variáveis salvas', 'Configuração de variação atualizada', position: NotificationPosition.bottom);
+                                  return KeyEventResult.handled;
+                                }
                               }
+                              return KeyEventResult.ignored;
+                            },
+                            child: InkWell(
+                            onTap: _variavelModificada && config.medidas.isNotEmpty && !config.medidas.any((m) => m <= 0) ? () {
+                              _salvarConfigVariavel(trechoConfig);
+                              setState(() {
+                                _editandoVariavel = false;
+                                _variavelModificada = false;
+                              });
+                              NotificationService.showPositive('Variáveis salvas', 'Configuração de variação atualizada', position: NotificationPosition.bottom);
+                            } : null,
+                            borderRadius: BorderRadius.circular(8),
+                            child: Builder(builder: (_) {
+                              final salvarHabilitado = _variavelModificada && config.medidas.isNotEmpty && !config.medidas.any((m) => m <= 0);
+                              return Container(
+                              height: 34,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                gradient: salvarHabilitado
+                                    ? const LinearGradient(colors: [Color(0xFF10B981), Color(0xFF059669)])
+                                    : null,
+                                color: salvarHabilitado ? null : Colors.grey[100],
+                                borderRadius: BorderRadius.circular(8),
+                                boxShadow: salvarHabilitado
+                                    ? [BoxShadow(color: const Color(0xFF10B981).withValues(alpha: 0.3), blurRadius: 6, offset: const Offset(0, 2))]
+                                    : [],
+                              ),
+                              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                                Icon(Icons.save, color: salvarHabilitado ? Colors.white : Colors.grey[400], size: 15),
+                                const SizedBox(width: 6),
+                                Text('Salvar Variáveis',
+                                    style: AppCss.smallBold.setColor(salvarHabilitado ? Colors.white : Colors.grey[400]!).setSize(11)),
+                              ]),
+                            );
+                            }),
+                          ),
+                          ),
+                        ),
+                      ]),
+                  ],
+                ),
+              ),
+            ),
+
+            // ══════ DIVISOR VERTICAL ══════
+            Container(
+              width: 1,
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              color: AppColors.secondary.withValues(alpha: 0.15),
+            ),
+
+            // ══════ COLUNA DIREITA — Lista de medidas ══════
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Cabeçalho da lista
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
+                    child: Row(children: [
+                      Icon(Icons.list_alt, size: 13, color: AppColors.secondary),
+                      const SizedBox(width: 4),
+                      Text(
+                        config.medidas.isEmpty
+                            ? 'Preencha inicial e final'
+                            : '${config.medidas.length} medida(s)${_posicaoSelecionada!.multiplicador > 1 ? ' × ${_posicaoSelecionada!.multiplicador}' : ''}',
+                        style: AppCss.minimumBold.setColor(AppColors.secondaryDark).setSize(10),
+                      ),
+                    ]),
+                  ),
+                  Divider(height: 1, color: AppColors.secondary.withValues(alpha: 0.12)),
+
+                  // Lista
+                  Expanded(
+                    child: config.medidas.isEmpty
+                        ? Center(child: Text('Sem medidas', style: AppCss.minimumRegular.setColor(Colors.grey[300]!)))
+                        : ListView.builder(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            itemCount: config.medidas.length,
+                            itemBuilder: (_, i) {
+                              final isManual = config.distribuicao == 'manual';
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 2),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: i.isEven ? Colors.grey[50] : Colors.white,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Row(children: [
+                                  SizedBox(
+                                    width: 24,
+                                    child: Text('#${i + 1}',
+                                        style: AppCss.minimumRegular.setColor(Colors.grey[400]!).setSize(10)),
+                                  ),
+                                  if (isManual && !isFollowerVar && !_isRO)
+                                    SizedBox(
+                                      width: 56,
+                                      height: 26,
+                                      child: TextField(
+                                        controller: i < _manualCtrls.length ? _manualCtrls[i] : null,
+                                        focusNode: i < _manualFns.length ? _manualFns[i] : null,
+                                        keyboardType: TextInputType.number,
+                                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                        textAlign: TextAlign.center,
+                                        style: AppCss.minimumBold.setSize(11),
+                                        decoration: InputDecoration(
+                                          filled: true,
+                                          fillColor: Colors.white,
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                                          isDense: true,
+                                          enabledBorder: OutlineInputBorder(
+                                              borderRadius: BorderRadius.circular(4),
+                                              borderSide: BorderSide(color: Colors.grey[300]!)),
+                                          focusedBorder: OutlineInputBorder(
+                                              borderRadius: BorderRadius.circular(4),
+                                              borderSide: BorderSide(color: AppColors.secondary, width: 1.5)),
+                                        ),
+                                        onTap: () {
+                                          if (i < _manualCtrls.length && _manualCtrls[i].text.isNotEmpty) {
+                                            _manualCtrls[i].selection = TextSelection(
+                                                baseOffset: 0, extentOffset: _manualCtrls[i].text.length);
+                                          }
+                                        },
+                                        onSubmitted: (val) {
+                                          final v = int.tryParse(val);
+                                          if (v != null && v > 0) {
+                                            setState(() {
+                                              config.medidas[i] = v;
+                                              _variavelModificada = true;
+                                            });
+                                          }
+                                          final next = i + 1;
+                                          if (next < _manualFns.length) {
+                                            _manualFns[next].requestFocus();
+                                            Future.microtask(() {
+                                              if (next < _manualCtrls.length && _manualCtrls[next].text.isNotEmpty) {
+                                                _manualCtrls[next].selection = TextSelection(
+                                                    baseOffset: 0, extentOffset: _manualCtrls[next].text.length);
+                                              }
+                                            });
+                                          }
+                                        },
+                                      ),
+                                    )
+                                  else
+                                    Text('${config.medidas[i]}',
+                                        style: AppCss.minimumBold.setColor(Colors.grey[700]!).setSize(12)),
+                                  const SizedBox(width: 4),
+                                  Text('cm', style: AppCss.minimumRegular.setColor(Colors.grey[400]!).setSize(10)),
+                                  if (_posicaoSelecionada!.multiplicador > 1) ...[
+                                    const Spacer(),
+                                    Text('× ${_posicaoSelecionada!.multiplicador}',
+                                        style: AppCss.minimumRegular.setColor(AppColors.secondary).setSize(10)),
+                                  ],
+                                ]),
+                              );
                             },
                           ),
-                        )
-                      else
-                        Text('${config.medidas[i]}',
-                            style: AppCss.minimumBold.setColor(Colors.grey[700]!).setSize(12)),
-                      const SizedBox(width: 6),
-                      Text('cm', style: AppCss.minimumRegular.setColor(Colors.grey[400]!).setSize(10)),
-                      if (_posicaoSelecionada!.multiplicador > 1) ...[
-                        const Spacer(),
-                        Text('× ${_posicaoSelecionada!.multiplicador}',
-                            style: AppCss.minimumRegular.setColor(Colors.orange[600]!).setSize(10)),
-                      ],
-                    ]),
-                  );
-                },
+                  ),
+                ],
               ),
+            ),
+          ],
+        ),
+        ),
+        ),
       ),
-    ]);
+    ]),
+    );
   }
 
   Widget _varField(String label, TextEditingController ctrl, {FocusNode? focusNode, FocusNode? nextFocus, TextEditingController? nextCtrl, bool readOnly = false, VoidCallback? onSubmitExtra, required void Function(int) onChanged}) {
@@ -3449,7 +3789,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                 borderSide: BorderSide(color: Colors.grey[300]!)),
             focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(6),
-                borderSide: const BorderSide(color: Colors.orange, width: 1.5)),
+                borderSide: BorderSide(color: AppColors.secondary, width: 1.5)),
           ),
           onTap: () {
             if (ctrl.text.isNotEmpty) {
@@ -3461,14 +3801,12 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
             onChanged(v);
             if (nextFocus != null) {
               nextFocus.requestFocus();
-              // Seleciona conteúdo do próximo campo
               if (nextCtrl != null && nextCtrl.text.isNotEmpty) {
                 Future.microtask(() {
                   nextCtrl.selection = TextSelection(baseOffset: 0, extentOffset: nextCtrl.text.length);
                 });
               }
             } else {
-              // Sem nextFocus: executa callback extra (ex: ir para próximo trecho)
               onSubmitExtra?.call();
             }
           },
@@ -3486,16 +3824,16 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: ativo ? Colors.orange.withValues(alpha: 0.15) : Colors.grey[100],
+            color: ativo ? AppColors.secondary.withValues(alpha: 0.12) : Colors.grey[100],
             borderRadius: BorderRadius.circular(4),
             border: Border.all(
-              color: ativo ? Colors.orange : Colors.grey[300]!,
+              color: ativo ? AppColors.secondary : Colors.grey[300]!,
               width: ativo ? 1.5 : 1,
             ),
           ),
           child: Text(label,
               style: AppCss.minimumBold
-                  .setColor(ativo ? Colors.orange[800]! : Colors.grey[500]!)
+                  .setColor(ativo ? AppColors.secondaryDark : Colors.grey[500]!)
                   .setSize(10)),
         ),
       ),
@@ -3521,7 +3859,6 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
 
     setState(() {});
     _atualizarManualCtrls(config.medidas);
-    _salvarConfigVariavel(trecho);
   }
 
   void _salvarConfigVariavel(String trecho) {
@@ -3564,6 +3901,115 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
     detalhamentoCtrl.formStream.update();
     _atualizarPesoElementoAtual();
     _atualizarPesoTotal(detalhamentoCtrl.form);
+  }
+
+  /// Entra em modo de edição de variável com overlay.
+  void _abrirEdicaoVariavel(int idx, FormaModel forma, {bool apenasVisualizar = false}) {
+    if (_posicaoSelecionada == null) return;
+
+    // Encontra o trecho config (líder do grupo)
+    String trechoConfig = forma.itens[idx].trecho;
+    final grupo = forma.itens[idx].grupoSimetria;
+    if (grupo.isNotEmpty) {
+      final itensDoGrupo = forma.itens.where((x) => x.grupoSimetria == grupo).toList();
+      final lider = itensDoGrupo.reduce((a, b) => a.numeroOrdem < b.numeroOrdem ? a : b);
+      trechoConfig = lider.trecho;
+    }
+
+    final config = _posicaoSelecionada!.variaveisConfig[trechoConfig];
+
+    setState(() {
+      _trechoVarIdx = idx;
+      if (!apenasVisualizar) {
+        _editandoVariavel = true;
+        _variavelModificada = false;
+        _varConfigBackup = config?.copyWith();
+        _varMultBackup = _posicaoSelecionada!.multiplicador;
+      }
+    });
+
+    if (!apenasVisualizar) {
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (!mounted) return;
+        _varInicialFn.requestFocus();
+        if (_varInicialCtrl.text.isNotEmpty) {
+          _varInicialCtrl.selection = TextSelection(
+              baseOffset: 0, extentOffset: _varInicialCtrl.text.length);
+        }
+      });
+    }
+  }
+
+  /// Tenta fechar o painel de variáveis. Se houver alterações, pergunta ao usuário.
+  Future<void> _tentarFecharPainelVariavel() async {
+    if (_variavelModificada) {
+      final descartar = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Variáveis não salvas'),
+          content: const Text('As alterações nas variáveis não foram salvas. Deseja descartar?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Continuar editando'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700], foregroundColor: Colors.white),
+              child: const Text('Descartar'),
+            ),
+          ],
+        ),
+      );
+      if (!(descartar ?? false)) return;
+    }
+    // Sempre restaura ao cancelar (desmarca checkbox se era novo)
+    _restaurarBackupVariavel();
+    setState(() {
+      _editandoVariavel = false;
+      _variavelModificada = false;
+    });
+  }
+
+  /// Restaura o backup da configuração de variável (quando o usuário cancela).
+  void _restaurarBackupVariavel() {
+    if (_posicaoSelecionada == null) return;
+    final forma = _formaSelecionada ?? _pForma;
+    if (forma == null || _trechoVarIdx < 0 || _trechoVarIdx >= forma.itens.length) return;
+
+    String trechoConfig = forma.itens[_trechoVarIdx].trecho;
+    final grupo = forma.itens[_trechoVarIdx].grupoSimetria;
+    if (grupo.isNotEmpty) {
+      final itensDoGrupo = forma.itens.where((x) => x.grupoSimetria == grupo).toList();
+      final lider = itensDoGrupo.reduce((a, b) => a.numeroOrdem < b.numeroOrdem ? a : b);
+      trechoConfig = lider.trecho;
+    }
+
+    if (_varConfigBackup != null) {
+      // Restaura config existente
+      _posicaoSelecionada!.variaveisConfig[trechoConfig] = _varConfigBackup!;
+    } else {
+      // Variável recém-marcada: desmarca checkbox e limpa config (mas NÃO comprimentos)
+      _posicaoSelecionada!.variaveisConfig.remove(trechoConfig);
+      _posicaoSelecionada!.variaveis[trechoConfig] = false;
+      // Limpa followers do grupo
+      if (grupo.isNotEmpty) {
+        for (int j = 0; j < forma.itens.length; j++) {
+          final item = forma.itens[j];
+          if (item.grupoSimetria == grupo && item.trecho != trechoConfig) {
+            _posicaoSelecionada!.variaveis[item.trecho] = false;
+            _posicaoSelecionada!.variaveisConfig.remove(item.trecho);
+          }
+        }
+      }
+      _trechoVarIdx = -1;
+      // Salva a desmarcação no banco
+      final elemId = _elementoDbIds[_elemIdx];
+      if (elemId != null && _posicaoSelecionada!.id.length == 36) {
+        detalhamentoCtrl.adicionarPosicaoAtualizada(_posicaoSelecionada!, elemId);
+      }
+    }
+    _posicaoSelecionada!.multiplicador = _varMultBackup;
   }
 
   Widget _detalhamentoIaContent(DetalhamentoCreateModel form) {

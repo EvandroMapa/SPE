@@ -146,7 +146,18 @@ class PdfDetalhamento {
                                   ),
                                   pw.SizedBox(height: 6),
                                   pw.Text(
-                                    pos.comprimentos.entries.map((e) => '${e.key}=${e.value}').join('  '),
+                                    pos.comprimentos.entries.map((e) {
+                                      final trecho = e.key;
+                                      final isVar = pos.variaveis[trecho] ?? false;
+                                      if (isVar) {
+                                        final config = pos.variaveisConfig[trecho]
+                                            ?? pos.variaveisConfig.values.firstOrNull;
+                                        if (config != null && config.inicial > 0 && config.final_ > 0) {
+                                          return '$trecho=${config.inicial} var ${config.final_}';
+                                        }
+                                      }
+                                      return '$trecho=${e.value}';
+                                    }).join('  '),
                                     style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
                                   ),
                                   // Linhas de variáveis por trecho
@@ -215,7 +226,7 @@ class PdfDetalhamento {
                               margin: const pw.EdgeInsets.only(right: 4),
                               child: formaDef == null || formaDef.itens.isEmpty
                                   ? pw.Center(child: pw.Text('SEM DESENHO', style: pw.TextStyle(fontSize: 8, color: PdfColors.grey500)))
-                                  : _buildDesenhoForma(formaDef, pos.comprimentos),
+                                  : _buildDesenhoForma(formaDef, pos),
                             ),
                           )
                         ],
@@ -374,7 +385,8 @@ class PdfDetalhamento {
     return pesoTotal;
   }
 
-  static pw.Widget _buildDesenhoForma(FormaModel forma, Map<String, int> medidas) {
+  static pw.Widget _buildDesenhoForma(FormaModel forma, PosicaoModel pos) {
+    final medidas = pos.comprimentos;
     if (forma.itens.isEmpty) return pw.SizedBox();
 
     // 1. Usar comprimentos originais da forma para geometria
@@ -465,7 +477,21 @@ class PdfDetalhamento {
        final len = math.sqrt(dx * dx + dy * dy);
        if (len < 1) continue;
 
-       final label = (medidas[itens[i].trecho] ?? itens[i].comprimento).toString();
+       // Label: mostra range se variável
+       final trechoNome = itens[i].trecho;
+       final isVar = pos.variaveis[trechoNome] ?? false;
+       String label;
+       if (isVar) {
+         final config = pos.variaveisConfig[trechoNome]
+             ?? pos.variaveisConfig.values.firstOrNull;
+         if (config != null && config.inicial > 0 && config.final_ > 0) {
+           label = '${config.inicial} var ${config.final_}';
+         } else {
+           label = (medidas[trechoNome] ?? itens[i].comprimento).toString();
+         }
+       } else {
+         label = (medidas[trechoNome] ?? itens[i].comprimento).toString();
+       }
        final boxW = label.length * 5.0 + 7;
        const boxH = 12.0;
        final lx = (midX - boxW / 2).clamp(0.5, width - boxW);

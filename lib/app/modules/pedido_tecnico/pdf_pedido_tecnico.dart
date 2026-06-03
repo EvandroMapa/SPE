@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'package:acoplan/app/core/client/models/bitola_model.dart';
 import 'package:acoplan/app/core/client/models/pedido_tecnico_model.dart';
 import 'package:acoplan/app/core/client/models/detalhamento_model.dart';
 import 'package:intl/intl.dart';
@@ -6,11 +7,15 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 class PdfPedidoTecnico {
+  static List<BitolaModel> _produtos = [];
+
   static Future<Uint8List> gerar({
     required PedidoTecnicoModel pedido,
     DetalhamentoModel? detalhamento,
     required bool completo,
+    List<BitolaModel> produtos = const [],
   }) async {
+    _produtos = produtos;
     final pdf = pw.Document();
     final fmtData = DateFormat('dd/MM/yyyy');
     final fmtHora = DateFormat('HH:mm');
@@ -425,6 +430,32 @@ class PdfPedidoTecnico {
               }),
             ],
 
+            // ── Resumo de Aço ──
+            if (detalhamento != null) ...[
+              pw.SizedBox(height: 24),
+              pw.Text(
+                'RESUMO DE AÇO',
+                style: pw.TextStyle(
+                  fontSize: 11,
+                  fontWeight: pw.FontWeight.bold,
+                  color: corPrimaria,
+                  letterSpacing: 1,
+                ),
+              ),
+              pw.SizedBox(height: 8),
+              _buildResumoAco(
+                pedido: pedido,
+                detalhamento: detalhamento,
+                corPrimaria: corPrimaria,
+                corFundoCabecalho: corFundoCabecalho,
+                corBorda: corBorda,
+                corVerde: corVerde,
+                estCabTbl: estCabTbl,
+                estCelula: estCelula,
+                estCelulaDestaque: estCelulaDestaque,
+              ),
+            ],
+
             // ── Assinatura ──
             pw.SizedBox(height: 30),
             pw.Row(
@@ -490,4 +521,152 @@ class PdfPedidoTecnico {
           ),
         ],
       );
+
+  // ── Massa linear (kg/m) ──────────────────────────────────────────────────
+  /// Busca massaFinal real no cadastro de produtos, fallback para d²/162.
+  static double _massaLinear(PosicaoModel pos) {
+    final produto = _produtos.where((p) => p.id == pos.bitolaId).firstOrNull;
+    if (produto != null && produto.massaFinal > 0) {
+      return produto.massaFinal;
+    }
+    final str = pos.bitolaNome.split('-').first.replaceAll(RegExp(r'[^0-9.]'), '');
+    final d = double.tryParse(str) ?? 0;
+    return (d * d) / 162;
+  }
+
+  // ── Peso total de uma posição (peça a peça para variáveis) ──────────────
+  static double _pesoTotalPosicao(PosicaoModel pos) {
+    final w = _massaLinear(pos);
+    if (w <= 0 || pos.qtde <= 0) return 0;
+
+    final temVar = pos.variaveisConfig.isNotEmpty &&
+        pos.variaveis.values.any((v) => v);
+
+    if (!temVar) {
+      final somaCm = pos.comprimentos.values.fold<int>(0, (s, v) => s + v);
+      return (somaCm / 100.0) * w * pos.qtde;
+    }
+
+    double pesoTotal = 0;
+    for (int peca = 0; peca < pos.qtde; peca++) {
+      int somaCm = 0;
+      for (final entry in pos.comprimentos.entries) {
+        final trecho = entry.key;
+        final isVar = pos.variaveis[trecho] ?? false;
+        if (isVar) {
+          final config = pos.variaveisConfig[trecho]
+              ?? pos.variaveisConfig.values.firstOrNull;
+          if (config != null && config.inicial > 0 && config.final_ > 0) {
+            final expandidas = config.medidasExpandidas(pos.multiplicador);
+            somaCm += peca < expandidas.length
+                ? expandidas[peca]
+                : (expandidas.isNotEmpty ? expandidas.last : 0);
+          } else {
+            somaCm += entry.value;
+          }
+        } else {
+          somaCm += entry.value;
+        }
+      }
+      pesoTotal += (somaCm / 100.0) * w;
+    }
+    return pesoTotal;
+  }
+
+  // ── Resumo de Aço (tabela por bitola) ────────────────────────────────────
+  static pw.Widget _buildResumoAco({
+    required PedidoTecnicoModel pedido,
+    required DetalhamentoModel detalhamento,
+    required PdfColor corPrimaria,
+    required PdfColor corFundoCabecalho,
+    required PdfColor corBorda,
+    required PdfColor corVerde,
+    required pw.TextStyle estCabTbl,
+    required pw.TextStyle estCelula,
+    required pw.TextStyle estCelulaDestaque,
+  }) {
+    // Só considerar elementos que fazem parte do pedido
+    final resumoPeso = <String, double>{};
+    final resumoComp = <String, int>{}; // cm
+
+    for (final elem in pedido.elementos) {
+      final elemDet = detalhamento.elementos
+          .where((e) => e.id == elem.elementoId)
+          .firstOrNull;
+      if (elemDet == null) continue;
+
+      final qtdeElem = elem.quantidadeSolicitada;
+
+      for (final pos in elemDet.posicoes) {
+        final bitola = pos.bitolaNome.split('-').first.trim();
+        final compUnit = pos.comprimentos.values.fold<int>(0, (s, v) => s + v);
+        final compTotalCm = compUnit * pos.qtde * qtdeElem;
+        final pesoTotal = _pesoTotalPosicao(pos) * qtdeElem;
+
+        resumoPeso[bitola] = (resumoPeso[bitola] ?? 0) + pesoTotal;
+        resumoComp[bitola] = (resumoComp[bitola] ?? 0) + compTotalCm;
+      }
+    }
+
+    final bitolasOrdenadas = resumoPeso.keys.toList()..sort();
+    double pesoTotalGeral = 0;
+
+    return pw.Table(
+      columnWidths: {
+        0: const pw.FlexColumnWidth(2),
+        1: const pw.FlexColumnWidth(2),
+        2: const pw.FlexColumnWidth(2),
+      },
+      border: pw.TableBorder.all(color: corBorda, width: 0.5),
+      children: [
+        // Cabeçalho
+        pw.TableRow(
+          decoration: pw.BoxDecoration(color: corPrimaria),
+          children: [
+            _celTbl('BITOLA', estCabTbl),
+            _celTbl('COMPR. TOTAL', estCabTbl, align: pw.Alignment.center),
+            _celTbl('PESO TOTAL', estCabTbl, align: pw.Alignment.center),
+          ],
+        ),
+        // Linhas por bitola
+        ...bitolasOrdenadas.asMap().entries.map((entry) {
+          final i = entry.key;
+          final b = entry.value;
+          final peso = resumoPeso[b] ?? 0;
+          final compM = (resumoComp[b] ?? 0) / 100;
+          pesoTotalGeral += peso;
+          final bg = i % 2 == 0
+              ? PdfColors.white
+              : const PdfColor.fromInt(0xFFF8FAFC);
+          return pw.TableRow(
+            decoration: pw.BoxDecoration(color: bg),
+            children: [
+              _celTbl(b, estCelulaDestaque),
+              _celTbl('${compM.toStringAsFixed(2)} m', estCelula,
+                  align: pw.Alignment.center),
+              _celTbl('${peso.toStringAsFixed(2)} kg', estCelula,
+                  align: pw.Alignment.center),
+            ],
+          );
+        }),
+        // Totalizador
+        pw.TableRow(
+          decoration: pw.BoxDecoration(color: corFundoCabecalho),
+          children: [
+            _celTbl('TOTAL GERAL', estCelulaDestaque),
+            _celTbl('', estCelula),
+            _celTbl(
+              '${pesoTotalGeral.toStringAsFixed(2)} kg',
+              pw.TextStyle(
+                fontSize: 9,
+                fontWeight: pw.FontWeight.bold,
+                color: corVerde,
+              ),
+              align: pw.Alignment.center,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
 }

@@ -76,6 +76,37 @@ class _PedidoTecnicoCreatePageState
   }
 
   Future<void> _confirmDelete() async {
+    // Buscar pedido atualizado do cache (widget.pedido é estático)
+    final pedido = BackendClient.pedidosTecnicos.data
+        .where((p) => p.id == widget.pedido!.id)
+        .firstOrNull ?? widget.pedido!;
+
+    // Bloquear exclusão se o pedido tem elementos
+    if (pedido.elementos.isNotEmpty) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          icon: Icon(Icons.info_outline, size: 40, color: Colors.orange[700]),
+          title: const Text('Não é possível excluir'),
+          content: const Text(
+            'Este pedido técnico possui elementos vinculados.\n'
+            'Remova todos os elementos antes de excluir o pedido.',
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryMain,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Entendi'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -126,6 +157,7 @@ class _PedidoTecnicoCreatePageState
       pedido: pedido,
       detalhamento: det,
       completo: completo,
+      produtos: BackendClient.bitolas.data,
     );
     await Printing.layoutPdf(
       onLayout: (format) async => pdfBytes,

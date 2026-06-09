@@ -41,10 +41,18 @@ class PedidoTecnicoController {
     final ocupados = BackendClient.pedidosTecnicos.elementosEmPedidosAbertos;
     final alocados = BackendClient.pedidosTecnicos.quantidadesAlocadas(form.id);
     final pedidoAtualId = form.id;
+    final bitolas = BackendClient.bitolas.data;
 
     final lista = <ElementoDetalhamentoViewModel>[];
 
     for (final elem in detalhamento.elementos) {
+      // Calcular peso unitário (1 peça) a partir das posições
+      // Usa o valor do banco se disponível, senão calcula on-the-fly
+      final pesoUnitCalculado = elem.calcularPesoUnitario(bitolas);
+      final pesoUnit = elem.pesoTotal > 0 && elem.quantidade > 0
+          ? elem.pesoTotal / elem.quantidade
+          : pesoUnitCalculado;
+
       for (final nome in elem.todosNomes) {
         final chave = '${elem.id}_$nome';
         final qtdAlocada = alocados[chave] ?? 0;
@@ -56,7 +64,7 @@ class PedidoTecnicoController {
             id: elem.id,
             nome: nome,
             quantidade: qtdRestante,
-            pesoTotal: elem.quantidade > 0 ? (elem.pesoTotal / elem.quantidade) * qtdRestante : 0.0,
+            pesoTotal: pesoUnit * qtdRestante,
             posicoes: elem.posicoes,
             elementosEquivalentes: const [],
           );
@@ -84,7 +92,7 @@ class PedidoTecnicoController {
               id: elem.id,
               nome: nome,
               quantidade: qtdeNoPedido,
-              pesoTotal: elem.quantidade > 0 ? (elem.pesoTotal / elem.quantidade) * qtdeNoPedido : 0.0,
+              pesoTotal: pesoUnit * qtdeNoPedido,
               posicoes: elem.posicoes,
               elementosEquivalentes: const [],
             );

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:acoplan/app/core/client/models/bitola_model.dart';
 import 'package:acoplan/app/core/client/models/forma_model.dart';
 import 'package:acoplan/app/core/client/models/trecho_variavel_config.dart';
 import 'package:acoplan/app/core/services/hash_service.dart';
@@ -197,6 +198,65 @@ class ElementoModel {
       'posicoes': posicoes.map((p) => p.toMap()).toList(),
       'elementos_equivalentes': elementosEquivalentes,
     };
+  }
+
+  /// Calcula o peso unitário do elemento (1 unidade) a partir das posições,
+  /// usando a massa linear das bitolas cadastradas.
+  /// Replica a lógica do detalhamento/PDF para não depender do campo `peso_total` do banco.
+  double calcularPesoUnitario(List<BitolaModel> bitolas) {
+    double pesoUnit = 0;
+    for (final pos in posicoes) {
+      // Buscar massa linear da bitola
+      final bitola = bitolas.where((b) => b.id == pos.bitolaId).firstOrNull;
+      double massaLinear;
+      if (bitola != null && bitola.massaFinal > 0) {
+        massaLinear = bitola.massaFinal;
+      } else {
+        // Fallback: d²/162
+        final str = pos.bitolaNome.split('-').first.replaceAll(RegExp(r'[^0-9.]'), '');
+        final d = double.tryParse(str) ?? 0;
+        massaLinear = (d * d) / 162;
+      }
+      if (massaLinear <= 0) continue;
+
+      final temVar = pos.variaveisConfig.isNotEmpty &&
+          pos.variaveis.values.any((v) => v);
+
+      if (!temVar) {
+        final somaCm = pos.comprimentos.values.fold<int>(0, (s, v) => s + v);
+        pesoUnit += (somaCm / 100.0) * massaLinear * pos.qtde;
+      } else {
+        // Calcula peça a peça (cada peça pode ter comprimento diferente)
+        for (int peca = 0; peca < pos.qtde; peca++) {
+          int somaCm = 0;
+          for (final entry in pos.comprimentos.entries) {
+            final trecho = entry.key;
+            final isVar = pos.variaveis[trecho] ?? false;
+            if (isVar) {
+              final config = pos.variaveisConfig[trecho]
+                  ?? pos.variaveisConfig.values.firstOrNull;
+              if (config != null && config.inicial > 0 && config.final_ > 0) {
+                final expandidas = config.medidasExpandidas(pos.multiplicador);
+                somaCm += peca < expandidas.length
+                    ? expandidas[peca]
+                    : (expandidas.isNotEmpty ? expandidas.last : 0);
+              } else {
+                somaCm += entry.value;
+              }
+            } else {
+              somaCm += entry.value;
+            }
+          }
+          pesoUnit += (somaCm / 100.0) * massaLinear;
+        }
+      }
+    }
+    return pesoUnit;
+  }
+
+  /// Peso total do elemento = peso unitário × quantidade
+  double calcularPesoTotal(List<BitolaModel> bitolas) {
+    return calcularPesoUnitario(bitolas) * quantidade;
   }
 
   @override

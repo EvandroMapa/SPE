@@ -1479,6 +1479,15 @@ class _PedidoTecnicoCreatePageState
                             .setColor(Colors.grey[500]!)
                             .setSize(11),
                       ),
+                      if (elem.pesoTotal > 0) ...[
+                        const SizedBox(width: 8),
+                        Text(
+                          '${(elem.pesoTotal / elem.quantidade * restante).toStringAsFixed(1)} kg',
+                          style: AppCss.minimumBold
+                              .setColor(const Color(0xFF10B981))
+                              .setSize(11),
+                        ),
+                      ],
                     ],
                   ),
 
@@ -1760,6 +1769,15 @@ class _PedidoTecnicoCreatePageState
                               .setColor(Colors.grey[500]!)
                               .setSize(11),
                         ),
+                        if (elem.pesoTotal > 0) ...[
+                          const SizedBox(width: 8),
+                          Text(
+                            '${elem.pesoTotal.toStringAsFixed(1)} kg',
+                            style: AppCss.minimumBold
+                                .setColor(const Color(0xFF10B981).withValues(alpha: 0.7))
+                                .setSize(11),
+                          ),
+                        ],
                       ],
                     ),
                   ],
@@ -1941,13 +1959,20 @@ class _PedidoTecnicoCreatePageState
       form.detalhamentoId = detalhamento.id;
       form.detalhamentoCodigo = detalhamento.codigo;
       form.observacao = _obsCtrl.text.trim();
+      final bitolas = BackendClient.bitolas.data;
       form.elementosSelecionados = detalhamento.elementos
           .expand((e) {
+            // Calcular peso unitário (1 peça) a partir das posições
+            final pesoUnitCalculado = e.calcularPesoUnitario(bitolas);
+            final pesoUnit = e.pesoTotal > 0 && e.quantidade > 0
+                ? e.pesoTotal / e.quantidade
+                : pesoUnitCalculado;
+            final pesoTotalCalc = pesoUnit * e.quantidade;
             return e.todosNomes.map((nome) => ElementoModel(
                   id: e.id,
                   nome: nome,
                   quantidade: e.quantidade,
-                  pesoTotal: e.pesoTotal,
+                  pesoTotal: pesoTotalCalc,
                   posicoes: e.posicoes,
                   elementosEquivalentes: const [],
                 ));

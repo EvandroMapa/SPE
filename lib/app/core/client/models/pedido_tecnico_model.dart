@@ -15,6 +15,8 @@ class PedidoTecnicoModel {
   final String observacao;
   final DateTime criadoEm;
   final List<PedidoTecnicoElementoModel> elementos;
+  /// Resumo de aço pré-calculado: {"bitolas": {...}, "elementos": {...}, "peso_total": ...}
+  final Map<String, dynamic>? resumoAco;
 
   PedidoTecnicoModel({
     required this.id,
@@ -30,6 +32,7 @@ class PedidoTecnicoModel {
     required this.observacao,
     required this.criadoEm,
     required this.elementos,
+    this.resumoAco,
   });
 
   factory PedidoTecnicoModel.empty() => PedidoTecnicoModel(
@@ -46,6 +49,7 @@ class PedidoTecnicoModel {
         observacao: '',
         criadoEm: DateTime.now(),
         elementos: [],
+        resumoAco: null,
       );
 
   bool get isAberto => status == 'aberto';
@@ -76,6 +80,9 @@ class PedidoTecnicoModel {
       elementos: elementosRaw
           .map((e) => PedidoTecnicoElementoModel.fromSupabaseMap(e))
           .toList(),
+      resumoAco: map['resumo_aco'] != null
+          ? Map<String, dynamic>.from(map['resumo_aco'] as Map)
+          : null,
     );
   }
 
@@ -91,6 +98,7 @@ class PedidoTecnicoModel {
       'status': status,
       'observacao': observacao,
     };
+    if (resumoAco != null) map['resumo_aco'] = resumoAco;
     if (codigo > 0) map['codigo'] = codigo;
     if (id.length == 36) map['id'] = id;
     return map;
@@ -110,6 +118,7 @@ class PedidoTecnicoModel {
         'observacao': observacao,
         'created_at': criadoEm.toIso8601String(),
         'elementos': elementos.map((e) => e.toMap()).toList(),
+        'resumo_aco': resumoAco,
       };
 
   String toJson() => json.encode(toMap());
@@ -128,6 +137,7 @@ class PedidoTecnicoModel {
     String? observacao,
     DateTime? criadoEm,
     List<PedidoTecnicoElementoModel>? elementos,
+    Map<String, dynamic>? resumoAco,
   }) =>
       PedidoTecnicoModel(
         id: id ?? this.id,
@@ -143,6 +153,7 @@ class PedidoTecnicoModel {
         observacao: observacao ?? this.observacao,
         criadoEm: criadoEm ?? this.criadoEm,
         elementos: elementos ?? this.elementos,
+        resumoAco: resumoAco ?? this.resumoAco,
       );
 
   @override

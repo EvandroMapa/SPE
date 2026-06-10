@@ -100,6 +100,13 @@ class PedidoTecnicoSupabaseCollection {
           .from('pedido_tecnico_elementos')
           .insert(elem.toSupabaseMap(pedidoId));
     }
+    // Gravar resumo_aco se disponível
+    if (model.resumoAco != null) {
+      await SupabaseService.client
+          .from(name)
+          .update({'resumo_aco': model.resumoAco})
+          .eq('id', pedidoId);
+    }
     await fetch();
     return PedidoTecnicoModel.fromSupabaseMap(
       inserted,
@@ -116,9 +123,9 @@ class PedidoTecnicoSupabaseCollection {
     await fetch();
   }
 
-  /// Remove todos os elementos e reinserindo os novos
   Future<void> atualizarElementos(
-      String pedidoId, List<PedidoTecnicoElementoModel> elementos) async {
+      String pedidoId, List<PedidoTecnicoElementoModel> elementos,
+      {Map<String, dynamic>? resumoAco}) async {
     await SupabaseService.client
         .from('pedido_tecnico_elementos')
         .delete()
@@ -127,6 +134,13 @@ class PedidoTecnicoSupabaseCollection {
       await SupabaseService.client
           .from('pedido_tecnico_elementos')
           .insert(elem.toSupabaseMap(pedidoId));
+    }
+    // Gravar resumo_aco se disponível
+    if (resumoAco != null) {
+      await SupabaseService.client
+          .from(name)
+          .update({'resumo_aco': resumoAco})
+          .eq('id', pedidoId);
     }
     await fetch();
   }

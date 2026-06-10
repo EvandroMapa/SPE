@@ -123,10 +123,16 @@ class PedidoTecnicoController {
     }
     try {
       final model = form.toPedidoTecnicoModel();
+
+      // Calcular resumo de aço (totais por bitola e elemento)
+      final resumoAco = _calcularResumoAco(model);
+      final modelComResumo = model.copyWith(resumoAco: resumoAco);
+
       if (form.isEdit) {
-        await BackendClient.pedidosTecnicos.atualizar(model);
+        await BackendClient.pedidosTecnicos.atualizar(modelComResumo);
         await BackendClient.pedidosTecnicos
-            .atualizarElementos(model.id, model.elementos);
+            .atualizarElementos(modelComResumo.id, modelComResumo.elementos,
+                resumoAco: resumoAco);
         if (!auto) {
           NotificationService.showPositive(
             'Pedido atualizado',
@@ -135,7 +141,8 @@ class PedidoTecnicoController {
           );
         }
       } else {
-        final createdModel = await BackendClient.pedidosTecnicos.criar(model);
+        final createdModel =
+            await BackendClient.pedidosTecnicos.criar(modelComResumo);
         form.id = createdModel.id;
         form.codigo = createdModel.codigo;
         form.identificador = createdModel.identificador;
@@ -159,6 +166,132 @@ class PedidoTecnicoController {
       }
       return false;
     }
+  }
+
+  /// Calcula o resumo de aço do pedido técnico:
+  /// - Peso total por bitola (para importação no PCP)
+  /// - Peso total por elemento (corrigido, sem inflação de equivalentes)
+  /// Usa a MESMA lógica de calcularPesoUnitario (com variáveis peça a peça),
+  /// acumulando por bitolaNome, garantindo Σ bitolas == Σ elementos.
+  Map<String, dynamic> _calcularResumoAco(PedidoTecnicoModel pedido) {
+    final detalhamento = BackendClient.detalhamentos.data
+        .where((d) => d.id == pedido.detalhamentoId)
+        .firstOrNull;
+    if (detalhamento == null) return {};
+
+    final bitolas = BackendClient.bitolas.data;
+    final resumoBitolas = <String, Map<String, double>>{};
+    final resumoElementos = <String, Map<String, dynamic>>{};
+
+    for (final elem in pedido.elementos) {
+      final elemDet = detalhamento.elementos
+          .where((e) => e.id == elem.elementoId)
+          .firstOrNull;
+      if (elemDet == null) continue;
+
+      final qtdeElem = elem.quantidadeSolicitada;
+      double pesoElemento = 0;
+
+      // Calcular peso por posição (mesma lógica de calcularPesoUnitario)
+      for (final pos in elemDet.posicoes) {
+        final bitolaNome = pos.bitolaNome;
+
+        // Massa linear da bitola
+        final bitolaModel =
+            bitolas.where((b) => b.id == pos.bitolaId).firstOrNull;
+        double massaLinear;
+        if (bitolaModel != null && bitolaModel.massaFinal > 0) {
+          massaLinear = bitolaModel.massaFinal;
+        } else {
+          final str =
+              pos.bitolaNome.split('-').first.replaceAll(RegExp(r'[^0-9.]'), '');
+          final d = double.tryParse(str) ?? 0;
+          massaLinear = (d * d) / 162;
+        }
+        if (massaLinear <= 0) continue;
+
+        // ── Peso unitário desta posição (1 unidade do elemento) ──
+        // Mesma lógica de calcularPesoUnitario: trata variáveis peça a peça
+        double pesoPosUnit = 0;
+        final temVar = pos.variaveisConfig.isNotEmpty &&
+            pos.variaveis.values.any((v) => v);
+
+        if (!temVar) {
+          final somaCm =
+              pos.comprimentos.values.fold<int>(0, (s, v) => s + v);
+          pesoPosUnit = (somaCm / 100.0) * massaLinear * pos.qtde;
+        } else {
+          // Calcula peça a peça (cada peça pode ter comprimento diferente)
+          for (int peca = 0; peca < pos.qtde; peca++) {
+            int somaCm = 0;
+            for (final entry in pos.comprimentos.entries) {
+              final trecho = entry.key;
+              final isVar = pos.variaveis[trecho] ?? false;
+              if (isVar) {
+                final config = pos.variaveisConfig[trecho] ??
+                    pos.variaveisConfig.values.firstOrNull;
+                if (config != null &&
+                    config.inicial > 0 &&
+                    config.final_ > 0) {
+                  final expandidas =
+                      config.medidasExpandidas(pos.multiplicador);
+                  somaCm += peca < expandidas.length
+                      ? expandidas[peca]
+                      : (expandidas.isNotEmpty ? expandidas.last : 0);
+                } else {
+                  somaCm += entry.value;
+                }
+              } else {
+                somaCm += entry.value;
+              }
+            }
+            pesoPosUnit += (somaCm / 100.0) * massaLinear;
+          }
+        }
+
+        // Peso total da posição = unitário × qtde do elemento
+        final pesoPosTotal = pesoPosUnit * qtdeElem;
+        pesoElemento += pesoPosTotal;
+
+        // Comprimento total (sem variáveis — valor de referência)
+        final somaCmRef =
+            pos.comprimentos.values.fold<int>(0, (s, v) => s + v);
+        final compM = (somaCmRef * pos.qtde * qtdeElem) / 100.0;
+
+        // Acumular por bitola
+        final atual = resumoBitolas[bitolaNome];
+        resumoBitolas[bitolaNome] = {
+          'peso': (atual?['peso'] ?? 0) + pesoPosTotal,
+          'comprimento_m': (atual?['comprimento_m'] ?? 0) + compM,
+        };
+      }
+
+      // Peso do elemento = soma dos pesos das posições (consistente com bitolas)
+      resumoElementos[elem.elementoNome] = {
+        'peso': double.parse(pesoElemento.toStringAsFixed(2)),
+        'qtde': qtdeElem,
+        'elemento_id': elem.elementoId,
+      };
+    }
+
+    // Arredondar bitolas para 2 casas
+    for (final key in resumoBitolas.keys) {
+      resumoBitolas[key] = {
+        'peso': double.parse(
+            (resumoBitolas[key]!['peso']!).toStringAsFixed(2)),
+        'comprimento_m': double.parse(
+            (resumoBitolas[key]!['comprimento_m']!).toStringAsFixed(2)),
+      };
+    }
+
+    final pesoTotal = resumoBitolas.values
+        .fold<double>(0, (s, v) => s + (v['peso'] ?? 0));
+
+    return {
+      'bitolas': resumoBitolas,
+      'elementos': resumoElementos,
+      'peso_total': double.parse(pesoTotal.toStringAsFixed(2)),
+    };
   }
 
   // ── Excluir ───────────────────────────────────────────

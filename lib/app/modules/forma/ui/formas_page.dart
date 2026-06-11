@@ -189,6 +189,24 @@ class _FormasPageState extends State<FormasPage> {
                             ),
                             const SizedBox(width: 8),
                             Tooltip(
+                              message: 'Duplicar',
+                              child: InkWell(
+                                onTap: () => _confirmDuplicar(forma),
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.secondary.withValues(alpha: 0.10),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(Icons.content_copy_outlined,
+                                      size: 18, color: AppColors.secondary),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Tooltip(
                               message: 'Excluir',
                               child: InkWell(
                                 onTap: () => _confirmDelete(forma),
@@ -242,6 +260,57 @@ class _FormasPageState extends State<FormasPage> {
               formaCtrl.excluir(context, forma);
             },
             child: const Text('Excluir', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDuplicar(FormaModel forma) {
+    int maiorCodigo = 0;
+    for (var f in formaCtrl.formas) {
+      final cod = int.tryParse(f.codigo) ?? 0;
+      if (cod > maiorCodigo) maiorCodigo = cod;
+    }
+    final sug = (maiorCodigo + 1).toString();
+    final ctrl = TextEditingController(text: sug);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Duplicar Forma'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Informe o código para a cópia da forma ${forma.codigo}:'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: ctrl,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Novo Código',
+                prefixIcon: Icon(Icons.tag),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.secondary,
+            ),
+            onPressed: () {
+              final codigo = ctrl.text;
+              pop(context);
+              formaCtrl.duplicar(context, forma, codigo);
+            },
+            child: const Text('Duplicar', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),

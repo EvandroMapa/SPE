@@ -128,7 +128,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
         return TextEditingController(text: rangeText);
       }
       final valor = posicao?.comprimentos[trecho];
-      return TextEditingController(text: valor != null ? valor.toString() : '');
+      return TextEditingController(text: valor != null ? valor.toString().replaceAll(RegExp(r'\.0$'), '') : '');
     });
     _compFns = List.generate(forma.itens.length, (_) => FocusNode());
   }
@@ -144,7 +144,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
   double _pesoUnitPosicao(PosicaoCreateModel pos) {
     if (pos.bitolaSelecionada == null) return 0;
     final massaLinear = pos.bitolaSelecionada!.massaFinal; // kg/m
-    final somaCm = pos.comprimentos.values.fold(0, (s, v) => s + v);
+    final somaCm = pos.comprimentos.values.fold(0.0, (s, v) => s + v);
     return (somaCm / 100.0) * massaLinear;
   }
 
@@ -164,7 +164,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
     // Calcula peça a peça
     double pesoTotal = 0;
     for (int peca = 0; peca < qtde; peca++) {
-      int somaCm = 0;
+      double somaCm = 0.0;
       for (final entry in pos.comprimentos.entries) {
         final trecho = entry.key;
         final isVar = pos.variaveis[trecho] ?? false;
@@ -175,8 +175,8 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
           if (config != null && config.inicial > 0 && config.final_ > 0) {
             final expandidas = config.medidasExpandidas(pos.multiplicador);
             somaCm += peca < expandidas.length
-                ? expandidas[peca]
-                : (expandidas.isNotEmpty ? expandidas.last : 0);
+                ? expandidas[peca].toDouble()
+                : (expandidas.isNotEmpty ? expandidas.last.toDouble() : 0.0);
           } else {
             somaCm += entry.value; // config incompleta, usa valor fixo
           }
@@ -1997,7 +1997,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                             children: [
                               // Linha 1: Forma + Comprimentos
                               Builder(builder: (_) {
-                                final somaCm = p.comprimentos.values.fold(0, (s, v) => s + v);
+                                final somaCm = p.comprimentos.values.fold(0.0, (s, v) => s + v);
                                 final corteCm = p.comprimentoDeCorte;
                                 final temCompr = somaCm > 0;
                                 return Row(children: [
@@ -2008,7 +2008,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                                   const SizedBox(width: 10),
                                   Icon(Icons.straighten, size: 11, color: temCompr ? const Color(0xFF6366F1) : Colors.grey[400]),
                                   const SizedBox(width: 3),
-                                  Text('${somaCm}cm', style: AppCss.minimumRegular.setColor(temCompr ? const Color(0xFF6366F1) : Colors.grey[400]!).setSize(11)),
+                                  Text('${somaCm.toString().replaceAll(RegExp(r'\.0$'), '')}cm', style: AppCss.minimumRegular.setColor(temCompr ? const Color(0xFF6366F1) : Colors.grey[400]!).setSize(11)),
                                   if (temCompr && corteCm != somaCm) ...[
                                     Text(' → ', style: AppCss.minimumRegular.setColor(Colors.grey[400]!).setSize(10)),
                                     Icon(Icons.content_cut, size: 10, color: const Color(0xFFF59E0B)),
@@ -2707,7 +2707,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
     final forma = _formaSelecionada;
     if (bitola == null || forma == null || _posicaoSelecionada == null) return;
 
-    final comprimentoCm = bitola.diametro.toInt(); // floor: 12.5mm → 12cm
+    final comprimentoCm = bitola.diametro.toInt().toDouble(); // floor: 12.5mm → 12cm
     if (comprimentoCm <= 0) return;
 
     bool algumAlterado = false;
@@ -2718,10 +2718,10 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
       final isVar = _posicaoSelecionada!.variaveis[item.trecho] ?? false;
       if (isVar) continue;
       // Só preenche se o campo estiver vazio/zerado
-      final valorAtual = _posicaoSelecionada!.comprimentos[item.trecho] ?? 0;
-      if (valorAtual == 0 && i < _compCtrls.length) {
+      final valorAtual = _posicaoSelecionada!.comprimentos[item.trecho] ?? 0.0;
+      if (valorAtual == 0.0 && i < _compCtrls.length) {
         _posicaoSelecionada!.comprimentos[item.trecho] = comprimentoCm;
-        _compCtrls[i].text = comprimentoCm.toString();
+        _compCtrls[i].text = comprimentoCm.toString().replaceAll(RegExp(r'\.0$'), '');
         algumAlterado = true;
       }
     }
@@ -2739,7 +2739,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
     final isVar = _posicaoSelecionada!.variaveis[trecho] ?? false;
     if (isVar) return;
 
-    final valor = int.tryParse(_compCtrls[idx].text);
+    final valor = double.tryParse(_compCtrls[idx].text.replaceAll(',', '.'));
 
     // Salva o trecho atual
     if (valor != null) {
@@ -2764,7 +2764,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
           }
           // Sincroniza o controller visual
           if (j < _compCtrls.length) {
-            _compCtrls[j].text = valor?.toString() ?? '';
+            _compCtrls[j].text = valor != null ? valor.toString().replaceAll(RegExp(r'\.0$'), '') : '';
           }
         }
       }
@@ -3072,8 +3072,8 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                                           controller: i < _compCtrls.length ? _compCtrls[i] : null,
                                           focusNode: i < _compFns.length ? _compFns[i] : null,
                                           readOnly: bloqueado || _isRO || isVariavel,
-                                          keyboardType: TextInputType.number,
-                                          inputFormatters: isVariavel ? [] : [FilteringTextInputFormatter.digitsOnly],
+                                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                          inputFormatters: isVariavel ? [] : [FilteringTextInputFormatter.allow(RegExp(r'^\d*[.,]?\d{0,1}$'))],
                                           style: AppCss.smallBold.setSize(isVariavel ? 10 : 13).setColor(
                                             isVariavel ? AppColors.secondaryDark : (isFollower ? Colors.grey[500]! : Colors.black87)),
                                           textAlign: TextAlign.center,
@@ -3089,7 +3089,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
                                           ),
                                           onChanged: isFollower || isVariavel ? null : (val) {
-                                            final v = int.tryParse(val) ?? 0;
+                                            final v = double.tryParse(val.replaceAll(',', '.')) ?? 0.0;
                                             if (v > 0) {
                                               _posicaoSelecionada?.comprimentos[trecho] = v;
                                             } else {
@@ -3190,7 +3190,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                                       // Só permite marcar se comprimento > 0 (verifica campo digitado)
                                       if (marcado) {
                                         final textoComp = i < _compCtrls.length ? _compCtrls[i].text : '';
-                                        final comp = int.tryParse(textoComp) ?? 0;
+                                        final comp = double.tryParse(textoComp.replaceAll(',', '.')) ?? 0.0;
                                         if (comp <= 0) {
                                           NotificationService.showNegative(
                                             'Comprimento obrigatório',

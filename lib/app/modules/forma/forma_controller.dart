@@ -2,6 +2,7 @@
 import 'package:acoplan/app/core/client/backend_client.dart';
 import 'package:acoplan/app/core/client/models/forma_model.dart';
 import 'package:acoplan/app/core/models/app_stream.dart';
+import 'package:acoplan/app/core/services/hash_service.dart';
 import 'package:acoplan/app/core/services/notification_service.dart';
 import 'package:acoplan/app/core/utils/global_resource.dart';
 import 'package:acoplan/app/modules/forma/forma_view_model.dart';
@@ -120,9 +121,9 @@ class FormaController {
     formulario.itens.add(novoItem);
     formularioStream.update();
 
-    // Dar foco no campo de ângulo do novo item
+    // Dar foco no campo de comprimento do novo item
     Future.delayed(const Duration(milliseconds: 100), () {
-      novoItem.focusNode.requestFocus();
+      novoItem.focoComprimento.requestFocus();
     });
   }
 
@@ -185,6 +186,58 @@ class FormaController {
     formulario.itens.clear();
     rotacaoDesenho = 0;
     formularioStream.update();
+  }
+
+  Future<void> duplicar(BuildContext context, FormaModel forma, String novoCodigo) async {
+    try {
+      final codigoLimpo = novoCodigo.trim();
+      if (codigoLimpo.isEmpty) {
+        throw Exception('O código é obrigatório');
+      }
+
+      // Validação de duplicidade
+      final codigoJaExiste = formas.any((f) => f.codigo == codigoLimpo);
+      if (codigoJaExiste) {
+        int maiorCodigo = 0;
+        for (var f in formas) {
+          final cod = int.tryParse(f.codigo) ?? 0;
+          if (cod > maiorCodigo) maiorCodigo = cod;
+        }
+        throw Exception('Já existe uma forma com o código $codigoLimpo. O próximo disponível é ${maiorCodigo + 1}');
+      }
+
+      // Copiar itens criando novas instâncias de FormaItemModel
+      final novosItens = forma.itens.map((it) => FormaItemModel(
+        trecho: it.trecho,
+        comprimento: it.comprimento,
+        angulo: it.angulo,
+        orientacao: it.orientacao,
+        tipo: it.tipo,
+        grupoSimetria: it.grupoSimetria,
+        ancoragemAutomatica: it.ancoragemAutomatica,
+        linhaDivisoria: it.linhaDivisoria,
+      )).toList();
+
+      final novaForma = FormaModel(
+        id: HashService.get,
+        codigo: codigoLimpo,
+        descricao: forma.descricao.isEmpty ? 'Cópia' : '${forma.descricao} (Cópia)',
+        imagem: forma.imagem,
+        rotacao: forma.rotacao,
+        itens: novosItens,
+        fatorDobra: forma.fatorDobra,
+        descontoDobra: forma.descontoDobra,
+      );
+
+      await BackendClient.formas.add(novaForma);
+
+      NotificationService.showPositive(
+        'Forma Duplicada',
+        'A forma ${forma.codigo} foi duplicada para o código $codigoLimpo',
+      );
+    } catch (e) {
+      NotificationService.showNegative('Erro ao duplicar', e.toString().replaceAll('Exception: ', ''));
+    }
   }
 
 }

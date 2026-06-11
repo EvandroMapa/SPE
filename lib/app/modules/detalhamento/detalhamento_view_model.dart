@@ -75,7 +75,7 @@ class PosicaoCreateModel {
   BitolaModel? bitolaSelecionada;
   FormaModel? formaSelecionada;
   TextController qtde = TextController();
-  Map<String, int> comprimentos = {};
+  Map<String, double> comprimentos = {};
   Map<String, bool> variaveis = {};
   Map<String, TrechoVariavelConfig> variaveisConfig = {};
   int multiplicador = 1;
@@ -92,12 +92,12 @@ class PosicaoCreateModel {
   /// Usa o snapshot armazenado; se null (registro antigo), usa o valor atual da forma.
   /// Fórmula: soma_trechos − descontoDobra × diâmetro_cm
   void calcularComprimentoDeCorte() {
-    final somaCm = comprimentos.values.fold(0, (s, v) => s + v);
+    final somaCm = comprimentos.values.fold(0.0, (s, v) => s + v);
     final diametroCm = (bitolaSelecionada?.diametro ?? 0) / 10.0;
     final desconto = descontoDobraSnapshot ?? formaSelecionada?.descontoDobra ?? 0.0;
     final resultado = somaCm - desconto * diametroCm;
     // 1 casa decimal, não pode ser negativo nem maior que a soma
-    comprimentoDeCorte = double.parse(resultado.clamp(0, somaCm.toDouble()).toStringAsFixed(1));
+    comprimentoDeCorte = double.parse(resultado.clamp(0.0, somaCm).toStringAsFixed(1));
   }
 
   PosicaoCreateModel() : id = HashService.get;
@@ -105,7 +105,7 @@ class PosicaoCreateModel {
   PosicaoCreateModel.fromModel(PosicaoModel modelo) : id = modelo.id {
     posicao.text = modelo.posicao > 0 ? modelo.posicao.toString() : '';
     qtde.text = modelo.qtde > 0 ? modelo.qtde.toString() : '';
-    comprimentos = Map<String, int>.from(modelo.comprimentos);
+    comprimentos = Map<String, double>.from(modelo.comprimentos);
     variaveis = Map<String, bool>.from(modelo.variaveis);
     variaveisConfig = modelo.variaveisConfig.map((k, v) => MapEntry(k, v.copyWith()));
     multiplicador = modelo.multiplicador;

@@ -435,6 +435,7 @@ class _FormaCreatePageState extends State<FormaCreatePage> {
             children: [
               const SizedBox(width: 52), // espaço dos botões ↑↓
               Expanded(child: Text('Trecho', style: AppCss.minimumBold)),
+              Expanded(child: Text('Comp. (cm)', style: AppCss.minimumBold)),
               Expanded(child: Text('Ângulo', style: AppCss.minimumBold)),
               Expanded(child: Text('Orientação', style: AppCss.minimumBold)),
               SizedBox(width: 64, child: Center(child: Text('Grupo', style: AppCss.minimumBold))),
@@ -507,13 +508,44 @@ class _FormaCreatePageState extends State<FormaCreatePage> {
                   ),
                   Expanded(
                     child: TextFormField(
-                      focusNode: item.focusNode,
+                      focusNode: item.focoComprimento,
+                      controller: item.comprimentoController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*[.,]?\d{0,1}$'))],
+                      textInputAction: TextInputAction.next,
+                      onChanged: (val) {
+                        final parsed = double.tryParse(val.replaceAll(',', '.')) ?? 10.0;
+                        item.comprimento = parsed;
+                        formaCtrl.formularioStream.update();
+                      },
+                      onFieldSubmitted: (_) {
+                        item.focoAngulo.requestFocus();
+                      },
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        border: InputBorder.none,
+                        suffixText: ' cm',
+                        suffixStyle: TextStyle(fontSize: 11, color: Colors.grey),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: TextFormField(
+                      focusNode: item.focoAngulo,
                       controller: item.anguloController,
                       keyboardType: TextInputType.number,
-                      onEditingComplete: () {
-                        item.angulo = (int.tryParse(item.anguloController.text) ?? 0).toDouble();
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      textInputAction: TextInputAction.next,
+                      onChanged: (val) {
+                        item.angulo = (int.tryParse(val) ?? 0).toDouble();
                         formaCtrl.formularioStream.update();
-                        _focoBotaoAdicionar.requestFocus();
+                      },
+                      onFieldSubmitted: (_) {
+                        if (index < formulario.itens.length - 1) {
+                          formulario.itens[index + 1].focoComprimento.requestFocus();
+                        } else {
+                          _focoBotaoAdicionar.requestFocus();
+                        }
                       },
                       decoration: const InputDecoration(isDense: true, border: InputBorder.none),
                     ),

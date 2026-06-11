@@ -92,7 +92,7 @@ class FormaModel {
 
 class FormaItemModel {
   String trecho;    // código do trecho: "T1", "T2", ...
-  int comprimento;  // tamanho do segmento (para o desenho)
+  double _comprimento = 10.0;
   double _angulo = 0;
   String orientacao;
   /// Tipo do trecho: 'linear' (padrão) ou 'circulo'
@@ -106,8 +106,23 @@ class FormaItemModel {
   /// Se true, desenha uma linha perpendicular (divisória) no ponto final deste trecho
   /// — puramente visual, aparece no preview e no PDF.
   bool linhaDivisoria;
-  FocusNode focusNode = FocusNode();
+  
+  FocusNode focoComprimento = FocusNode();
+  FocusNode focoAngulo = FocusNode();
+  FocusNode get focusNode => focoAngulo;
+  
+  late TextEditingController comprimentoController;
   late TextEditingController anguloController;
+
+  double get comprimento => _comprimento;
+  set comprimento(double valor) {
+    _comprimento = valor;
+    // Sincroniza o controller de texto sem mover o cursor se o valor já for igual
+    final novoTexto = valor.toString().replaceAll(RegExp(r'\.0$'), '');
+    if (comprimentoController.text != novoTexto) {
+      comprimentoController.text = novoTexto;
+    }
+  }
 
   double get angulo => _angulo;
   set angulo(double valor) {
@@ -121,7 +136,7 @@ class FormaItemModel {
 
   FormaItemModel({
     required this.trecho,
-    required this.comprimento,
+    required double comprimento,
     required double angulo,
     required this.orientacao,
     this.tipo = 'linear',
@@ -129,14 +144,16 @@ class FormaItemModel {
     this.ancoragemAutomatica = false,
     this.linhaDivisoria = false,
   }) {
+    _comprimento = comprimento;
     _angulo = angulo;
+    comprimentoController = TextEditingController(text: comprimento.toString().replaceAll(RegExp(r'\.0$'), ''));
     anguloController = TextEditingController(text: angulo.toInt().toString());
   }
 
   factory FormaItemModel.fromMap(Map<String, dynamic> map) {
     return FormaItemModel(
       trecho: map['trecho'] ?? 'T1',
-      comprimento: (map['comprimento'] ?? 10).toInt(),
+      comprimento: (map['comprimento'] ?? 10.0).toDouble(),
       angulo: (map['angulo'] ?? 0).toDouble(),
       orientacao: map['orientacao'] ?? 'Horário',
       tipo: map['tipo'] ?? 'linear',
@@ -160,7 +177,9 @@ class FormaItemModel {
   }
 
   void dispose() {
-    focusNode.dispose();
+    focoComprimento.dispose();
+    focoAngulo.dispose();
+    comprimentoController.dispose();
     anguloController.dispose();
   }
 

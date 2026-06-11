@@ -223,12 +223,12 @@ class ElementoModel {
           pos.variaveis.values.any((v) => v);
 
       if (!temVar) {
-        final somaCm = pos.comprimentos.values.fold<int>(0, (s, v) => s + v);
+        final somaCm = pos.comprimentos.values.fold<double>(0.0, (s, v) => s + v);
         pesoUnit += (somaCm / 100.0) * massaLinear * pos.qtde;
       } else {
         // Calcula peça a peça (cada peça pode ter comprimento diferente)
         for (int peca = 0; peca < pos.qtde; peca++) {
-          int somaCm = 0;
+          double somaCm = 0.0;
           for (final entry in pos.comprimentos.entries) {
             final trecho = entry.key;
             final isVar = pos.variaveis[trecho] ?? false;
@@ -238,8 +238,8 @@ class ElementoModel {
               if (config != null && config.inicial > 0 && config.final_ > 0) {
                 final expandidas = config.medidasExpandidas(pos.multiplicador);
                 somaCm += peca < expandidas.length
-                    ? expandidas[peca]
-                    : (expandidas.isNotEmpty ? expandidas.last : 0);
+                    ? expandidas[peca].toDouble()
+                    : (expandidas.isNotEmpty ? expandidas.last.toDouble() : 0.0);
               } else {
                 somaCm += entry.value;
               }
@@ -271,7 +271,7 @@ class PosicaoModel {
   final String formaId;
   final String formaCodigo;
   final int qtde;
-  final Map<String, int> comprimentos;
+  final Map<String, double> comprimentos;
   final Map<String, bool> variaveis;
   final Map<String, TrechoVariavelConfig> variaveisConfig;
   final int multiplicador;
@@ -330,7 +330,7 @@ class PosicaoModel {
       formaCodigo: map['forma_codigo'] ?? '',
       qtde: int.tryParse(map['qtde']?.toString() ?? '0') ?? 0,
       comprimentos: map['comprimentos'] != null
-          ? Map<String, int>.from((map['comprimentos'] as Map).map((k, v) => MapEntry(k.toString(), (v as num).toInt())))
+          ? Map<String, double>.from((map['comprimentos'] as Map).map((k, v) => MapEntry(k.toString(), (v as num).toDouble())))
           : {},
       variaveis: map['variaveis'] != null
           ? Map<String, bool>.from((map['variaveis'] as Map).map((k, v) => MapEntry(k.toString(), v as bool)))

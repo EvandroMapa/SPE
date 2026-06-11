@@ -2008,7 +2008,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                                   const SizedBox(width: 10),
                                   Icon(Icons.straighten, size: 11, color: temCompr ? const Color(0xFF6366F1) : Colors.grey[400]),
                                   const SizedBox(width: 3),
-                                  Text('${somaCm.toString().replaceAll(RegExp(r'\.0$'), '')}cm', style: AppCss.minimumRegular.setColor(temCompr ? const Color(0xFF6366F1) : Colors.grey[400]!).setSize(11)),
+                                  Text('${somaCm == somaCm.roundToDouble() ? somaCm.toInt().toString() : somaCm.toStringAsFixed(1)}cm', style: AppCss.minimumRegular.setColor(temCompr ? const Color(0xFF6366F1) : Colors.grey[400]!).setSize(11)),
                                   if (temCompr && corteCm != somaCm) ...[
                                     Text(' → ', style: AppCss.minimumRegular.setColor(Colors.grey[400]!).setSize(10)),
                                     Icon(Icons.content_cut, size: 10, color: const Color(0xFFF59E0B)),

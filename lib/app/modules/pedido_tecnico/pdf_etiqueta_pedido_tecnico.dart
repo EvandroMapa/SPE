@@ -85,7 +85,7 @@ class PdfEtiquetaPedidoTecnico {
   }) {
     final id = pedido.identificador.isNotEmpty ? pedido.identificador : 'PT ${pedido.codigo.toString().padLeft(3, '0')}';
     final bitolaStr = pos.bitolaNome.split('-').first.trim();
-    final compUnit = pos.comprimentos.values.fold<int>(0, (s, v) => s + v);
+    final compUnit = pos.comprimentos.values.fold<double>(0.0, (s, v) => s + v);
     final compCorteRaw = pos.comprimentoDeCorte > 0 ? pos.comprimentoDeCorte : compUnit.toDouble();
 
     // Verificar se tem variáveis para mostrar range
@@ -94,11 +94,11 @@ class PdfEtiquetaPedidoTecnico {
     String compCorteStr;
     if (temVar) {
       // Calcular min/max comprimento por peça
-      int compMin = 999999, compMax = 0;
+      int compMin = 999999; double compMax = 0;
       final desconto = pos.descontoDobraSnapshot ?? 0;
       final dCm = (double.tryParse(bitolaStr.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0) / 10.0;
       for (int peca = 0; peca < pos.qtde; peca++) {
-        int soma = 0;
+        double soma = 0;
         for (final entry in pos.comprimentos.entries) {
           final trecho = entry.key;
           final isVar = pos.variaveis[trecho] ?? false;
@@ -108,8 +108,8 @@ class PdfEtiquetaPedidoTecnico {
             if (config != null && config.inicial > 0 && config.final_ > 0) {
               final expandidas = config.medidasExpandidas(pos.multiplicador);
               soma += peca < expandidas.length
-                  ? expandidas[peca]
-                  : (expandidas.isNotEmpty ? expandidas.last : 0);
+                  ? expandidas[peca].toDouble()
+                  : (expandidas.isNotEmpty ? expandidas.last.toDouble() : 0.0);
             } else {
               soma += entry.value;
             }
@@ -117,7 +117,7 @@ class PdfEtiquetaPedidoTecnico {
             soma += entry.value;
           }
         }
-        if (soma < compMin) compMin = soma;
+        if (soma < compMin) compMin = soma.toInt();
         if (soma > compMax) compMax = soma;
       }
       compUnitStr = compMin == compMax ? '$compMin cm' : '$compMin var $compMax';
@@ -305,7 +305,7 @@ class PdfEtiquetaPedidoTecnico {
   }
 
   // ── Desenho da forma — labels desenhados NO canvas para coordenadas corretas
-  static pw.Widget _buildDesenhoForma(FormaModel forma, Map<String, int> medidas, {Map<String, bool> variaveis = const {}, Map<String, TrechoVariavelConfig> variaveisConfig = const {}}) {
+  static pw.Widget _buildDesenhoForma(FormaModel forma, Map<String, double> medidas, {Map<String, bool> variaveis = const {}, Map<String, TrechoVariavelConfig> variaveisConfig = const {}}) {
     if (forma.itens.isEmpty) return pw.SizedBox();
 
     // Usar comprimentos ORIGINAIS da forma para geometria fiel ao cadastro
@@ -632,9 +632,9 @@ class PdfEtiquetaPedidoTecnico {
     final id = pedido.identificador.isNotEmpty ? pedido.identificador : 'PT ${pedido.codigo.toString().padLeft(3, '0')}';
 
     // Comprimento total por peça
-    final comprimentosPorPeca = <int>[];
+    final comprimentosPorPeca = <double>[];
     for (int peca = 0; peca < pos.qtde; peca++) {
-      int soma = 0;
+      double soma = 0;
       for (final entry in pos.comprimentos.entries) {
         final trecho = entry.key;
         final isVar = pos.variaveis[trecho] ?? false;
@@ -644,8 +644,8 @@ class PdfEtiquetaPedidoTecnico {
           if (config != null && config.inicial > 0 && config.final_ > 0) {
             final expandidas = config.medidasExpandidas(pos.multiplicador);
             soma += peca < expandidas.length
-                ? expandidas[peca]
-                : (expandidas.isNotEmpty ? expandidas.last : 0);
+                ? expandidas[peca].toDouble()
+                : (expandidas.isNotEmpty ? expandidas.last.toDouble() : 0.0);
           } else {
             soma += entry.value;
           }

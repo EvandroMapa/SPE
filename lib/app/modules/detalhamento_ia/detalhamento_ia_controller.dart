@@ -296,7 +296,7 @@ class DetalhamentoIaController {
 
           final comprimentosMap = posMap['comprimentos'] as Map? ?? {};
           for (final entry in comprimentosMap.entries) {
-            pos.comprimentos[entry.key.toString()] = int.tryParse(entry.value?.toString() ?? '0') ?? 0;
+            pos.comprimentos[entry.key.toString()] = double.tryParse(entry.value?.toString() ?? '0') ?? 0.0;
           }
           
           if (pos.formaSelecionada != null) {
@@ -389,7 +389,7 @@ class DetalhamentoIaController {
 
           final comprimentosMap = posMap['comprimentos'] as Map? ?? {};
           for (final entry in comprimentosMap.entries) {
-            pos.comprimentos[entry.key.toString()] = int.tryParse(entry.value?.toString() ?? '0') ?? 0;
+            pos.comprimentos[entry.key.toString()] = double.tryParse(entry.value?.toString() ?? '0') ?? 0.0;
           }
 
           if (pos.formaSelecionada != null) {

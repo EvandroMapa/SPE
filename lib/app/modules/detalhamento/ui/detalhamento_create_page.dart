@@ -3883,7 +3883,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
     // Atualiza o comprimento base com o valor inicial
     final config = _posicaoSelecionada!.variaveisConfig[trecho];
     if (config != null && config.inicial > 0) {
-      _posicaoSelecionada!.comprimentos[trecho] = config.inicial;
+      _posicaoSelecionada!.comprimentos[trecho] = config.inicial.toDouble();
     }
 
     // Sincroniza followers do mesmo grupo de simetria
@@ -3899,7 +3899,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
           if (item.grupoSimetria == grupo && item.trecho != trecho) {
             // Atualiza comprimento do follower
             if (config.inicial > 0) {
-              _posicaoSelecionada!.comprimentos[item.trecho] = config.inicial;
+              _posicaoSelecionada!.comprimentos[item.trecho] = config.inicial.toDouble();
             }
             // Atualiza controller visual do follower
             if (j < _compCtrls.length && varText.isNotEmpty) {
@@ -4621,7 +4621,7 @@ class _PreparacaoFullscreenDialogState extends State<_PreparacaoFullscreenDialog
 
               final comprimentosMap = posMap['comprimentos'] as Map? ?? {};
               for (final entry in comprimentosMap.entries) {
-                pos.comprimentos[entry.key.toString()] = int.tryParse(entry.value?.toString() ?? '0') ?? 0;
+                pos.comprimentos[entry.key.toString()] = double.tryParse(entry.value?.toString() ?? '0') ?? 0.0;
               }
 
               if (pos.formaSelecionada != null) {

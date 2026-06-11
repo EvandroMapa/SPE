@@ -394,7 +394,7 @@ class FormaPreviewState extends State<FormaPreviewWidget> {
       // Para círculo: preserva o raio original (não calcula da corda)
       final comp = itemOriginal.tipo == 'circulo'
           ? itemOriginal.comprimento
-          : v.distance.round().clamp(1, 99999);
+          : v.distance.clamp(1.0, 99999.0);
       return FormaItemModel(
         trecho: 'T${i + 1}',
         comprimento: comp,
@@ -498,7 +498,7 @@ class FormaPreviewState extends State<FormaPreviewWidget> {
     final dyTela = origemTela.dy - local.dy;
     final distTela = math.sqrt(dxTela * dxTela + dyTela * dyTela);
     if (distTela < 10) return;
-    final comprimento = (distTela / _esc).round().clamp(10, 99999);
+    final comprimento = (distTela / _esc).clamp(10.0, 99999.0);
     // Direção de local → antiga origem
     final novaDir = math.atan2(dyTela, dxTela) * 180 / math.pi;
     // Ângulo de giro entre novo T1 e o próximo item (círculo)
@@ -551,11 +551,11 @@ class FormaPreviewState extends State<FormaPreviewWidget> {
     while (delta > 180) { delta -= 360; }
     while (delta < -180) { delta += 360; }
 
-    final comp = vetor.distance.round().clamp(10, 99999);
+    final comp = vetor.distance.clamp(10.0, 99999.0);
     _addViaController(delta.abs().roundToDouble(), delta >= 0 ? 'Horário' : 'Anti-horário', comp, local);
   }
 
-  void _addViaController(double angulo, String orientacao, [int comprimento = 150, Offset? posicaoTela]) {
+  void _addViaController(double angulo, String orientacao, [double comprimento = 150.0, Offset? posicaoTela]) {
     if (widget.itens.isNotEmpty) {
       widget.itens.last.angulo = angulo;
       widget.itens.last.orientacao = orientacao;
@@ -617,7 +617,7 @@ class FormaPreviewState extends State<FormaPreviewWidget> {
       final v = mPts[i + 1] - mPts[i];
       // Círculo: comprimento = raio (não deve ser sobrescrito pela corda)
       if (widget.itens[i].tipo != 'circulo') {
-        widget.itens[i].comprimento = v.distance.round().clamp(1, 99999);
+        widget.itens[i].comprimento = v.distance.clamp(1.0, 99999.0);
       }
       if (i < widget.itens.length - 1) {
         final vNext = mPts[i + 2] - mPts[i + 1];

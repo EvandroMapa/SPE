@@ -543,13 +543,13 @@ class PdfPedidoTecnico {
         pos.variaveis.values.any((v) => v);
 
     if (!temVar) {
-      final somaCm = pos.comprimentos.values.fold<int>(0, (s, v) => s + v);
+      final somaCm = pos.comprimentos.values.fold<double>(0.0, (s, v) => s + v);
       return (somaCm / 100.0) * w * pos.qtde;
     }
 
     double pesoTotal = 0;
     for (int peca = 0; peca < pos.qtde; peca++) {
-      int somaCm = 0;
+      double somaCm = 0.0;
       for (final entry in pos.comprimentos.entries) {
         final trecho = entry.key;
         final isVar = pos.variaveis[trecho] ?? false;
@@ -559,8 +559,8 @@ class PdfPedidoTecnico {
           if (config != null && config.inicial > 0 && config.final_ > 0) {
             final expandidas = config.medidasExpandidas(pos.multiplicador);
             somaCm += peca < expandidas.length
-                ? expandidas[peca]
-                : (expandidas.isNotEmpty ? expandidas.last : 0);
+                ? expandidas[peca].toDouble()
+                : (expandidas.isNotEmpty ? expandidas.last.toDouble() : 0.0);
           } else {
             somaCm += entry.value;
           }
@@ -587,7 +587,7 @@ class PdfPedidoTecnico {
   }) {
     // Só considerar elementos que fazem parte do pedido
     final resumoPeso = <String, double>{};
-    final resumoComp = <String, int>{}; // cm
+    final resumoComp = <String, double>{}; // cm
 
     for (final elem in pedido.elementos) {
       final elemDet = detalhamento.elementos
@@ -599,7 +599,7 @@ class PdfPedidoTecnico {
 
       for (final pos in elemDet.posicoes) {
         final bitola = pos.bitolaNome.split('-').first.trim();
-        final compUnit = pos.comprimentos.values.fold<int>(0, (s, v) => s + v);
+        final compUnit = pos.comprimentos.values.fold<double>(0.0, (s, v) => s + v);
         final compTotalCm = compUnit * pos.qtde * qtdeElem;
         final pesoTotal = _pesoTotalPosicao(pos) * qtdeElem;
 

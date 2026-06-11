@@ -96,7 +96,7 @@ class PdfDetalhamento {
                   ...elem.posicoes.map((pos) {
                     final bitolaStr = pos.bitolaNome.split('-').first.trim();
                     final formaStr = pos.formaCodigo;
-                    final compUnitario = pos.comprimentos.values.fold<int>(0, (sum, val) => sum + val);
+                    final compUnitario = pos.comprimentos.values.fold<double>(0.0, (sum, val) => sum + val);
                     final compCorte = pos.comprimentoDeCorte > 0 ? pos.comprimentoDeCorte : compUnitario;
 
                     // Peso da posição (peça a peça para variáveis)
@@ -267,12 +267,12 @@ class PdfDetalhamento {
 
   static pw.Widget _buildQuadroAco(DetalhamentoModel detalhamento) {
     final resumoAco = <String, double>{};
-    final compAco = <String, int>{}; // em cm
+    final compAco = <String, double>{}; // em cm
 
     for (var elem in detalhamento.elementos) {
       for (var pos in elem.posicoes) {
         final bitola = pos.bitolaNome.split('-').first.trim();
-        final compUnit = pos.comprimentos.values.fold<int>(0, (sum, val) => sum + val);
+        final compUnit = pos.comprimentos.values.fold<double>(0.0, (sum, val) => sum + val);
         final compTotalCm = compUnit * pos.qtde * elem.quantidade;
         final pesoTotal = _pesoTotalPosicao(pos) * elem.quantidade;
 
@@ -353,14 +353,14 @@ class PdfDetalhamento {
         pos.variaveis.values.any((v) => v);
 
     if (!temVar) {
-      final somaCm = pos.comprimentos.values.fold<int>(0, (s, v) => s + v);
+      final somaCm = pos.comprimentos.values.fold<double>(0.0, (s, v) => s + v);
       return (somaCm / 100.0) * w * pos.qtde;
     }
 
     // Peça a peça
     double pesoTotal = 0;
     for (int peca = 0; peca < pos.qtde; peca++) {
-      int somaCm = 0;
+      double somaCm = 0.0;
       for (final entry in pos.comprimentos.entries) {
         final trecho = entry.key;
         final isVar = pos.variaveis[trecho] ?? false;
@@ -371,8 +371,8 @@ class PdfDetalhamento {
           if (config != null && config.inicial > 0 && config.final_ > 0) {
             final expandidas = config.medidasExpandidas(pos.multiplicador);
             somaCm += peca < expandidas.length
-                ? expandidas[peca]
-                : (expandidas.isNotEmpty ? expandidas.last : 0);
+                ? expandidas[peca].toDouble()
+                : (expandidas.isNotEmpty ? expandidas.last.toDouble() : 0.0);
           } else {
             somaCm += entry.value;
           }

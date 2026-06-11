@@ -218,12 +218,12 @@ class PedidoTecnicoController {
 
         if (!temVar) {
           final somaCm =
-              pos.comprimentos.values.fold<int>(0, (s, v) => s + v);
+              pos.comprimentos.values.fold<double>(0.0, (s, v) => s + v);
           pesoPosUnit = (somaCm / 100.0) * massaLinear * pos.qtde;
         } else {
           // Calcula peça a peça (cada peça pode ter comprimento diferente)
           for (int peca = 0; peca < pos.qtde; peca++) {
-            int somaCm = 0;
+            double somaCm = 0.0;
             for (final entry in pos.comprimentos.entries) {
               final trecho = entry.key;
               final isVar = pos.variaveis[trecho] ?? false;
@@ -236,8 +236,8 @@ class PedidoTecnicoController {
                   final expandidas =
                       config.medidasExpandidas(pos.multiplicador);
                   somaCm += peca < expandidas.length
-                      ? expandidas[peca]
-                      : (expandidas.isNotEmpty ? expandidas.last : 0);
+                      ? expandidas[peca].toDouble()
+                      : (expandidas.isNotEmpty ? expandidas.last.toDouble() : 0.0);
                 } else {
                   somaCm += entry.value;
                 }
@@ -255,7 +255,7 @@ class PedidoTecnicoController {
 
         // Comprimento total (sem variáveis — valor de referência)
         final somaCmRef =
-            pos.comprimentos.values.fold<int>(0, (s, v) => s + v);
+            pos.comprimentos.values.fold<double>(0.0, (s, v) => s + v);
         final compM = (somaCmRef * pos.qtde * qtdeElem) / 100.0;
 
         // Acumular por bitola

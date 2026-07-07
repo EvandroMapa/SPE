@@ -1068,8 +1068,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
           _col1(form),
           if (_editandoVariavel)
             Positioned.fill(
-              child: GestureDetector(
-                onTap: () => _tentarFecharPainelVariavel(),
+              child: AbsorbPointer(
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   color: Colors.black.withValues(alpha: 0.25),
@@ -1085,8 +1084,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
           eSel != null ? _col2(eSel) : _empty('Selecione um elemento\npara ver suas posições', Icons.touch_app_outlined),
           if (_editandoVariavel)
             Positioned.fill(
-              child: GestureDetector(
-                onTap: () => _tentarFecharPainelVariavel(),
+              child: AbsorbPointer(
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   color: Colors.black.withValues(alpha: 0.25),
@@ -1187,7 +1185,19 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
 
   // ── COL 1: Elementos ───────────────────────────────────
   Widget _col1(DetalhamentoCreateModel form) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+    return Container(
+      margin: const EdgeInsets.fromLTRB(4, 4, 4, 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.primaryMain.withValues(alpha: 0.35), width: 1.5),
+        boxShadow: [
+          BoxShadow(color: AppColors.primaryMain.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, 2)),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(9),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       _hdr('ELEMENTOS', Icons.layers_outlined, '${_totalElementosComEquivalentes(form)}'),
       // ── Barra de "Salvar Elementos" quando importação pendente ──
       if (_importacaoPendente && !_isRO)
@@ -1645,7 +1655,9 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
               }),
               ),
       ),
-    ]);
+    ]),
+      ),
+    );
   }
 
   void _addElem(DetalhamentoCreateModel form) async {
@@ -1728,7 +1740,19 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
 
   // ── COL 2: Posições ────────────────────────────────────
   Widget _col2(ElementoCreateModel elem) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+    return Container(
+      margin: const EdgeInsets.fromLTRB(4, 4, 4, 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.secondary.withValues(alpha: 0.4), width: 1.5),
+        boxShadow: [
+          BoxShadow(color: AppColors.secondary.withValues(alpha: 0.10), blurRadius: 12, offset: const Offset(0, 2)),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(9),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       _hdr('POSIÇÕES — ${elem.nome.text}', Icons.list_alt_outlined, '${elem.posicoes.length}'),
       if (!_isRO) Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -2038,7 +2062,9 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
               }),
               ),
       ),
-    ]);
+    ]),
+      ),
+    );
   }
 
   Widget _campoBitola() {
@@ -2904,20 +2930,33 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
             child: AnimatedOpacity(
               opacity: _editandoVariavel ? 0.3 : 1.0,
               duration: const Duration(milliseconds: 200),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(4, 4, 4, 4),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.primaryMain.withValues(alpha: 0.35), width: 1.5),
+                  boxShadow: [
+                    BoxShadow(color: AppColors.primaryMain.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, 2)),
+                  ],
+                ),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             // Header com colunas
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.grey[50],
-                border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+                gradient: LinearGradient(
+                  colors: [AppColors.primaryMain.withValues(alpha: 0.10), AppColors.primaryMain.withValues(alpha: 0.03)],
+                ),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(9)),
+                border: Border(bottom: BorderSide(color: AppColors.primaryMain.withValues(alpha: 0.20))),
               ),
               child: Row(children: [
-                SizedBox(width: 44, child: Center(child: Text('Trecho', style: AppCss.minimumBold.setColor(Colors.grey[500]!).setSize(10)))),
+                SizedBox(width: 44, child: Center(child: Text('Trecho', style: AppCss.minimumBold.setColor(AppColors.primaryMain.withValues(alpha: 0.7)).setSize(10)))),
                 const SizedBox(width: 8),
-                SizedBox(width: 80, child: Center(child: Text('Comp.', style: AppCss.minimumBold.setColor(Colors.grey[500]!).setSize(10)))),
+                Flexible(child: Center(child: Text('Comp.', style: AppCss.minimumBold.setColor(AppColors.primaryMain.withValues(alpha: 0.7)).setSize(10)))),
                 const SizedBox(width: 8),
-                Expanded(child: Center(child: Text('Var.', style: AppCss.minimumBold.setColor(Colors.grey[500]!).setSize(10)))),
+                Expanded(child: Center(child: Text('Var.', style: AppCss.minimumBold.setColor(AppColors.primaryMain.withValues(alpha: 0.7)).setSize(10)))),
               ]),
             ),
             Expanded(
@@ -3003,13 +3042,14 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                               ),
                             ),
                             const SizedBox(width: 8),
-                            Transform.translate(
+                            Flexible(
+                            child: Transform.translate(
                               offset: const Offset(0, 6),
                               child: Stack(
                                 clipBehavior: Clip.none,
                                 children: [
                                 SizedBox(
-                                width: 80,
+                                width: double.infinity,
                                 height: 34,
                                 child: Builder(builder: (_) {
                                   // Determina se é variável e busca config (própria ou do líder)
@@ -3175,6 +3215,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                                     ),
                                   ),
                                 ],
+                                ),
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -3185,7 +3226,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                                   child: Checkbox(
                                     value: isVariavel,
                                     activeColor: isFollower ? Colors.grey[400] : AppColors.primaryMain,
-                                    onChanged: _isRO || _posicaoSelecionada == null || isFollower ? null : (v) {
+                                    onChanged: _isRO || _posicaoSelecionada == null || isFollower ? null : (v) async {
                                       final marcado = v ?? false;
                                       // Só permite marcar se comprimento > 0 (verifica campo digitado)
                                       if (marcado) {
@@ -3198,6 +3239,37 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                                             position: NotificationPosition.bottom,
                                           );
                                           return;
+                                        }
+                                      }
+                                      // ── Confirmação ao desmarcar com dados existentes ──
+                                      if (!marcado) {
+                                        final cfgExistente = _posicaoSelecionada!.variaveisConfig[trecho];
+                                        final temDados = cfgExistente != null &&
+                                            (cfgExistente.medidas.isNotEmpty || cfgExistente.inicial > 0 || cfgExistente.final_ > 0);
+                                        if (temDados) {
+                                          if (!mounted) return;
+                                          final confirmar = await showDialog<bool>(
+                                            context: context,
+                                            builder: (ctx) => AlertDialog(
+                                              icon: Icon(Icons.warning_amber_rounded, size: 36, color: Colors.orange[700]),
+                                              title: const Text('Remover variação?'),
+                                              content: Text(
+                                                'O trecho ${forma.itens[i].trecho} possui variação configurada (${cfgExistente.inicial} a ${cfgExistente.final_} cm, ${cfgExistente.medidas.length} medida(s)).\n\nAo desmarcar, toda a configuração será perdida.',
+                                              ),
+                                              actions: [
+                                                TextButton(
+                                                  onPressed: () => Navigator.pop(ctx, false),
+                                                  child: const Text('Manter variável'),
+                                                ),
+                                                ElevatedButton(
+                                                  onPressed: () => Navigator.pop(ctx, true),
+                                                  style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[700], foregroundColor: Colors.white),
+                                                  child: const Text('Remover variação'),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                          if (!(confirmar ?? false)) return;
                                         }
                                       }
                                       setState(() {
@@ -3258,23 +3330,19 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                             // Botão de ver/editar variável (espaço fixo)
                             SizedBox(
                               width: 24, height: 24,
-                              child: isVariavel
+                              child: isVariavel && !isFollower
                                   ? Builder(builder: (_) {
                                       final isSelecionado = _trechoVarIdx == i;
                                       final isEditando = isSelecionado && _editandoVariavel;
                                       final isVisualizando = isSelecionado && !_editandoVariavel;
                                       return Tooltip(
-                                        message: isEditando ? 'Editando variável' : (isVisualizando ? 'Clique para editar' : 'Ver variável'),
+                                        message: isEditando ? 'Editando variável' : 'Editar variável',
                                         preferBelow: false,
                                         waitDuration: const Duration(milliseconds: 300),
                                         child: GestureDetector(
                                           onTap: () {
                                             if (isEditando) return;
-                                            if (isVisualizando) {
-                                              _abrirEdicaoVariavel(i, forma);
-                                            } else {
-                                              _abrirEdicaoVariavel(i, forma, apenasVisualizar: true);
-                                            }
+                                            _abrirEdicaoVariavel(i, forma);
                                           },
                                           child: Container(
                                             decoration: BoxDecoration(
@@ -3316,6 +3384,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                     }),
             ),
               ]),
+              ),
             ),
           )),
           // ── Painel de configuração do trecho variável ──
@@ -3430,16 +3499,21 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                   children: [
                     // Inicial / Final
                     Builder(builder: (_) {
-                      if (!_varInicialFn.hasFocus && _varInicialCtrl.text != (config.inicial > 0 ? config.inicial.toString() : '')) {
-                        _varInicialCtrl.text = config.inicial > 0 ? config.inicial.toString() : '';
+                      if (!_editandoVariavel) {
+                        // Fora do modo edição: sincroniza tudo com o modelo
+                        if (_varInicialCtrl.text != (config.inicial > 0 ? config.inicial.toString() : '')) {
+                          _varInicialCtrl.text = config.inicial > 0 ? config.inicial.toString() : '';
+                        }
+                        if (_varFinalCtrl.text != (config.final_ > 0 ? config.final_.toString() : '')) {
+                          _varFinalCtrl.text = config.final_ > 0 ? config.final_.toString() : '';
+                        }
+                        final mult = _posicaoSelecionada!.multiplicador;
+                        if (_varMultCtrl.text != (mult > 0 ? mult.toString() : '')) {
+                          _varMultCtrl.text = mult > 0 ? mult.toString() : '';
+                        }
                       }
-                      if (!_varFinalFn.hasFocus && _varFinalCtrl.text != (config.final_ > 0 ? config.final_.toString() : '')) {
-                        _varFinalCtrl.text = config.final_ > 0 ? config.final_.toString() : '';
-                      }
-                      final mult = _posicaoSelecionada!.multiplicador;
-                      if (!_varMultFn.hasFocus && _varMultCtrl.text != (mult > 0 ? mult.toString() : '')) {
-                        _varMultCtrl.text = mult > 0 ? mult.toString() : '';
-                      }
+                      // Quando editando: NÃO reseta controllers — o usuário pode estar digitando
+                      // Os valores serão sincronizados para o modelo no onChanged/onSubmitExtra
                       return Row(children: [
                         Expanded(child: _varField('Inicial', _varInicialCtrl, focusNode: isFollowerVar ? null : _varInicialFn, nextFocus: isFollowerVar ? null : _varFinalFn, nextCtrl: _varFinalCtrl, readOnly: isFollowerVar || _isRO, onChanged: (v) {
                           config.inicial = v;
@@ -3462,15 +3536,27 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                     // Multiplicador + Distribuição
                     Row(children: [
                       Expanded(child: _varField('Multiplicador', _varMultCtrl, focusNode: isFollowerVar ? null : _varMultFn, readOnly: isFollowerVar || _isRO, onSubmitExtra: () {
-                        if (config.inicial > 0 && config.final_ > 0 && qtde > 0 && config.distribuicao != 'manual') {
+                        final mult = (int.tryParse(_varMultCtrl.text) ?? 1).clamp(1, 100);
+                        _posicaoSelecionada!.multiplicador = mult;
+                        // Garantir que config.inicial e config.final_ refletem o que foi digitado
+                        // (podem ter sido atualizados via onChanged mas o Builder ainda não sincronizou)
+                        final vInicial = int.tryParse(_varInicialCtrl.text) ?? 0;
+                        final vFinal = int.tryParse(_varFinalCtrl.text) ?? 0;
+                        if (vInicial > 0) config.inicial = vInicial;
+                        if (vFinal > 0) config.final_ = vFinal;
+                        config.medidas.clear();
+                        config.distribuicao = 'linear';
+                        if (config.inicial > 0 && config.final_ > 0 && qtde > 0) {
                           _recalcularVariavel(config, qtde, trechoConfig);
                           setState(() => _variavelModificada = true);
+                        } else {
+                          setState(() => _variavelModificada = false);
                         }
                       }, onChanged: (v) {
+                        // Apenas atualiza o modelo sem setState — o setState ocorre no onSubmitExtra
                         _posicaoSelecionada!.multiplicador = v.clamp(1, 100);
                         config.medidas.clear();
                         config.distribuicao = 'linear';
-                        setState(() => _variavelModificada = false);
                       })),
                       const SizedBox(width: 8),
                       Expanded(
@@ -3573,9 +3659,9 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                     const Spacer(),
 
                     // Botões Salvar / Cancelar
-                    if (!isFollowerVar && !_isRO)
+                    if (_editandoVariavel)
                       Row(children: [
-                        // Cancelar
+                        // Cancelar — sempre visível quando editando
                         Expanded(
                           child: InkWell(
                             onTap: () => _tentarFecharPainelVariavel(),
@@ -3592,6 +3678,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                             ),
                           ),
                         ),
+                        if (!isFollowerVar && !_isRO) ...[
                         const SizedBox(width: 8),
                         // Salvar Variáveis
                         Expanded(
@@ -3649,6 +3736,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                           ),
                           ),
                         ),
+                        ],
                       ]),
                   ],
                 ),

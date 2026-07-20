@@ -5,6 +5,11 @@ import 'package:flutter/widgets.dart';
 
 /// Mixin que preserva o foco do campo de texto ao fazer alt+tab e retornar.
 ///
+/// Estratégia:
+///   - Rastreia continuamente o FocusNode ativo via FocusManager.addListener
+///   - Ao retornar à janela (window.onFocus) restaura o último nó salvo
+///   - NÃO depende de window.onBlur (que dispara após o Flutter já ter limpado o foco)
+///
 /// Uso:
 /// ```dart
 /// class _MinhaPageState extends State<MinhaPage> with FocoJanelaMixin {
@@ -22,23 +27,32 @@ import 'package:flutter/widgets.dart';
 /// ```
 mixin FocoJanelaMixin<T extends StatefulWidget> on State<T> {
   FocusNode? _focoSalvo;
-  StreamSubscription<html.Event>? _subBlur;
   StreamSubscription<html.Event>? _subFocus;
 
-  /// Inicia os listeners de blur/focus da janela do browser.
-  void iniciarFocoJanela() {
-    // Salva o foco ativo quando o usuário sai da janela (alt+tab)
-    _subBlur = html.window.onBlur.listen((_) {
-      _focoSalvo = FocusManager.instance.primaryFocus;
-    });
+  /// Chamado pelo FocusManager sempre que o primaryFocus muda.
+  void _onFocusChange() {
+    final atual = FocusManager.instance.primaryFocus;
+    // Guarda apenas nós válidos (com contexto montado) — ignora quando
+    // o Flutter limpa o foco ao sair da janela (primaryFocus vira null)
+    if (atual != null && atual.context != null) {
+      _focoSalvo = atual;
+    }
+  }
 
-    // Restaura o foco quando o usuário volta para a janela
+  /// Inicia o rastreamento de foco e o listener de retorno de janela.
+  void iniciarFocoJanela() {
+    // Rastrear continuamente qualquer mudança de foco
+    FocusManager.instance.addListener(_onFocusChange);
+
+    // Quando o usuário volta para a janela, restaurar o último campo ativo
     _subFocus = html.window.onFocus.listen((_) {
       final alvo = _focoSalvo;
       if (alvo != null && alvo.context != null) {
-        // Pequeno delay para o browser terminar de restaurar o foco da janela
-        Future.delayed(const Duration(milliseconds: 50), () {
-          if (mounted) alvo.requestFocus();
+        // Delay: aguarda o browser terminar de restaurar o foco da janela
+        Future.delayed(const Duration(milliseconds: 150), () {
+          if (mounted && (alvo.context != null)) {
+            alvo.requestFocus();
+          }
         });
       }
     });
@@ -46,7 +60,7 @@ mixin FocoJanelaMixin<T extends StatefulWidget> on State<T> {
 
   /// Cancela os listeners. Chamar no dispose().
   void descartarFocoJanela() {
-    _subBlur?.cancel();
+    FocusManager.instance.removeListener(_onFocusChange);
     _subFocus?.cancel();
     _focoSalvo = null;
   }

@@ -30,6 +30,7 @@ import 'package:acoplan/app/modules/detalhamento_ia/importacao/importacao_result
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:overlay_support/overlay_support.dart';
+import 'package:acoplan/app/core/utils/foco_janela_mixin.dart';
 
 enum _Sec { dadosGerais, elementos, detalhamentoIA }
 
@@ -42,7 +43,7 @@ class DetalhamentoCreatePage extends StatefulWidget {
   State<DetalhamentoCreatePage> createState() => _DetalhamentoCreatePageState();
 }
 
-class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
+class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> with FocoJanelaMixin {
   _Sec _sel = _Sec.dadosGerais;
   int _elemIdx = -1;
   int _excluindoElementoIdx = -1;
@@ -408,6 +409,9 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
     // Listener de perda de foco no campo posição para checar duplicata
     _pNum.focus.addListener(_onPosicaoFocusChange);
 
+    // Preservar foco ao fazer alt+tab e retornar
+    iniciarFocoJanela();
+
     super.initState();
   }
 
@@ -456,6 +460,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
     _posScrollCtrl.dispose();
     _elemListFocus.dispose();
     _posListFocus.dispose();
+    descartarFocoJanela();
     super.dispose();
   }
 

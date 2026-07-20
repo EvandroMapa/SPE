@@ -13,6 +13,10 @@ class DetalhamentoModel {
   final String obraNome;
   final List<ElementoModel> elementos;
   final double pesoTotal;
+  final String desenho;
+  final String pavimento;
+  final String funcionarioId;
+  final String funcionarioNome;
 
   DetalhamentoModel({
     required this.id,
@@ -23,6 +27,10 @@ class DetalhamentoModel {
     required this.obraNome,
     required this.elementos,
     this.pesoTotal = 0,
+    this.desenho = '',
+    this.pavimento = '',
+    this.funcionarioId = '',
+    this.funcionarioNome = '',
   });
 
   factory DetalhamentoModel.empty() => DetalhamentoModel(
@@ -34,6 +42,10 @@ class DetalhamentoModel {
         obraNome: '',
         elementos: [],
         pesoTotal: 0,
+        desenho: '',
+        pavimento: '',
+        funcionarioId: '',
+        funcionarioNome: '',
       );
 
   factory DetalhamentoModel.fromSupabaseMap(
@@ -62,16 +74,26 @@ class DetalhamentoModel {
       obraNome: map['obra_nome'] ?? '',
       elementos: elementos,
       pesoTotal: double.tryParse(map['peso_total']?.toString() ?? '0') ?? 0,
+      desenho: map['desenho'] ?? '',
+      pavimento: map['pavimento'] ?? '',
+      funcionarioId: map['funcionario_id'] ?? '',
+      funcionarioNome: map['funcionario_nome'] ?? '',
     );
   }
 
+  /// Mapa para INSERT/UPDATE de dados gerais no Supabase.
+  /// NÃO inclui peso_total — o peso é gerenciado exclusivamente
+  /// por atualizarPesoTotal() para não ser zerado ao salvar outros campos.
   Map<String, dynamic> toSupabaseMap() {
     final map = <String, dynamic>{
       'cliente_id': clienteId,
       'cliente_nome': clienteNome,
       'obra_id': obraId,
       'obra_nome': obraNome,
-      'peso_total': pesoTotal,
+      'desenho': desenho.isEmpty ? null : desenho,
+      'pavimento': pavimento.isEmpty ? null : pavimento,
+      'funcionario_id': funcionarioId.isEmpty ? null : funcionarioId,
+      'funcionario_nome': funcionarioNome.isEmpty ? null : funcionarioNome,
     };
     if (codigo > 0) {
       map['codigo'] = codigo;
@@ -91,6 +113,10 @@ class DetalhamentoModel {
       'obra_id': obraId,
       'obra_nome': obraNome,
       'peso_total': pesoTotal,
+      'desenho': desenho,
+      'pavimento': pavimento,
+      'funcionario_id': funcionarioId,
+      'funcionario_nome': funcionarioNome,
       'elementos': elementos.map((e) => e.toMap()).toList(),
     };
   }
@@ -109,6 +135,10 @@ class DetalhamentoModel {
     String? obraNome,
     List<ElementoModel>? elementos,
     double? pesoTotal,
+    String? desenho,
+    String? pavimento,
+    String? funcionarioId,
+    String? funcionarioNome,
   }) {
     return DetalhamentoModel(
       id: id ?? this.id,
@@ -119,8 +149,43 @@ class DetalhamentoModel {
       obraNome: obraNome ?? this.obraNome,
       elementos: elementos ?? this.elementos,
       pesoTotal: pesoTotal ?? this.pesoTotal,
+      desenho: desenho ?? this.desenho,
+      pavimento: pavimento ?? this.pavimento,
+      funcionarioId: funcionarioId ?? this.funcionarioId,
+      funcionarioNome: funcionarioNome ?? this.funcionarioNome,
     );
   }
+}
+
+/// Representa um elemento equivalente (mesmo desenho, quantidade própria)
+class EquivalenteModel {
+  final String nome;
+  final int quantidade;
+
+  const EquivalenteModel({required this.nome, required this.quantidade});
+
+  factory EquivalenteModel.fromJson(dynamic json, {int qtdePadrao = 1}) {
+    if (json is String) {
+      // Formato legado: apenas o nome, usa quantidade do pai
+      return EquivalenteModel(nome: json, quantidade: qtdePadrao);
+    }
+    if (json is Map) {
+      return EquivalenteModel(
+        nome: json['nome']?.toString() ?? '',
+        quantidade: int.tryParse(json['quantidade']?.toString() ?? '0') ?? qtdePadrao,
+      );
+    }
+    return EquivalenteModel(nome: json.toString(), quantidade: qtdePadrao);
+  }
+
+  Map<String, dynamic> toJson() => {'nome': nome, 'quantidade': quantidade};
+
+  @override
+  String toString() => nome;
+  @override
+  bool operator ==(Object other) => other is EquivalenteModel && other.nome == nome;
+  @override
+  int get hashCode => nome.hashCode;
 }
 
 class ElementoModel {
@@ -129,7 +194,7 @@ class ElementoModel {
   final int quantidade;
   final double pesoTotal;
   final List<PosicaoModel> posicoes;
-  final List<String> elementosEquivalentes;
+  final List<EquivalenteModel> elementosEquivalentes;
 
   ElementoModel({
     required this.id,
@@ -140,14 +205,14 @@ class ElementoModel {
     this.elementosEquivalentes = const [],
   });
 
-  /// Retorna a lista expandida: [nome] + elementosEquivalentes
-  List<String> get todosNomes => [nome, ...elementosEquivalentes];
+  /// Retorna os nomes: [nomePai, ...nomes dos equivalentes]
+  List<String> get todosNomes => [nome, ...elementosEquivalentes.map((e) => e.nome)];
 
-  /// Quantidade total considerando equivalentes
-  int get quantidadeExpandida => quantidade * todosNomes.length;
+  /// Quantidade total: qtdePai + soma das quantidades dos equivalentes
+  int get quantidadeExpandida => quantidade + elementosEquivalentes.fold(0, (s, e) => s + e.quantidade);
 
-  /// Peso total considerando equivalentes
-  double get pesoExpandido => pesoTotal * todosNomes.length;
+  /// Peso expandido aproximado (usa peso_total do banco × qtde expandida)
+  double get pesoExpandido => pesoTotal * quantidadeExpandida;
 
   factory ElementoModel.empty() => ElementoModel(
         id: HashService.get,
@@ -162,14 +227,16 @@ class ElementoModel {
     Map<String, dynamic> map,
     List<Map<String, dynamic>> posicoesRaw,
   ) {
+    final qtdePai = int.tryParse(map['quantidade']?.toString() ?? '0') ?? 0;
     return ElementoModel(
       id: map['id'] ?? '',
       nome: map['nome'] ?? '',
-      quantidade: int.tryParse(map['quantidade']?.toString() ?? '0') ?? 0,
+      quantidade: qtdePai,
       pesoTotal: double.tryParse(map['peso_total']?.toString() ?? '0') ?? 0,
       posicoes: posicoesRaw.map((p) => PosicaoModel.fromSupabaseMap(p)).toList(),
       elementosEquivalentes: (map['elementos_equivalentes'] as List?)
-              ?.map((e) => e.toString())
+              ?.map((e) => EquivalenteModel.fromJson(e, qtdePadrao: qtdePai))
+              .where((e) => e.nome.isNotEmpty)
               .toList() ??
           [],
     );
@@ -181,7 +248,7 @@ class ElementoModel {
       'quantidade': quantidade,
       'peso_total': pesoTotal,
       'detalhamento_id': detalhamentoId,
-      'elementos_equivalentes': elementosEquivalentes,
+      'elementos_equivalentes': elementosEquivalentes.map((e) => e.toJson()).toList(),
     };
     if (id.length == 36) {
       map['id'] = id;
@@ -196,7 +263,7 @@ class ElementoModel {
       'quantidade': quantidade,
       'peso_total': pesoTotal,
       'posicoes': posicoes.map((p) => p.toMap()).toList(),
-      'elementos_equivalentes': elementosEquivalentes,
+      'elementos_equivalentes': elementosEquivalentes.map((e) => e.toJson()).toList(),
     };
   }
 

@@ -3,6 +3,7 @@ import 'package:acoplan/app/core/client/models/forma_model.dart';
 import 'package:acoplan/app/core/client/models/detalhamento_model.dart';
 import 'package:acoplan/app/core/client/models/bitola_model.dart';
 import 'package:acoplan/app/core/client/models/trecho_variavel_config.dart';
+import 'package:acoplan/app/core/client/models/usuario_model.dart';
 import 'package:acoplan/app/core/models/text_controller.dart';
 import 'package:acoplan/app/core/services/hash_service.dart';
 
@@ -13,6 +14,9 @@ class DetalhamentoCreateModel {
   ObraModel? obraSelecionada;
   List<ElementoCreateModel> elementos = [];
   late bool isEdit;
+  String desenho = '';
+  String pavimento = '';
+  UsuarioModel? funcionarioSelecionado;
 
   DetalhamentoCreateModel()
       : id = HashService.get,
@@ -25,6 +29,8 @@ class DetalhamentoCreateModel {
     elementos = detalhamento.elementos
         .map((e) => ElementoCreateModel.fromModel(e))
         .toList();
+    desenho = detalhamento.desenho;
+    pavimento = detalhamento.pavimento;
   }
 
   DetalhamentoModel toDetalhamentoModel() => DetalhamentoModel(
@@ -35,6 +41,10 @@ class DetalhamentoCreateModel {
         obraId: obraSelecionada?.id ?? '',
         obraNome: obraSelecionada?.descricao ?? '',
         elementos: elementos.map((e) => e.toElementoModel()).toList(),
+        desenho: desenho,
+        pavimento: pavimento,
+        funcionarioId: funcionarioSelecionado?.id ?? '',
+        funcionarioNome: funcionarioSelecionado?.nome ?? '',
       );
 }
 
@@ -43,7 +53,7 @@ class ElementoCreateModel {
   TextController nome = TextController();
   TextController quantidade = TextController();
   List<PosicaoCreateModel> posicoes = [];
-  List<String> elementosEquivalentes = [];
+  List<EquivalenteModel> elementosEquivalentes = [];
 
   ElementoCreateModel() : id = HashService.get;
 

@@ -42,7 +42,8 @@ class PdfDetalhamento {
               for (var pos in elem.posicoes) {
                 pesoUnitarioElem += _pesoTotalPosicao(pos);
               }
-              final pesoTotalElem = pesoUnitarioElem * elem.quantidade;
+              // Multiplicar pela quantidade expandida (pai + equivalentes)
+              final pesoTotalElem = pesoUnitarioElem * elem.quantidadeExpandida;
 
               return pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -64,7 +65,21 @@ class PdfDetalhamento {
                         pw.Row(
                           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                           children: [
-                            pw.Text(elem.nome, style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: PdfColors.blueGrey900)),
+                            pw.Column(
+                              crossAxisAlignment: pw.CrossAxisAlignment.start,
+                              children: [
+                                // Nome agrupado: L1=L2=L3(x2)
+                                pw.Text(
+                                  _nomeAgrupado(elem),
+                                  style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: PdfColors.blueGrey900),
+                                ),
+                                if (elem.elementosEquivalentes.isNotEmpty)
+                                  pw.Text(
+                                    'Qtde: ${elem.quantidade} (pai) + ${elem.elementosEquivalentes.map((e) => e.quantidade > 1 ? "${e.nome} ×${e.quantidade}" : e.nome).join(" + ")} = ${elem.quantidadeExpandida} total',
+                                    style: pw.TextStyle(fontSize: 8, color: PdfColors.blueGrey600),
+                                  ),
+                              ],
+                            ),
                             pw.Row(
                               children: [
                                 pw.Container(
@@ -82,7 +97,7 @@ class PdfDetalhamento {
                                     color: PdfColors.blueGrey800,
                                     borderRadius: pw.BorderRadius.all(pw.Radius.circular(4)),
                                   ),
-                                  child: pw.Text('Qtde: ${elem.quantidade}', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: PdfColors.white)),
+                                  child: pw.Text('Qtde: ${elem.quantidadeExpandida}', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: PdfColors.white)),
                                 ),
                               ],
                             ),
@@ -270,11 +285,13 @@ class PdfDetalhamento {
     final compAco = <String, double>{}; // em cm
 
     for (var elem in detalhamento.elementos) {
+      // Quantidade total = pai + equivalentes
+      final qtdeTotalElem = elem.quantidadeExpandida;
       for (var pos in elem.posicoes) {
         final bitola = pos.bitolaNome.split('-').first.trim();
         final compUnit = pos.comprimentos.values.fold<double>(0.0, (sum, val) => sum + val);
-        final compTotalCm = compUnit * pos.qtde * elem.quantidade;
-        final pesoTotal = _pesoTotalPosicao(pos) * elem.quantidade;
+        final compTotalCm = compUnit * pos.qtde * qtdeTotalElem;
+        final pesoTotal = _pesoTotalPosicao(pos) * qtdeTotalElem;
 
         resumoAco[bitola] = (resumoAco[bitola] ?? 0) + pesoTotal;
         compAco[bitola] = (compAco[bitola] ?? 0) + compTotalCm;
@@ -325,6 +342,16 @@ class PdfDetalhamento {
         ),
       ]
     );
+  }
+
+  /// Formata o nome agrupado: L1=L2=L3(x2) — sufixo (xN) apenas quando N > 1
+  static String _nomeAgrupado(ElementoModel elem) {
+    if (elem.elementosEquivalentes.isEmpty) return elem.nome;
+    final partes = [
+      elem.nome,
+      ...elem.elementosEquivalentes.map((e) => e.quantidade > 1 ? '${e.nome}(x${e.quantidade})' : e.nome),
+    ];
+    return partes.join('=');
   }
 
   /// Massa linear (kg/m) a partir da bitola — busca massaFinal real no cadastro,

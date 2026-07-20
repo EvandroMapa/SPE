@@ -53,10 +53,18 @@ class PedidoTecnicoController {
           ? elem.pesoTotal / elem.quantidade
           : pesoUnitCalculado;
 
-      for (final nome in elem.todosNomes) {
+      // Itera sobre [pai, ...equivalentes] com a quantidade correta de cada um
+      final todosEntries = <({String nome, int qtdeTotal})>[
+        (nome: elem.nome, qtdeTotal: elem.quantidade),
+        ...elem.elementosEquivalentes.map((e) => (nome: e.nome, qtdeTotal: e.quantidade)),
+      ];
+
+      for (final entry in todosEntries) {
+        final nome = entry.nome;
+        final qtdeElemento = entry.qtdeTotal;
         final chave = '${elem.id}_$nome';
         final qtdAlocada = alocados[chave] ?? 0;
-        final qtdRestante = elem.quantidade - qtdAlocada;
+        final qtdRestante = qtdeElemento - qtdAlocada;
 
         // 1. Tile de Disponível (para a quantidade livre ou que o pedido atual está manipulando)
         if (qtdRestante > 0) {

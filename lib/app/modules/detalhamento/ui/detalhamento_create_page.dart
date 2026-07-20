@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:acoplan/app/app_controller.dart';
 import 'package:acoplan/app/core/services/supabase_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:acoplan/app/modules/detalhamento_ia/preparacao/preparacao_dxf_controller.dart';
@@ -7,6 +8,7 @@ import 'package:acoplan/app/core/client/models/cliente_model.dart';
 import 'package:acoplan/app/core/client/models/forma_model.dart';
 import 'package:acoplan/app/core/client/models/detalhamento_model.dart';
 import 'package:acoplan/app/core/client/models/bitola_model.dart';
+import 'package:acoplan/app/core/client/models/usuario_model.dart';
 import 'package:acoplan/app/core/client/models/trecho_variavel_config.dart';
 import 'package:acoplan/app/core/components/app_drop_down.dart';
 import 'package:acoplan/app/core/components/app_field.dart';
@@ -195,12 +197,12 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
   }
 
   int _qtdeTotalElemento(ElementoCreateModel elem) {
-    final qtde = int.tryParse(elem.quantidade.text) ?? 1;
-    final numEquiv = 1 + elem.elementosEquivalentes.length;
-    return qtde * numEquiv;
+    final qtdePai = int.tryParse(elem.quantidade.text) ?? 1;
+    final somaEquiv = elem.elementosEquivalentes.fold<int>(0, (s, e) => s + e.quantidade);
+    return qtdePai + somaEquiv;
   }
 
-  /// Peso total de um elemento = peso unitário × quantidade do elemento × (1 + num equivalentes)
+  /// Peso total de um elemento = pesoUnit × qtdePai + Σ(pesoUnit × qtdeEquiv)
   double _pesoTotalElemento(ElementoCreateModel elem) {
     return _pesoUnitElemento(elem) * _qtdeTotalElemento(elem);
   }
@@ -236,7 +238,8 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
   final TextController _eNome = TextController();
   final TextController _eQtde = TextController();
   final TextController _eEquiv = TextController();
-  List<String> _equivalentesTemp = [];
+  final TextController _eEquivQtde = TextController(text: '1');
+  List<EquivalenteModel> _equivalentesTemp = [];
   int _editandoIdx = -1;
   bool _equivalentesExpandidos = true;
   bool _importacaoPendente = false;
@@ -255,12 +258,23 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
   String? _posicaoFocadaId;
   bool _editandoPosicao = false;
 
+  // Dados gerais extras
+  final _desenhoCtrl = TextEditingController();
+  final _pavimentoCtrl = TextEditingController();
+  bool _dadosGeraisInit = false;
+
 
   @override
   void initState() {
     setWebTitle(widget.detalhamento != null ? 'Detalhamento' : 'Novo Detalhamento');
     if (!widget.skipInit) {
       detalhamentoCtrl.init(widget.detalhamento);
+      // Recalcula peso ao abrir: corrige dados legados ou peso zerado por bug
+      if (widget.detalhamento != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          await _atualizarPesoTotal(detalhamentoCtrl.form);
+        });
+      }
     }
     // Detectar modificações nos campos do elemento
     _eNome.controller.addListener(() {
@@ -306,12 +320,33 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
         setState(() => _posicaoModificada = true);
       }
     });
+    // Sincronizar campos desenho/pavimento com o form
+    _desenhoCtrl.addListener(() => detalhamentoCtrl.form.desenho = _desenhoCtrl.text);
+    _pavimentoCtrl.addListener(() => detalhamentoCtrl.form.pavimento = _pavimentoCtrl.text);
     
     // Preencher IDs do banco para elementos existentes
     if (widget.detalhamento != null) {
       for (int i = 0; i < detalhamentoCtrl.form.elementos.length; i++) {
         _elementoDbIds[i] = detalhamentoCtrl.form.elementos[i].id;
       }
+      // Preencher campos extras dos dados gerais
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _desenhoCtrl.text = detalhamentoCtrl.form.desenho;
+        _pavimentoCtrl.text = detalhamentoCtrl.form.pavimento;
+        _dadosGeraisInit = true;
+      });
+    } else {
+      // Novo detalhamento: pré-preencher funcionário com usuário logado
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final usuarioLogado = appCtrl.usuario;
+        if (usuarioLogado != null && detalhamentoCtrl.form.funcionarioSelecionado == null) {
+          detalhamentoCtrl.form.funcionarioSelecionado = usuarioLogado;
+          detalhamentoCtrl.formStream.update();
+        }
+        _dadosGeraisInit = true;
+      });
     }
 
     // Selecionar primeiro elemento ao editar (sem entrar em edição)
@@ -413,6 +448,8 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
     _fnForma.dispose();
     _bitolaCtrl.dispose();
     _formaCtrl.dispose();
+    _desenhoCtrl.dispose();
+    _pavimentoCtrl.dispose();
     for (final c in _compCtrls) { c.dispose(); }
     for (final f in _compFns) { f.dispose(); }
     _elemScrollCtrl.dispose();
@@ -979,6 +1016,27 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
             AppDropDown<ObraModel?>(label: 'Obra', item: form.obraSelecionada, itens: obras,
               itemLabel: (e) => e?.descricao ?? 'Selecione uma obra',
               onSelect: (e) { form.obraSelecionada = e; detalhamentoCtrl.formStream.update(); }),
+            const SizedBox(height: 16),
+            AppField(
+              label: 'Desenho',
+              controllerObj: _desenhoCtrl,
+              required: false,
+            ),
+            const SizedBox(height: 16),
+            AppField(
+              label: 'Pavimento',
+              controllerObj: _pavimentoCtrl,
+              required: false,
+            ),
+            const SizedBox(height: 16),
+            AppDropDown<UsuarioModel?>(
+              label: 'Funcionário',
+              item: form.funcionarioSelecionado,
+              itens: BackendClient.usuarios.data,
+              itemLabel: (e) => e?.nome ?? 'Selecione um funcionário',
+              required: false,
+              onSelect: (e) { form.funcionarioSelecionado = e; detalhamentoCtrl.formStream.update(); },
+            ),
           ]),
         ),
       ),
@@ -1279,91 +1337,105 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
               ]),
               const SizedBox(height: 8),
               const SizedBox(height: 8),
-              // ── Seção de Equivalentes (colapsável ao editar) ────
-              if (_editandoIdx != -1 && !_equivalentesExpandidos && _equivalentesTemp.isNotEmpty)
-                // Modo colapsado: chip resumo
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: InkWell(
-                    onTap: () => setState(() => _equivalentesExpandidos = true),
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryMain.withValues(alpha: 0.06),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppColors.primaryMain.withValues(alpha: 0.15)),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.people_outline, size: 16, color: AppColors.primaryMain),
-                          const SizedBox(width: 8),
-                          Text(
-                            '${_equivalentesTemp.length} equivalente${_equivalentesTemp.length > 1 ? 's' : ''}',
-                            style: AppCss.minimumBold.setColor(AppColors.primaryMain).setSize(13),
-                          ),
-                          const Spacer(),
-                          Icon(Icons.expand_more, size: 18, color: AppColors.primaryMain.withValues(alpha: 0.6)),
-                        ],
-                      ),
-                    ),
-                  ),
-                )
-              else if (_editandoIdx != -1 && !_equivalentesExpandidos && _equivalentesTemp.isEmpty)
-                // Modo colapsado sem equivalentes: botão para adicionar
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: InkWell(
-                    onTap: () => setState(() => _equivalentesExpandidos = true),
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[50],
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.people_outline, size: 16, color: Colors.grey[400]),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Sem equivalentes',
-                            style: AppCss.minimumRegular.setColor(Colors.grey[400]!).setSize(13),
-                          ),
-                          const Spacer(),
-                          Icon(Icons.add, size: 16, color: Colors.grey[400]),
-                        ],
+              // ── Seção de Equivalentes (só para elementos já salvos) ────
+              if (_editandoIdx != -1) ...[
+                if (!_equivalentesExpandidos && _equivalentesTemp.isNotEmpty)
+                  // Modo colapsado: chip resumo
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: InkWell(
+                      onTap: () => setState(() => _equivalentesExpandidos = true),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryMain.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.primaryMain.withValues(alpha: 0.15)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.people_outline, size: 16, color: AppColors.primaryMain),
+                            const SizedBox(width: 8),
+                            Text(
+                              '${_equivalentesTemp.length} equivalente${_equivalentesTemp.length > 1 ? 's' : ''}',
+                              style: AppCss.minimumBold.setColor(AppColors.primaryMain).setSize(13),
+                            ),
+                            const Spacer(),
+                            Icon(Icons.expand_more, size: 18, color: AppColors.primaryMain.withValues(alpha: 0.6)),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                )
-              else ...[
-                // Modo expandido: campo + chips
-                Row(children: [
-                  Expanded(child: AppField(label: 'Equivalentes', controller: _eEquiv,
-                    isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                    suffixIcon: Icons.add,
-                    onSuffix: () {
-                      final text = _eEquiv.text.trim();
-                      if (text.isNotEmpty && !_equivalentesTemp.contains(text) && text != _eNome.text.trim()) {
-                        setState(() {
-                          _equivalentesTemp.add(text);
-                          _eEquiv.text = '';
-                        });
-                      }
-                    },
-                    onEditingComplete: () {
-                      final text = _eEquiv.text.trim();
-                      if (text.isNotEmpty && !_equivalentesTemp.contains(text) && text != _eNome.text.trim()) {
-                        setState(() {
-                          _equivalentesTemp.add(text);
-                          _eEquiv.text = '';
-                        });
-                      }
-                    }, onChanged: (_) {})),
-                  // Botão recolher (só ao editar)
-                  if (_editandoIdx != -1) ...[
+                  )
+                else if (!_equivalentesExpandidos && _equivalentesTemp.isEmpty)
+                  // Modo colapsado sem equivalentes: botão para adicionar
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: InkWell(
+                      onTap: () => setState(() => _equivalentesExpandidos = true),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[50],
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.people_outline, size: 16, color: Colors.grey[400]),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Sem equivalentes',
+                              style: AppCss.minimumRegular.setColor(Colors.grey[400]!).setSize(13),
+                            ),
+                            const Spacer(),
+                            Icon(Icons.add, size: 16, color: Colors.grey[400]),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )
+                else ...[
+                  // Modo expandido: campo nome + campo qtde + botão adicionar
+                  Row(children: [
+                    Expanded(flex: 3, child: AppField(label: 'Equivalente', controller: _eEquiv,
+                      isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      onEditingComplete: () {
+                        if (_eEquivQtde.text.isEmpty) _eEquivQtde.text = '1';
+                        _eEquivQtde.focus.requestFocus();
+                        _eEquivQtde.controller.selection = TextSelection(baseOffset: 0, extentOffset: _eEquivQtde.text.length);
+                      }, onChanged: (_) {})),
+                    const SizedBox(width: 6),
+                    SizedBox(
+                      width: 64,
+                      child: AppField(label: 'Qtde', controller: _eEquivQtde,
+                        isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        type: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        onEditingComplete: () => _adicionarEquivalente(),
+                        onChanged: (_) {}),
+                    ),
+                    const SizedBox(width: 6),
+                    // Botão adicionar
+                    Tooltip(
+                      message: 'Adicionar equivalente',
+                      child: InkWell(
+                        onTap: () => _adicionarEquivalente(),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          width: 36, height: 36,
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryMain.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppColors.primaryMain.withValues(alpha: 0.25)),
+                          ),
+                          child: Icon(Icons.add, size: 18, color: AppColors.primaryMain),
+                        ),
+                      ),
+                    ),
+                    // Botão recolher
                     const SizedBox(width: 6),
                     Tooltip(
                       message: 'Recolher equivalentes',
@@ -1380,26 +1452,27 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                         ),
                       ),
                     ),
-                  ],
-                ]),
-                if (_equivalentesTemp.isNotEmpty)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: _equivalentesTemp.map((eq) => Chip(
-                        label: Text(eq, style: AppCss.minimumBold.setColor(AppColors.primaryMain)),
-                        backgroundColor: AppColors.primaryMain.withValues(alpha: 0.1),
-                        deleteIcon: Icon(Icons.close, size: 14, color: AppColors.primaryMain),
-                        onDeleted: () => setState(() => _equivalentesTemp.remove(eq)),
-                        padding: EdgeInsets.zero,
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      )).toList(),
+                  ]),
+                  if (_equivalentesTemp.isNotEmpty)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: _equivalentesTemp.map((eq) => Chip(
+                          label: Text('${eq.nome} (${eq.quantidade})', style: AppCss.minimumBold.setColor(AppColors.primaryMain)),
+                          backgroundColor: AppColors.primaryMain.withValues(alpha: 0.1),
+                          deleteIcon: Icon(Icons.close, size: 14, color: AppColors.primaryMain),
+                          onDeleted: () => setState(() => _equivalentesTemp.removeWhere((e) => e.nome == eq.nome)),
+                          padding: EdgeInsets.zero,
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        )).toList(),
+                      ),
                     ),
-                  ),
+                ],
               ],
+
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -1630,7 +1703,8 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               if (e.elementosEquivalentes.isNotEmpty) ...[
-                                Text('${e.nome.text}=${e.elementosEquivalentes.join('=')}',
+                                Text(
+                                    '${e.nome.text}=${e.elementosEquivalentes.map((eq) => eq.quantidade > 1 ? '${eq.nome}(x${eq.quantidade})' : eq.nome).join('=')}',
                                     style: AppCss.minimumBold.setColor(AppColors.primaryMain).setSize(12), maxLines: 1, overflow: TextOverflow.ellipsis),
                                 const SizedBox(height: 4),
                               ],
@@ -1660,6 +1734,55 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
     );
   }
 
+  /// Adiciona equivalente à lista temporária com validação
+  void _adicionarEquivalente() {
+    final nome = _eEquiv.text.trim();
+    if (nome.isEmpty) {
+      NotificationService.showNegative(
+        'Nome obrigatório',
+        'Informe o nome do equivalente antes de adicionar',
+        position: NotificationPosition.bottom,
+      );
+      _eEquiv.focus.requestFocus();
+      return;
+    }
+    if (nome == _eNome.text.trim()) {
+      NotificationService.showNegative(
+        'Nome inválido',
+        'O equivalente não pode ter o mesmo nome do elemento pai',
+        position: NotificationPosition.bottom,
+      );
+      return;
+    }
+    if (_equivalentesTemp.any((e) => e.nome == nome)) {
+      NotificationService.showNegative(
+        'Duplicado',
+        'Já existe um equivalente com esse nome',
+        position: NotificationPosition.bottom,
+      );
+      return;
+    }
+    // Valida e garante qtde >= 1
+    final qtdeRaw = _eEquivQtde.text.trim();
+    final qtde = int.tryParse(qtdeRaw) ?? 0;
+    if (qtde < 1) {
+      NotificationService.showNegative(
+        'Qtde inválida',
+        'A quantidade do equivalente deve ser ao menos 1',
+        position: NotificationPosition.bottom,
+      );
+      _eEquivQtde.text = '1'; // restaura o default
+      _eEquivQtde.focus.requestFocus();
+      return;
+    }
+    setState(() {
+      _equivalentesTemp.add(EquivalenteModel(nome: nome, quantidade: qtde));
+      _eEquiv.text = '';
+      _eEquivQtde.text = '1'; // repõe o default para o próximo equivalente
+    });
+    _eEquiv.focus.requestFocus();
+  }
+
   void _addElem(DetalhamentoCreateModel form) async {
     if (_eNome.text.trim().isEmpty) {
       NotificationService.showNegative('Campo obrigatório', 'Informe o nome do elemento', position: NotificationPosition.bottom);
@@ -1671,15 +1794,16 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
     
     // Adiciona o que estiver pendente no campo de equivalentes antes de salvar
     final pendente = _eEquiv.text.trim();
-    if (pendente.isNotEmpty && !_equivalentesTemp.contains(pendente) && pendente != n.nome.text) {
-      _equivalentesTemp.add(pendente);
+    if (pendente.isNotEmpty && !_equivalentesTemp.any((e) => e.nome == pendente) && pendente != n.nome.text) {
+      final qtdePendente = (int.tryParse(_eEquivQtde.text) ?? 0) < 1 ? 1 : int.parse(_eEquivQtde.text);
+      _equivalentesTemp.add(EquivalenteModel(nome: pendente, quantidade: qtdePendente));
     }
     
     n.elementosEquivalentes = List.from(_equivalentesTemp);
     
     form.elementos.add(n);
     final idx = form.elementos.length - 1;
-    _eNome.text = ''; _eQtde.text = ''; _eEquiv.text = '';
+    _eNome.text = ''; _eQtde.text = ''; _eEquiv.text = ''; _eEquivQtde.text = '1';
     _equivalentesTemp.clear();
     // Limpar colunas de posição e forma
     _limparPos();
@@ -1720,8 +1844,20 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
     elem.quantidade.text = _eQtde.text.isEmpty ? '1' : _eQtde.text;
     
     final pendente = _eEquiv.text.trim();
-    if (pendente.isNotEmpty && !_equivalentesTemp.contains(pendente) && pendente != elem.nome.text) {
-      _equivalentesTemp.add(pendente);
+    if (pendente.isNotEmpty && !_equivalentesTemp.any((e) => e.nome == pendente) && pendente != elem.nome.text) {
+      // Valida qtde do equivalente pendente antes de aceitar o save
+      final qtdePendente = int.tryParse(_eEquivQtde.text) ?? 0;
+      if (qtdePendente < 1) {
+        NotificationService.showNegative(
+          'Qtde inválida',
+          'Informe a quantidade do equivalente "$pendente" (mínimo 1) ou limpe o campo antes de salvar',
+          position: NotificationPosition.bottom,
+        );
+        _eEquivQtde.text = '1';
+        _eEquivQtde.focus.requestFocus();
+        return;
+      }
+      _equivalentesTemp.add(EquivalenteModel(nome: pendente, quantidade: qtdePendente));
     }
     
     elem.elementosEquivalentes = List.from(_equivalentesTemp);
@@ -1729,13 +1865,14 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
     setState(() {
       _editandoIdx = -1; _elementoModificado = false;
       _equivalentesExpandidos = true;
-      _eNome.text = ''; _eQtde.text = ''; _eEquiv.text = '';
+      _eNome.text = ''; _eQtde.text = ''; _eEquiv.text = ''; _eEquivQtde.text = '1';
       _equivalentesTemp.clear();
     });
     detalhamentoCtrl.formStream.update();
     
-    // Auto-save update
+    // Auto-save update + sincroniza peso total no banco
     await detalhamentoCtrl.atualizarElemento(elem);
+    await _atualizarPesoTotal(detalhamentoCtrl.form);
   }
 
   // ── COL 2: Posições ────────────────────────────────────
@@ -1812,8 +1949,6 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
           ]),
           const SizedBox(height: 8),
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Expanded(flex: 2, child: _campoForma()),
-            const SizedBox(width: 8),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text('Qtde:', style: AppCss.smallBold),
@@ -1835,6 +1970,8 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> {
                 ),
               ]),
             ),
+            const SizedBox(width: 8),
+            Expanded(flex: 2, child: _campoForma()),
             const SizedBox(width: 8),
             Tooltip(
               message: _posicaoModificada

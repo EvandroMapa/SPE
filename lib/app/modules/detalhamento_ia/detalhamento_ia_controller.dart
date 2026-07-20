@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'package:acoplan/app/core/client/backend_client.dart';
 import 'package:acoplan/app/core/client/models/cliente_model.dart';
+import 'package:acoplan/app/core/client/models/detalhamento_model.dart';
 import 'package:acoplan/app/core/models/app_stream.dart';
 import 'package:acoplan/app/core/services/notification_service.dart';
 import 'package:acoplan/app/modules/detalhamento_ia/importacao/importacao_resultado.dart';
@@ -278,7 +279,11 @@ class DetalhamentoIaController {
         final elem = ElementoCreateModel();
         elem.nome.text = elMap['nome']?.toString() ?? 'Elemento';
         elem.quantidade.text = elMap['quantidade']?.toString() ?? '1';
-        elem.elementosEquivalentes = (elMap['equivalentes'] as List?)?.map((e) => e.toString()).toList() ?? [];
+        elem.elementosEquivalentes = (elMap['equivalentes'] as List?)
+            ?.map((e) => EquivalenteModel.fromJson(e,
+                qtdePadrao: int.tryParse(elMap['quantidade']?.toString() ?? '1') ?? 1))
+            .where((e) => e.nome.isNotEmpty)
+            .toList() ?? [];
 
         final posicoes = elMap['posicoes'] as List? ?? [];
         for (final posMap in posicoes) {
@@ -371,7 +376,11 @@ class DetalhamentoIaController {
         final elem = ElementoCreateModel();
         elem.nome.text = elMap['nome']?.toString() ?? 'Elemento';
         elem.quantidade.text = elMap['quantidade']?.toString() ?? '1';
-        elem.elementosEquivalentes = (elMap['equivalentes'] as List?)?.map((e) => e.toString()).toList() ?? [];
+        elem.elementosEquivalentes = (elMap['equivalentes'] as List?)
+            ?.map((e) => EquivalenteModel.fromJson(e,
+                qtdePadrao: int.tryParse(elMap['quantidade']?.toString() ?? '1') ?? 1))
+            .where((e) => e.nome.isNotEmpty)
+            .toList() ?? [];
 
         final posicoes = elMap['posicoes'] as List? ?? [];
         for (final posMap in posicoes) {

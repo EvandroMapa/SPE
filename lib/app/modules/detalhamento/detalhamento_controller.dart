@@ -62,6 +62,13 @@ class DetalhamentoController {
       createModel.obraSelecionada = cliente.obras.where((o) => o.id == detalhamento.obraId).firstOrNull;
     }
 
+    // Restaurar funcionário
+    if (detalhamento.funcionarioId.isNotEmpty) {
+      createModel.funcionarioSelecionado = BackendClient.usuarios.data
+          .where((u) => u.id == detalhamento.funcionarioId)
+          .firstOrNull;
+    }
+
     // Restaurar bitola/forma nas posições
     final bitolas = BackendClient.bitolas.data;
     final formas = BackendClient.formas.data;
@@ -247,10 +254,10 @@ class DetalhamentoController {
     }
   }
 
-  // ── Atualizar peso total do detalhamento ────────────────────
+  // ── Atualizar peso total do detalhamento ────────────────────────
   Future<void> atualizarPesoTotal(double pesoTotal) async {
-    final detalhamentoId = form.id;
-    if (detalhamentoId.length != 36) return;
+    final detalhamentoId = _detalhamentoDbId; // UUID real do banco
+    if (detalhamentoId == null || detalhamentoId.length != 36) return;
     try {
       BackendClient.detalhamentos.pausarFetch();
       await BackendClient.detalhamentos.atualizarPesoTotal(detalhamentoId, pesoTotal);

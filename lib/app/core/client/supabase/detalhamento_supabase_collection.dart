@@ -21,7 +21,7 @@ class DetalhamentoSupabaseCollection {
     if (_isStarted && lock) return;
     _isStarted = true;
     try {
-      final response = await SupabaseService.client.from(name).select();
+      final response = await SupabaseService.client.from(name).select().order('codigo', ascending: false);
       final rows = List<Map<String, dynamic>>.from(response);
 
       final items = <DetalhamentoModel>[];
@@ -52,7 +52,9 @@ class DetalhamentoSupabaseCollection {
         }
         items.add(DetalhamentoModel.fromSupabaseMap(p, elementosRaw, posicoesRaw));
       }
-      dataStream.add(items);
+      final seenIds = <String>{};
+      final uniqueItems = items.where((e) => seenIds.add(e.id)).toList();
+      dataStream.add(uniqueItems);
     } catch (e) { log('Supabase Error (Detalhamento.start): $e'); }
   }
 
@@ -77,14 +79,29 @@ class DetalhamentoSupabaseCollection {
   // ── Planilha CRUD ────────────────────────────────────────
   /// Cria detalhamento no banco e retorna com ID real (UUID)
   Future<String> criarDetalhamento(DetalhamentoModel model) async {
-    final proximoCodigo = data.isEmpty
-        ? 1
-        : data.map((c) => c.codigo).reduce((a, b) => a > b ? a : b) + 1;
+    int proximoCodigo = 1;
+    try {
+      final res = await SupabaseService.client
+          .from(name)
+          .select('codigo')
+          .order('codigo', ascending: false)
+          .limit(1);
+      final maxBanco = res.isNotEmpty ? (int.tryParse(res.first['codigo']?.toString() ?? '0') ?? 0) : 0;
+      final maxMemoria = data.isEmpty
+          ? 0
+          : data.map((c) => c.codigo).reduce((a, b) => a > b ? a : b);
+      proximoCodigo = (maxBanco > maxMemoria ? maxBanco : maxMemoria) + 1;
+    } catch (_) {
+      proximoCodigo = data.isEmpty
+          ? 1
+          : data.map((c) => c.codigo).reduce((a, b) => a > b ? a : b) + 1;
+    }
     final m = model.copyWith(codigo: proximoCodigo);
     final inserted = await SupabaseService.client
         .from(name).insert(m.toSupabaseMap()).select().single();
-    await fetch();
-    return inserted['id'] as String;
+    final newId = inserted['id'] as String;
+    unawaited(fetch());
+    return newId;
   }
 
   Future<bool> estaVinculadoAPedido(String detalhamentoId) async {
@@ -128,8 +145,9 @@ class DetalhamentoSupabaseCollection {
     map.remove('id');
     final inserted = await SupabaseService.client
         .from('elementos').insert(map).select().single();
-    await fetch();
-    return inserted['id'] as String;
+    final newId = inserted['id'] as String;
+    unawaited(fetch());
+    return newId;
   }
 
   Future<void> excluirElemento(String elementoId) async {
@@ -152,8 +170,9 @@ class DetalhamentoSupabaseCollection {
     map.remove('id');
     final inserted = await SupabaseService.client
         .from('posicoes').insert(map).select().single();
-    await fetch();
-    return inserted['id'] as String;
+    final newId = inserted['id'] as String;
+    unawaited(fetch());
+    return newId;
   }
 
   /// Atualiza apenas a coluna 'ordem' de múltiplas posições (batch leve)

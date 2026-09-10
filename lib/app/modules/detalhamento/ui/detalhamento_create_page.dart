@@ -263,6 +263,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> with Fo
   final _desenhoCtrl = TextEditingController();
   final _pavimentoCtrl = TextEditingController();
   bool _dadosGeraisInit = false;
+  bool _salvandoDadosGerais = false;
 
 
   @override
@@ -1048,74 +1049,99 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> with Fo
       const SizedBox(height: 16),
       if (!_isRO)
         InkWell(
-          onTap: () async {
-            if (widget.skipInit) {
-              // Duplicação: mostrar spinner bloqueante
-              showDialog(
-                context: context,
-                barrierDismissible: false,
-                builder: (_) => PopScope(
-                  canPop: false,
-                  child: Center(
-                    child: Container(
-                      padding: const EdgeInsets.all(32),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 12)],
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          CircularProgressIndicator(color: AppColors.primaryMain),
-                          const SizedBox(height: 16),
-                          Text('Duplicando projeto...', style: AppCss.smallBold),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              );
+          onTap: _salvandoDadosGerais
+              ? null
+              : () async {
+                  setState(() => _salvandoDadosGerais = true);
+                  try {
+                    if (widget.skipInit) {
+                      // Duplicação: mostrar spinner bloqueante
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (_) => PopScope(
+                          canPop: false,
+                          child: Center(
+                            child: Container(
+                              padding: const EdgeInsets.all(32),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 12)],
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  CircularProgressIndicator(color: AppColors.primaryMain),
+                                  const SizedBox(height: 16),
+                                  Text('Duplicando projeto...', style: AppCss.smallBold),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
 
-              final sucesso = await detalhamentoCtrl.duplicarCompleto();
+                      final sucesso = await detalhamentoCtrl.duplicarCompleto();
 
-              if (mounted) Navigator.pop(context); // Fechar spinner
+                      if (mounted) Navigator.pop(context); // Fechar spinner
 
-              if (sucesso && mounted) {
-                showDialog(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    icon: Icon(Icons.check_circle_outline, size: 48, color: const Color(0xFF10B981)),
-                    content: Text(
-                      'Projeto duplicado com sucesso!\nNovo código: ${detalhamentoCtrl.form.codigo}',
-                      style: AppCss.smallRegular,
-                      textAlign: TextAlign.center,
-                    ),
-                    actionsAlignment: MainAxisAlignment.center,
-                    actions: [
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryMain),
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          pop(context);
-                        },
-                        child: Text('OK', style: AppCss.smallBold.setColor(Colors.white)),
-                      ),
-                    ],
-                  ),
-                );
-              }
-            } else {
-              await detalhamentoCtrl.salvarDadosGerais();
-            }
-          },
+                      if (sucesso && mounted) {
+                        showDialog(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            icon: Icon(Icons.check_circle_outline, size: 48, color: const Color(0xFF10B981)),
+                            content: Text(
+                              'Projeto duplicado com sucesso!\nNovo código: ${detalhamentoCtrl.form.codigo}',
+                              style: AppCss.smallRegular,
+                              textAlign: TextAlign.center,
+                            ),
+                            actionsAlignment: MainAxisAlignment.center,
+                            actions: [
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryMain),
+                                onPressed: () {
+                                  Navigator.pop(ctx);
+                                  pop(context);
+                                },
+                                child: Text('OK', style: AppCss.smallBold.setColor(Colors.white)),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+                    } else {
+                      final foiCriacao = await detalhamentoCtrl.salvarDadosGerais();
+                      if (foiCriacao && mounted) {
+                        setState(() {
+                          _sel = _Sec.elementos;
+                        });
+                      }
+                    }
+                  } finally {
+                    if (mounted) setState(() => _salvandoDadosGerais = false);
+                  }
+                },
           child: Container(
             height: 44, width: double.infinity,
-            decoration: BoxDecoration(color: AppColors.primaryMain, borderRadius: BorderRadius.circular(12)),
-            child: Center(child: Text(
-              widget.skipInit ? 'DUPLICAR PROJETO' : 'SALVAR DADOS GERAIS',
-              style: AppCss.minimumBold.setColor(Colors.white).setSize(13).setLetterSpacing(1),
-            )),
+            decoration: BoxDecoration(
+              color: _salvandoDadosGerais
+                  ? AppColors.primaryMain.withValues(alpha: 0.6)
+                  : AppColors.primaryMain,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Center(
+              child: _salvandoDadosGerais
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : Text(
+                      widget.skipInit ? 'DUPLICAR PROJETO' : 'SALVAR DADOS GERAIS',
+                      style: AppCss.minimumBold.setColor(Colors.white).setSize(13).setLetterSpacing(1),
+                    ),
+            ),
           ),
         ),
     ]);
@@ -1462,17 +1488,23 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> with Fo
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.only(top: 8),
-                      child: Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: _equivalentesTemp.map((eq) => Chip(
-                          label: Text('${eq.nome} (${eq.quantidade})', style: AppCss.minimumBold.setColor(AppColors.primaryMain)),
-                          backgroundColor: AppColors.primaryMain.withValues(alpha: 0.1),
-                          deleteIcon: Icon(Icons.close, size: 14, color: AppColors.primaryMain),
-                          onDeleted: () => setState(() => _equivalentesTemp.removeWhere((e) => e.nome == eq.nome)),
-                          padding: EdgeInsets.zero,
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        )).toList(),
+                      constraints: const BoxConstraints(maxHeight: 110),
+                      child: Scrollbar(
+                        thumbVisibility: _equivalentesTemp.length > 4,
+                        child: SingleChildScrollView(
+                          child: Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: _equivalentesTemp.map((eq) => Chip(
+                              label: Text('${eq.nome} (${eq.quantidade})', style: AppCss.minimumBold.setColor(AppColors.primaryMain)),
+                              backgroundColor: AppColors.primaryMain.withValues(alpha: 0.1),
+                              deleteIcon: Icon(Icons.close, size: 14, color: AppColors.primaryMain),
+                              onDeleted: () => setState(() => _equivalentesTemp.removeWhere((e) => e.nome == eq.nome)),
+                              padding: EdgeInsets.zero,
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            )).toList(),
+                          ),
+                        ),
                       ),
                     ),
                 ],

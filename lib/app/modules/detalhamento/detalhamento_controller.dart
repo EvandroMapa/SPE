@@ -3,7 +3,6 @@ import 'package:acoplan/app/core/client/backend_client.dart';
 import 'package:acoplan/app/core/client/models/detalhamento_model.dart';
 import 'package:acoplan/app/core/models/app_stream.dart';
 import 'package:acoplan/app/core/services/notification_service.dart';
-import 'package:acoplan/app/core/utils/global_resource.dart';
 import 'package:acoplan/app/modules/detalhamento/detalhamento_view_model.dart';
 import 'package:flutter/material.dart';
 
@@ -24,6 +23,8 @@ class DetalhamentoController {
   String? _detalhamentoDbId;
   String? get detalhamentoDbId => _detalhamentoDbId;
   StreamSubscription? _realtimeSub;
+  bool _salvando = false;
+  bool get salvando => _salvando;
 
   void init(DetalhamentoModel? detalhamento) {
     if (detalhamento != null) {
@@ -86,9 +87,19 @@ class DetalhamentoController {
     formStream.add(createModel);
   }
 
+  Completer<bool>? _salvarCompleter;
+
   // ── Salvar/atualizar dados gerais do detalhamento ────────────
   /// Retorna `true` se foi criação nova (incluindo duplicação)
   Future<bool> salvarDadosGerais({bool silencioso = false}) async {
+    if (_salvando) {
+      if (_salvarCompleter != null) {
+        return await _salvarCompleter!.future;
+      }
+      return false;
+    }
+    _salvando = true;
+    _salvarCompleter = Completer<bool>();
     try {
       if (form.clienteSelecionado == null) throw Exception('Selecione um cliente');
       if (form.obraSelecionada == null) throw Exception('Selecione uma obra');
@@ -103,6 +114,7 @@ class DetalhamentoController {
       } else {
         // Criar nova
         _detalhamentoDbId = await BackendClient.detalhamentos.criarDetalhamento(model);
+        form.id = _detalhamentoDbId!;
         form.isEdit = true;
         foiCriacao = true;
       }
@@ -111,10 +123,15 @@ class DetalhamentoController {
       if (!silencioso) {
         NotificationService.showPositive('Detalhamento salvo', 'Dados gerais registrados com sucesso');
       }
+      _salvarCompleter?.complete(foiCriacao);
       return foiCriacao;
     } catch (e) {
+      _salvarCompleter?.complete(false);
       NotificationService.showNegative('Erro', e.toString());
       return false;
+    } finally {
+      _salvando = false;
+      _salvarCompleter = null;
     }
   }
 
@@ -130,7 +147,7 @@ class DetalhamentoController {
         final elemModel = elem.toElementoModel();
         final elemDbId = await BackendClient.detalhamentos.adicionarElemento(
           elemModel, _detalhamentoDbId!);
-        if (elemDbId == null) continue;
+        if (elemDbId.isEmpty) continue;
 
         // Salvar posições do elemento
         for (final pos in elem.posicoes) {
@@ -152,22 +169,19 @@ class DetalhamentoController {
     }
   }
 
-  /// Garante que a detalhamento existe no banco antes de operar elementos
+  /// Garante que o detalhamento existe no banco antes de operar elementos
   Future<bool> _garantirDetalhamento() async {
     if (_detalhamentoDbId != null) return true;
-    try {
-      if (form.clienteSelecionado == null || form.obraSelecionada == null) {
-        NotificationService.showNegative('Atenção', 'Preencha cliente e obra antes de adicionar elementos');
-        return false;
-      }
-      final model = form.toDetalhamentoModel();
-      _detalhamentoDbId = await BackendClient.detalhamentos.criarDetalhamento(model);
-      form.isEdit = true;
-      return true;
-    } catch (e) {
-      NotificationService.showNegative('Erro', e.toString());
+    if (_salvando && _salvarCompleter != null) {
+      await _salvarCompleter!.future;
+      if (_detalhamentoDbId != null) return true;
+    }
+    if (form.clienteSelecionado == null || form.obraSelecionada == null) {
+      NotificationService.showNegative('Atenção', 'Preencha cliente e obra antes de adicionar elementos');
       return false;
     }
+    await salvarDadosGerais(silencioso: true);
+    return _detalhamentoDbId != null;
   }
 
   // ── Elemento: adicionar ──────────────────────────────────

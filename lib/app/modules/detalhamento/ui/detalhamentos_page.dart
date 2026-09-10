@@ -114,8 +114,12 @@ class _DetalhamentosPageState extends State<DetalhamentosPage> {
             child: StreamOut<List<DetalhamentoModel>>(
               stream: detalhamentoCtrl.detalhamentosStream.listen,
               builder: (context, detalhamentos) {
+                // Deduplica por id para prevenir duplicações visuais
+                final seenIds = <String>{};
+                final uniqueList = detalhamentos.where((d) => seenIds.add(d.id)).toList();
+
                 // Filtrar
-                var filtered = detalhamentos.where((p) {
+                var filtered = uniqueList.where((p) {
                   final query = _filter.toLowerCase();
                   return p.clienteNome.toLowerCase().contains(query) ||
                       p.obraNome.toLowerCase().contains(query) ||

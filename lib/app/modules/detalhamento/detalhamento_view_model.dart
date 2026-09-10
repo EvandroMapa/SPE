@@ -8,7 +8,7 @@ import 'package:acoplan/app/core/models/text_controller.dart';
 import 'package:acoplan/app/core/services/hash_service.dart';
 
 class DetalhamentoCreateModel {
-  final String id;
+  String id;
   int codigo = 0;
   ClienteModel? clienteSelecionado;
   ObraModel? obraSelecionada;

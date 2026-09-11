@@ -250,11 +250,15 @@ class _PedidoTecnicoCreatePageState
 
   List<DetalhamentoModel> get _detalhamentosDaObra {
     if (_clienteSel == null || _obraSel == null) return [];
-    return BackendClient.detalhamentos.data
+    final list = BackendClient.detalhamentos.data
         .where((p) =>
             p.clienteId == _clienteSel!.id &&
             p.obraId == _obraSel!.id)
         .toList();
+    if (_detalhamentoSel != null && !list.any((d) => d.id == _detalhamentoSel!.id)) {
+      list.insert(0, _detalhamentoSel!);
+    }
+    return list;
   }
 
   bool get _hasUnsavedChanges {
@@ -694,7 +698,7 @@ class _PedidoTecnicoCreatePageState
                 itens: detalhamentos,
                 disable: form.isEdit,
                 itemLabel: (e) =>
-                    e != null ? 'Detalhamento ${e.codigo}' : 'Selecione um detalhamento',
+                    e != null ? e.labelExibicao : 'Selecione um detalhamento',
                 onSelect: (e) => setState(() {
                   _detalhamentoSel = e;
                   _elementosSelecionados.clear();
@@ -895,7 +899,9 @@ class _PedidoTecnicoCreatePageState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Elementos do Detalhamento',
+                      _detalhamentoSel != null
+                          ? 'Elementos — ${_detalhamentoSel!.labelExibicao}'
+                          : 'Elementos do Detalhamento',
                       style: AppCss.mediumBold.setSize(15),
                     ),
                     const SizedBox(height: 2),

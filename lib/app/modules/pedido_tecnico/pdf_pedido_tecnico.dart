@@ -153,7 +153,7 @@ class PdfPedidoTecnico {
                         pw.SizedBox(height: 6),
                         _infoLinhasPdf(
                           'Detalhamento',
-                          'Nº ${pedido.detalhamentoCodigo}',
+                          'Nº ${pedido.detalhamentoCodigo}${detalhamento != null && detalhamento.descricao.isNotEmpty ? ' - ${detalhamento.descricao}' : ''}',
                           estLabel,
                           estValor,
                         ),

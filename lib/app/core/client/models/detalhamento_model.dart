@@ -126,6 +126,23 @@ class DetalhamentoModel {
   @override
   String toString() => 'DetalhamentoModel(id: $id, codigo: $codigo)';
 
+  /// Descrição textual baseada em desenho e pavimento
+  String get descricao {
+    final partes = <String>[];
+    if (desenho.trim().isNotEmpty) partes.add(desenho.trim());
+    if (pavimento.trim().isNotEmpty) partes.add(pavimento.trim());
+    return partes.join(' - ');
+  }
+
+  /// Label para exibição em seletores e dropdowns: "X - descrição" ou "Detalhamento X"
+  String get labelExibicao {
+    final desc = descricao;
+    if (desc.isNotEmpty) {
+      return '$codigo - $desc';
+    }
+    return 'Detalhamento $codigo';
+  }
+
   DetalhamentoModel copyWith({
     String? id,
     int? codigo,

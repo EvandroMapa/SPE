@@ -1,3 +1,4 @@
+import 'package:acoplan/app/core/client/backend_client.dart';
 import 'package:acoplan/app/core/client/models/pedido_tecnico_model.dart';
 import 'package:acoplan/app/core/components/app_scaffold.dart';
 import 'package:acoplan/app/core/components/empty_data.dart';
@@ -95,7 +96,13 @@ class _PedidosTecnicosPageState extends State<PedidosTecnicosPage> {
                           p.obraNome.toLowerCase().contains(query) ||
                           p.codigo.toString().contains(query) ||
                           p.identificador.toLowerCase().contains(query) ||
-                          p.detalhamentoCodigo.toString().contains(query);
+                          p.detalhamentoCodigo.toString().contains(query) ||
+                          (BackendClient.detalhamentos.data
+                              .where((d) => d.id == p.detalhamentoId)
+                              .firstOrNull
+                              ?.descricao
+                              .toLowerCase()
+                              .contains(query) ?? false);
                   final matchStatus = _statusFiltro == 'todos' ||
                       p.status == _statusFiltro;
                   return matchText && matchStatus;
@@ -282,11 +289,23 @@ class _PedidoCard extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 2),
-                      Text(
-                        'Det. ${pedido.detalhamentoCodigo} • ${fmt.format(pedido.criadoEm.toLocal())}',
-                        style: AppCss.minimumRegular
-                            .setColor(Colors.grey[500]!)
-                            .setSize(11),
+                      Builder(
+                        builder: (context) {
+                          final det = BackendClient.detalhamentos.data
+                              .where((d) => d.id == pedido.detalhamentoId)
+                              .firstOrNull;
+                          final detDesc = det?.descricao.isNotEmpty == true
+                              ? ' • ${det!.descricao}'
+                              : '';
+                          return Text(
+                            'Det. ${pedido.detalhamentoCodigo}$detDesc • ${fmt.format(pedido.criadoEm.toLocal())}',
+                            style: AppCss.minimumRegular
+                                .setColor(Colors.grey[500]!)
+                                .setSize(11),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          );
+                        },
                       ),
                     ],
                   ),

@@ -1,3 +1,4 @@
+import 'package:acoplan/app/app_repository.dart';
 import 'package:acoplan/app/core/components/app_scaffold.dart';
 import 'package:acoplan/app/core/models/text_controller.dart';
 import 'package:acoplan/app/core/utils/app_colors.dart';
@@ -26,6 +27,7 @@ class SignUpPageState extends State<SignUpPage>
   @override
   void initState() {
     super.initState();
+    _loadRememberMe();
     _animCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
@@ -38,6 +40,21 @@ class SignUpPageState extends State<SignUpPage>
     _animCtrl.forward();
   }
 
+  Future<void> _loadRememberMe() async {
+    final pref = await AppRepository.getManterConectado();
+    if (mounted) {
+      setState(() => _rememberMe = pref);
+      signCtrl.keepConnectedStream.add(pref);
+    }
+  }
+
+  void _toggleRememberMe() {
+    final novoValor = !_rememberMe;
+    setState(() => _rememberMe = novoValor);
+    AppRepository.setManterConectado(novoValor);
+    signCtrl.keepConnectedStream.add(novoValor);
+  }
+
   @override
   void dispose() {
     _animCtrl.dispose();
@@ -47,8 +64,9 @@ class SignUpPageState extends State<SignUpPage>
   void _doLogin() async {
     FocusScope.of(context).unfocus();
     setState(() => _loading = true);
+    await AppRepository.setManterConectado(_rememberMe);
     await Future.delayed(const Duration(milliseconds: 200));
-    await signCtrl.login(email.text, senha.text);
+    await signCtrl.login(email.text, senha.text, keepConnected: _rememberMe);
     if (mounted) setState(() => _loading = false);
   }
 
@@ -178,7 +196,7 @@ class SignUpPageState extends State<SignUpPage>
 
                     // ── Manter conectado ──
                     GestureDetector(
-                      onTap: () => setState(() => _rememberMe = !_rememberMe),
+                      onTap: _toggleRememberMe,
                       child: Row(
                         children: [
                           AnimatedContainer(

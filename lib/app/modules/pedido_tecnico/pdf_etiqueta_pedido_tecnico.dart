@@ -25,12 +25,15 @@ class PdfEtiquetaPedidoTecnico {
   // ── Estilos ──────────────────────────────────────────────────────────────
   static final _sTarjaId = pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: _corBranco, letterSpacing: 1.2);
   static final _sTarjaLabel = pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold, color: _corBranco, letterSpacing: 0.7);
-  static final _sTarjaValor = pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: _corBranco);
   static final _sTarjaGrande = pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold, color: _corBranco);
+  static final _sTarjaOs = pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: _corBranco);
   static final _sLabel = pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold, color: _corPreto, letterSpacing: 0.7);
-  static final _sValor = pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: _corPreto);
+  static final _sBoxLabel = pw.TextStyle(fontSize: 4.5, fontWeight: pw.FontWeight.bold, color: _corPreto, letterSpacing: 0.5);
+  static final _sBoxValor = pw.TextStyle(fontSize: 6, color: _corPreto);
   static final _sMini = pw.TextStyle(fontSize: 7, color: _corPreto);
   static final _sMiniBold = pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold, color: _corPreto);
+
+  static Map<String, BitolaModel> _bitolasMap = {};
 
   // ── Gerador principal ────────────────────────────────────────────────────
   static Future<Uint8List> gerar({
@@ -38,22 +41,53 @@ class PdfEtiquetaPedidoTecnico {
     required DetalhamentoModel detalhamento,
     required List<FormaModel> formasCadastradas,
     List<BitolaModel>? bitolas,
+    void Function(int atual, int total)? onProgress,
   }) async {
     _bitolas = (bitolas != null && bitolas.isNotEmpty)
         ? bitolas
         : BackendClient.bitolas.data;
-    final pdf = pw.Document();
+    _bitolasMap = {for (final b in _bitolas) b.id: b};
+
+    final elemMap = {for (final e in detalhamento.elementos) e.id: e};
+    final formasMap = {for (final f in formasCadastradas) f.codigo: f};
+
+    // Pré-contagem de páginas para feedback de progresso preciso
+    int totalPaginas = 0;
     for (final elem in pedido.elementos) {
-      final elemDetalhamento = detalhamento.elementos.where((e) => e.id == elem.elementoId).firstOrNull;
+      if (elem.quantidadeSolicitada <= 0) continue;
+      final elemDet = elemMap[elem.elementoId];
+      if (elemDet == null) continue;
+      for (final pos in elemDet.posicoes) {
+        if (pos.qtde <= 0) continue;
+        totalPaginas++;
+        final temVar = pos.variaveis.values.any((v) => v) && pos.variaveisConfig.isNotEmpty;
+        if (temVar) totalPaginas += 2;
+      }
+    }
+
+    final pdf = pw.Document(compress: false);
+    int paginaAtual = 0;
+    for (final elem in pedido.elementos) {
+      if (elem.quantidadeSolicitada <= 0) continue;
+      final elemDetalhamento = elemMap[elem.elementoId];
       if (elemDetalhamento == null) continue;
       for (final pos in elemDetalhamento.posicoes) {
-        final formaDef = formasCadastradas.where((f) => f.codigo == pos.formaCodigo).firstOrNull;
+        if (pos.qtde <= 0) continue;
+        final formaDef = formasMap[pos.formaCodigo];
         // Etiqueta principal
         pdf.addPage(pw.Page(
           pageFormat: _formato,
           margin: pw.EdgeInsets.zero,
-          build: (_) => _buildEtiqueta(pedido: pedido, elem: elem, elemDetalhamento: elemDetalhamento, pos: pos, formaDef: formaDef),
+          build: (_) => _buildEtiqueta(
+            pedido: pedido,
+            detalhamento: detalhamento,
+            elem: elem,
+            elemDetalhamento: elemDetalhamento,
+            pos: pos,
+            formaDef: formaDef,
+          ),
         ));
+        paginaAtual++;
 
         // Se tem trecho variável → DUAS etiquetas extras
         final temVar = pos.variaveis.values.any((v) => v) && pos.variaveisConfig.isNotEmpty;
@@ -67,6 +101,7 @@ class PdfEtiquetaPedidoTecnico {
               pos: pos,
             ),
           ));
+          paginaAtual++;
           // Etiqueta 3: comprimentos + comprimento de corte
           pdf.addPage(pw.Page(
             pageFormat: _formato,
@@ -76,8 +111,18 @@ class PdfEtiquetaPedidoTecnico {
               pos: pos,
             ),
           ));
+          paginaAtual++;
+        }
+
+        if (onProgress != null && (paginaAtual % 3 == 0 || paginaAtual == totalPaginas)) {
+          onProgress(paginaAtual, totalPaginas);
+          await Future.delayed(Duration.zero);
         }
       }
+    }
+    if (onProgress != null) {
+      onProgress(totalPaginas, totalPaginas);
+      await Future.delayed(const Duration(milliseconds: 20));
     }
     return pdf.save();
   }
@@ -85,14 +130,15 @@ class PdfEtiquetaPedidoTecnico {
   // ── Layout ───────────────────────────────────────────────────────────────
   static pw.Widget _buildEtiqueta({
     required PedidoTecnicoModel pedido,
+    required DetalhamentoModel detalhamento,
     required PedidoTecnicoElementoModel elem,
     required ElementoModel elemDetalhamento,
     required PosicaoModel pos,
     FormaModel? formaDef,
   }) {
-    final id = pedido.identificador.isNotEmpty ? pedido.identificador : 'PT ${pedido.codigo.toString().padLeft(3, '0')}';
+    final id = _limpar(pedido.identificador.isNotEmpty ? pedido.identificador : 'PT ${pedido.codigo.toString().padLeft(3, '0')}');
     final pesoPos = _calcularPesoPosicao(pos);
-    final bitolaStr = pos.bitolaNome.split('-').first.trim();
+    final bitolaStr = _limpar(pos.bitolaNome.split('-').first.trim());
     final compUnit = pos.comprimentos.values.fold<double>(0.0, (s, v) => s + v);
     final compCorteRaw = pos.comprimentoDeCorte > 0 ? pos.comprimentoDeCorte : compUnit.toDouble();
 
@@ -101,6 +147,14 @@ class PdfEtiquetaPedidoTecnico {
     String compUnitStr;
     String compCorteStr;
     if (temVar) {
+      // Pré-calcular medidas expandidas por trecho variável
+      final expandidasMap = <String, List<int>>{};
+      for (final entry in pos.variaveisConfig.entries) {
+        if (entry.value.inicial > 0 && entry.value.final_ > 0) {
+          expandidasMap[entry.key] = entry.value.medidasExpandidas(pos.multiplicador);
+        }
+      }
+
       // Calcular min/max comprimento por peça
       int compMin = 999999; double compMax = 0;
       final desconto = pos.descontoDobraSnapshot ?? 0;
@@ -111,13 +165,11 @@ class PdfEtiquetaPedidoTecnico {
           final trecho = entry.key;
           final isVar = pos.variaveis[trecho] ?? false;
           if (isVar) {
-            final config = pos.variaveisConfig[trecho]
-                ?? pos.variaveisConfig.values.firstOrNull;
-            if (config != null && config.inicial > 0 && config.final_ > 0) {
-              final expandidas = config.medidasExpandidas(pos.multiplicador);
+            final expandidas = expandidasMap[trecho] ?? expandidasMap.values.firstOrNull;
+            if (expandidas != null && expandidas.isNotEmpty) {
               soma += peca < expandidas.length
                   ? expandidas[peca].toDouble()
-                  : (expandidas.isNotEmpty ? expandidas.last.toDouble() : 0.0);
+                  : expandidas.last.toDouble();
             } else {
               soma += entry.value;
             }
@@ -148,39 +200,72 @@ class PdfEtiquetaPedidoTecnico {
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.stretch,
         children: [
-          // 1 ── IDENTIFICADOR
-          _boxPreta(radius: 6, vPad: 5,
-            child: pw.Center(child: pw.Text(id, style: _sTarjaId)),
+          // 1 ── IDENTIFICADOR + OS
+          _buildTarjaLocalizadorOs(id, pedido.codigo),
+          pw.SizedBox(height: 3),
+
+          // 2 ── CLIENTE / OBRA / PAVIMENTO
+          pw.Container(
+            width: double.infinity,
+            constraints: const pw.BoxConstraints(minHeight: 25),
+            padding: const pw.EdgeInsets.only(left: 8, right: 8, top: 1.5, bottom: 3),
+            decoration: pw.BoxDecoration(
+              color: _corBranco,
+              borderRadius: pw.BorderRadius.circular(5),
+              border: pw.Border.all(color: _corPreto, width: 0.8),
+            ),
+            child: pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Expanded(
+                  flex: 4,
+                  child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+                    pw.Text('CLIENTE', style: _sBoxLabel),
+                    pw.Text(_limpar(pedido.clienteNome), style: _sBoxValor, maxLines: 2),
+                  ]),
+                ),
+                pw.SizedBox(width: 3),
+                pw.Container(margin: const pw.EdgeInsets.only(top: 1), width: 0.8, height: 21, color: _corPreto),
+                pw.SizedBox(width: 5),
+                pw.Expanded(
+                  flex: 4,
+                  child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+                    pw.Text('OBRA', style: _sBoxLabel),
+                    pw.Text(_limpar(pedido.obraNome), style: _sBoxValor, maxLines: 2),
+                  ]),
+                ),
+                pw.SizedBox(width: 3),
+                pw.Container(margin: const pw.EdgeInsets.only(top: 1), width: 0.8, height: 21, color: _corPreto),
+                pw.SizedBox(width: 5),
+                pw.Expanded(
+                  flex: 3,
+                  child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+                    pw.Text('PAVIMENTO', style: _sBoxLabel),
+                    pw.Text(
+                      detalhamento.pavimento.trim().isNotEmpty ? _limpar(detalhamento.pavimento.trim()) : '-',
+                      style: _sBoxValor,
+                      maxLines: 2,
+                    ),
+                  ]),
+                ),
+              ],
+            ),
           ),
           pw.SizedBox(height: 3),
 
-          // 2 ── CLIENTE / OBRA
-          _boxBranca(radius: 5, vPad: 4,
-            child: pw.Row(children: [
-              pw.Expanded(child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-                pw.Text('CLIENTE', style: _sLabel),
-                pw.Text(pedido.clienteNome, style: _sValor, maxLines: 1),
-              ])),
-              pw.Container(width: 0.8, height: 24, color: _corPreto),
-              pw.SizedBox(width: 8),
-              pw.Expanded(child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-                pw.Text('OBRA', style: _sLabel),
-                pw.Text(pedido.obraNome, style: _sValor, maxLines: 1),
-              ])),
-            ]),
-          ),
-          pw.SizedBox(height: 3),
-
-          // 3 ── ELEMENTO (palavra "ELEMENTO" suprimida, fonte ampliada)
+          // 3 ── ELEMENTO (palavra "ELEMENTO" suprimida, centralizado, fonte ampliada)
           _boxPreta(radius: 5, vPad: 5,
             child: pw.Row(
               crossAxisAlignment: pw.CrossAxisAlignment.center,
               children: [
                 pw.Expanded(
-                  child: pw.Text(
-                    elem.elementoNome.isEmpty ? '-' : elem.elementoNome,
-                    style: _sTarjaGrande,
-                    maxLines: 1,
+                  child: pw.Center(
+                    child: pw.Text(
+                      elem.elementoNome.isEmpty ? '-' : _limpar(elem.elementoNome),
+                      style: _sTarjaGrande,
+                      textAlign: pw.TextAlign.center,
+                      maxLines: 1,
+                    ),
                   ),
                 ),
                 pw.Container(width: 0.8, height: 26, color: _corBranco),
@@ -190,19 +275,21 @@ class PdfEtiquetaPedidoTecnico {
                   mainAxisSize: pw.MainAxisSize.min,
                   children: [
                     pw.Text('QTDE', style: _sTarjaLabel),
-                    pw.Text('${elem.quantidadeSolicitada}', style: _sTarjaValor),
+                    pw.SizedBox(height: 1),
+                    pw.Text('${elem.quantidadeSolicitada}', style: _sTarjaOs),
                   ],
                 ),
+                pw.SizedBox(width: 4),
               ],
             ),
           ),
           pw.SizedBox(height: 3),
 
-          // 4 ── POSIÇÃO (FORMA substituída por PESO)
+          // 4 ── POSIÇÃO (fontes equalizadas com a de PESO)
           _boxBranca(radius: 5, vPad: 4,
             child: pw.Column(children: [
               pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceAround, children: [
-                _col('POS', '${pos.posicao}', fontSize: 15),
+                _col('POS', '${pos.posicao}'),
                 pw.Container(width: 0.8, height: 28, color: _corPreto),
                 _colQtdeMult(pos),
                 pw.Container(width: 0.8, height: 28, color: _corPreto),
@@ -212,7 +299,7 @@ class PdfEtiquetaPedidoTecnico {
               ]),
               pw.Container(margin: const pw.EdgeInsets.symmetric(vertical: 3), height: 0.8, color: _corPreto),
               pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceAround, children: [
-                _col('C. UNITÁRIO', compUnitStr),
+                _col('C. UNITARIO', compUnitStr),
                 pw.Container(width: 0.8, height: 22, color: _corPreto),
                 pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.center, children: [
                   pw.Text('C. DE CORTE', style: _sLabel),
@@ -247,20 +334,45 @@ class PdfEtiquetaPedidoTecnico {
             ),
           ),
 
-          // 7 ── RODAPÉ
+          // 7 ── RODAPÉ (Tarja Localizador + OS repetida)
           pw.SizedBox(height: 3),
-          pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
-            pw.Text('Det. ${pedido.detalhamentoCodigo}', style: _sMini),
-            pw.Text(id, style: _sMiniBold),
-          ]),
+          if (pedido.detalhamentoCodigo > 0)
+            pw.Padding(
+              padding: const pw.EdgeInsets.only(bottom: 2, left: 2),
+              child: pw.Text('Det. ${pedido.detalhamentoCodigo}', style: _sMini),
+            ),
+          _buildTarjaLocalizadorOs(id, pedido.codigo),
         ],
       ),
     );
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────
+  static String _limpar(String texto) {
+    if (texto.isEmpty) return '';
+    return texto
+        .replaceAll('º', 'o')
+        .replaceAll('ª', 'a')
+        .replaceAll('°', 'o')
+        .replaceAll('Á', 'A').replaceAll('á', 'a')
+        .replaceAll('À', 'A').replaceAll('à', 'a')
+        .replaceAll('Â', 'A').replaceAll('â', 'a')
+        .replaceAll('Ã', 'A').replaceAll('ã', 'a')
+        .replaceAll('É', 'E').replaceAll('é', 'e')
+        .replaceAll('Ê', 'E').replaceAll('ê', 'e')
+        .replaceAll('Í', 'I').replaceAll('í', 'i')
+        .replaceAll('Ó', 'O').replaceAll('ó', 'o')
+        .replaceAll('Ô', 'O').replaceAll('ô', 'o')
+        .replaceAll('Õ', 'O').replaceAll('õ', 'o')
+        .replaceAll('Ú', 'U').replaceAll('ú', 'u')
+        .replaceAll('Ç', 'C').replaceAll('ç', 'c')
+        .replaceAll('Ø', 'D').replaceAll('ø', 'd')
+        .replaceAll('–', '-').replaceAll('—', '-');
+  }
+
   static double _massaLinear(PosicaoModel pos) {
-    final produto = _bitolas.where((p) => p.id == pos.bitolaId).firstOrNull;
+    final produto = _bitolasMap[pos.bitolaId] ??
+        _bitolas.where((p) => p.id == pos.bitolaId).firstOrNull;
     if (produto != null && produto.massaFinal > 0) {
       return produto.massaFinal;
     }
@@ -281,6 +393,13 @@ class PdfEtiquetaPedidoTecnico {
       return (somaCm / 100.0) * w * pos.qtde;
     }
 
+    final expandidasMap = <String, List<int>>{};
+    for (final entry in pos.variaveisConfig.entries) {
+      if (entry.value.inicial > 0 && entry.value.final_ > 0) {
+        expandidasMap[entry.key] = entry.value.medidasExpandidas(pos.multiplicador);
+      }
+    }
+
     double pesoTotal = 0;
     for (int peca = 0; peca < pos.qtde; peca++) {
       double somaCm = 0.0;
@@ -288,13 +407,11 @@ class PdfEtiquetaPedidoTecnico {
         final trecho = entry.key;
         final isVar = pos.variaveis[trecho] ?? false;
         if (isVar) {
-          final config = pos.variaveisConfig[trecho]
-              ?? pos.variaveisConfig.values.firstOrNull;
-          if (config != null && config.inicial > 0 && config.final_ > 0) {
-            final expandidas = config.medidasExpandidas(pos.multiplicador);
+          final expandidas = expandidasMap[trecho] ?? expandidasMap.values.firstOrNull;
+          if (expandidas != null && expandidas.isNotEmpty) {
             somaCm += peca < expandidas.length
                 ? expandidas[peca].toDouble()
-                : (expandidas.isNotEmpty ? expandidas.last.toDouble() : 0.0);
+                : expandidas.last.toDouble();
           } else {
             somaCm += entry.value;
           }
@@ -306,6 +423,39 @@ class PdfEtiquetaPedidoTecnico {
     }
     return pesoTotal;
   }
+  static pw.Widget _buildTarjaLocalizadorOs(String localizador, int codigoOS) {
+    return _boxPreta(
+      radius: 5,
+      vPad: 4,
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.center,
+        children: [
+          pw.Expanded(
+            child: pw.Center(
+              child: pw.Text(
+                localizador,
+                style: _sTarjaId,
+                maxLines: 1,
+              ),
+            ),
+          ),
+          pw.Container(width: 0.8, height: 22, color: _corBranco),
+          pw.SizedBox(width: 8),
+          pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
+            mainAxisSize: pw.MainAxisSize.min,
+            children: [
+              pw.Text('OS', style: _sTarjaLabel),
+              pw.SizedBox(height: 1),
+              pw.Text('$codigoOS', style: _sTarjaOs),
+            ],
+          ),
+          pw.SizedBox(width: 4),
+        ],
+      ),
+    );
+  }
+
   static pw.Widget _boxPreta({required pw.Widget child, double radius = 5, double vPad = 6}) =>
       pw.Container(
         width: double.infinity,
@@ -353,14 +503,7 @@ class PdfEtiquetaPedidoTecnico {
     if (forma.itens.isEmpty) return pw.SizedBox();
 
     // Usar comprimentos ORIGINAIS da forma para geometria fiel ao cadastro
-    final itens = forma.itens.map((it) => FormaItemModel(
-      trecho: it.trecho,
-      comprimento: it.comprimento,
-      angulo: it.angulo,
-      orientacao: it.orientacao,
-      tipo: it.tipo,
-      linhaDivisoria: it.linhaDivisoria,
-    )).toList();
+    final itens = forma.itens;
 
     // Calcular pontos no espaço modelo
     final pts = <PdfPoint>[const PdfPoint(0, 0)];
@@ -538,7 +681,7 @@ class PdfEtiquetaPedidoTecnico {
     required ElementoModel elemDetalhamento,
     required PosicaoModel pos,
   }) {
-    final id = pedido.identificador.isNotEmpty ? pedido.identificador : 'PT ${pedido.codigo.toString().padLeft(3, '0')}';
+    final id = _limpar(pedido.identificador.isNotEmpty ? pedido.identificador : 'PT ${pedido.codigo.toString().padLeft(3, '0')}');
     final pesoPos = _calcularPesoPosicao(pos);
 
     // Medidas expandidas por trecho variável
@@ -557,18 +700,16 @@ class PdfEtiquetaPedidoTecnico {
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.stretch,
         children: [
-          // IDENTIFICADOR
-          _boxPreta(radius: 6, vPad: 5,
-            child: pw.Center(child: pw.Text(id, style: _sTarjaId)),
-          ),
+          // 1 ── IDENTIFICADOR + OS
+          _buildTarjaLocalizadorOs(id, pedido.codigo),
           pw.SizedBox(height: 3),
 
           // POS / BITOLA / PESO / QTDE
           _boxBranca(radius: 5, vPad: 4,
             child: pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceAround, children: [
-              _col('POS', '${pos.posicao}', fontSize: 15),
+              _col('POS', '${pos.posicao}'),
               pw.Container(width: 0.8, height: 28, color: _corPreto),
-              _col('BITOLA', pos.bitolaNome.split('-').first.trim()),
+              _col('BITOLA', _limpar(pos.bitolaNome.split('-').first.trim())),
               pw.Container(width: 0.8, height: 28, color: _corPreto),
               _col('PESO', '${pesoPos.toStringAsFixed(2)} kg'),
               pw.Container(width: 0.8, height: 28, color: _corPreto),
@@ -663,12 +804,13 @@ class PdfEtiquetaPedidoTecnico {
             ),
           ),
 
-          // RODAPÉ
+          // RODAPÉ (Tarja Localizador + OS repetida)
           pw.SizedBox(height: 3),
-          pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
-            pw.Text('Pos ${pos.posicao}  |  ${pos.qtde} pecas', style: _sMini),
-            pw.Text(id, style: _sMiniBold),
-          ]),
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(bottom: 2, left: 2),
+            child: pw.Text('Pos ${pos.posicao}  |  ${pos.qtde} pecas', style: _sMini),
+          ),
+          _buildTarjaLocalizadorOs(id, pedido.codigo),
         ],
       ),
     );
@@ -681,8 +823,15 @@ class PdfEtiquetaPedidoTecnico {
     required ElementoModel elemDetalhamento,
     required PosicaoModel pos,
   }) {
-    final id = pedido.identificador.isNotEmpty ? pedido.identificador : 'PT ${pedido.codigo.toString().padLeft(3, '0')}';
+    final id = _limpar(pedido.identificador.isNotEmpty ? pedido.identificador : 'PT ${pedido.codigo.toString().padLeft(3, '0')}');
     final pesoPos = _calcularPesoPosicao(pos);
+
+    final expandidasMap = <String, List<int>>{};
+    for (final entry in pos.variaveisConfig.entries) {
+      if (entry.value.inicial > 0 && entry.value.final_ > 0) {
+        expandidasMap[entry.key] = entry.value.medidasExpandidas(pos.multiplicador);
+      }
+    }
 
     // Comprimento total por peça
     final comprimentosPorPeca = <double>[];
@@ -692,13 +841,11 @@ class PdfEtiquetaPedidoTecnico {
         final trecho = entry.key;
         final isVar = pos.variaveis[trecho] ?? false;
         if (isVar) {
-          final config = pos.variaveisConfig[trecho]
-              ?? pos.variaveisConfig.values.firstOrNull;
-          if (config != null && config.inicial > 0 && config.final_ > 0) {
-            final expandidas = config.medidasExpandidas(pos.multiplicador);
+          final expandidas = expandidasMap[trecho] ?? expandidasMap.values.firstOrNull;
+          if (expandidas != null && expandidas.isNotEmpty) {
             soma += peca < expandidas.length
                 ? expandidas[peca].toDouble()
-                : (expandidas.isNotEmpty ? expandidas.last.toDouble() : 0.0);
+                : expandidas.last.toDouble();
           } else {
             soma += entry.value;
           }
@@ -720,18 +867,16 @@ class PdfEtiquetaPedidoTecnico {
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.stretch,
         children: [
-          // IDENTIFICADOR
-          _boxPreta(radius: 6, vPad: 5,
-            child: pw.Center(child: pw.Text(id, style: _sTarjaId)),
-          ),
+          // 1 ── IDENTIFICADOR + OS
+          _buildTarjaLocalizadorOs(id, pedido.codigo),
           pw.SizedBox(height: 3),
 
           // POS / BITOLA / PESO / QTDE
           _boxBranca(radius: 5, vPad: 4,
             child: pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceAround, children: [
-              _col('POS', '${pos.posicao}', fontSize: 15),
+              _col('POS', '${pos.posicao}'),
               pw.Container(width: 0.8, height: 28, color: _corPreto),
-              _col('BITOLA', pos.bitolaNome.split('-').first.trim()),
+              _col('BITOLA', _limpar(pos.bitolaNome.split('-').first.trim())),
               pw.Container(width: 0.8, height: 28, color: _corPreto),
               _col('PESO', '${pesoPos.toStringAsFixed(2)} kg'),
               pw.Container(width: 0.8, height: 28, color: _corPreto),
@@ -845,12 +990,13 @@ class PdfEtiquetaPedidoTecnico {
             ),
           ),
 
-          // RODAPÉ
+          // RODAPÉ (Tarja Localizador + OS repetida)
           pw.SizedBox(height: 3),
-          pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
-            pw.Text('Pos ${pos.posicao}  |  ${pos.qtde} pecas', style: _sMini),
-            pw.Text(id, style: _sMiniBold),
-          ]),
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(bottom: 2, left: 2),
+            child: pw.Text('Pos ${pos.posicao}  |  ${pos.qtde} pecas', style: _sMini),
+          ),
+          _buildTarjaLocalizadorOs(id, pedido.codigo),
         ],
       ),
     );

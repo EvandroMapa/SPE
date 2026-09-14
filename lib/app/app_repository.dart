@@ -22,6 +22,16 @@ class AppRepository {
     sharedPrefs.remove('usuario');
   }
 
+  static Future<bool> getManterConectado() async {
+    final sharedPrefs = await SharedPreferences.getInstance();
+    return sharedPrefs.getBool('manter_conectado') ?? true;
+  }
+
+  static Future<void> setManterConectado(bool value) async {
+    final sharedPrefs = await SharedPreferences.getInstance();
+    await sharedPrefs.setBool('manter_conectado', value);
+  }
+
   static Future<void> clear() async {
     final sharedPrefs = await SharedPreferences.getInstance();
     sharedPrefs.clear();

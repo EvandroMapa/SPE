@@ -38,6 +38,8 @@ class AppController {
     usuarioCtrl.usuarioStream.add(user);
     if (keepConnected) {
       await AppRepository.add(user);
+    } else {
+      await AppRepository.removeUser();
     }
     
     // Sincroniza a chave de API global a partir do Supabase ao logar

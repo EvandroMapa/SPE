@@ -17,7 +17,9 @@ class SignController {
 
   final usuarioStream = AppStream<UsuarioModel?>();
 
-  Future<void> login(String email, String senha) async {
+  Future<void> login(String email, String senha, {bool? keepConnected}) async {
+    final manterConectado = keepConnected ?? keepConnectedStream.value;
+    keepConnectedStream.add(manterConectado);
     loadingStream.add(true);
     try {
       if (email.isEmpty || senha.isEmpty) {
@@ -37,7 +39,7 @@ class SignController {
       }
 
       final usuario = UsuarioModel.fromSupabaseMap(response);
-      await appCtrl.setCurrentUser(usuario, keepConnectedStream.value);
+      await appCtrl.setCurrentUser(usuario, manterConectado);
     } catch (e) {
       NotificationService.showNegative('Erro ao entrar', e.toString());
     } finally {

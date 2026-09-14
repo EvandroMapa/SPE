@@ -44,6 +44,8 @@ class _PedidoTecnicoCreatePageState
 
   bool _salvando = false;
   bool _bloqueadosExpandido = false;
+  bool _gerandoEtiquetas = false;
+  String _statusEtiquetas = '';
 
   @override
   void initState() {
@@ -171,6 +173,7 @@ class _PedidoTecnicoCreatePageState
   }
 
   void _gerarEtiqueta() async {
+    if (_gerandoEtiquetas) return;
     final pedido = _pedidoAtual;
     if (pedido == null) {
       NotificationService.showNegative('Pedido não salvo', 'Salve o pedido antes de gerar etiquetas.', position: NotificationPosition.bottom);
@@ -179,19 +182,58 @@ class _PedidoTecnicoCreatePageState
     final det = BackendClient.detalhamentos.data
         .where((p) => p.id == pedido.detalhamentoId)
         .firstOrNull ?? _detalhamentoSel;
-    if (det == null) return;
+    if (det == null) {
+      NotificationService.showNegative('Detalhamento não encontrado', 'Não foi possível carregar os dados do detalhamento.', position: NotificationPosition.bottom);
+      return;
+    }
 
-    final formas = BackendClient.formas.data;
-    final pdfBytes = await PdfEtiquetaPedidoTecnico.gerar(
-      pedido: pedido,
-      detalhamento: det,
-      formasCadastradas: formas,
-      bitolas: BackendClient.bitolas.data,
-    );
-    await Printing.layoutPdf(
-      onLayout: (format) async => pdfBytes,
-      name: '${pedido.identificador.isNotEmpty ? pedido.identificador : 'PT-${pedido.codigo}'} - Etiquetas',
-    );
+    setState(() {
+      _gerandoEtiquetas = true;
+      _statusEtiquetas = 'Iniciando...';
+    });
+
+    // Yield para renderizar o spinner na UI imediatamente antes do processamento do PDF
+    await Future.delayed(const Duration(milliseconds: 30));
+
+    try {
+      final formas = BackendClient.formas.data;
+      final pdfBytes = await PdfEtiquetaPedidoTecnico.gerar(
+        pedido: pedido,
+        detalhamento: det,
+        formasCadastradas: formas,
+        bitolas: BackendClient.bitolas.data,
+        onProgress: (atual, total) {
+          if (mounted) {
+            setState(() {
+              _statusEtiquetas = atual < total
+                  ? '$atual de $total etiquetas'
+                  : 'Abrindo impressora...';
+            });
+          }
+        },
+      );
+      if (!mounted) return;
+      setState(() {
+        _gerandoEtiquetas = false;
+        _statusEtiquetas = '';
+      });
+
+      // Aguarda o Flutter desmontar o modal de overlay antes de invocar o navegador
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      await Printing.layoutPdf(
+        onLayout: (format) async => pdfBytes,
+        name: '${pedido.identificador.isNotEmpty ? pedido.identificador : 'PT-${pedido.codigo}'} - Etiquetas',
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _gerandoEtiquetas = false;
+          _statusEtiquetas = '';
+        });
+        NotificationService.showNegative('Erro ao gerar etiquetas', e.toString(), position: NotificationPosition.bottom);
+      }
+    }
   }
 
   void _cancelarOuReabrir() {
@@ -432,7 +474,7 @@ class _PedidoTecnicoCreatePageState
               ],
             ),
           ),
-          if (_salvando)
+          if (_salvando || _gerandoEtiquetas)
             Positioned.fill(
               child: Container(
                 color: Colors.white.withValues(alpha: 0.6),
@@ -455,7 +497,11 @@ class _PedidoTecnicoCreatePageState
                         const CircularProgressIndicator(),
                         const SizedBox(height: 16),
                         Text(
-                          'Salvando alterações...',
+                          _gerandoEtiquetas
+                              ? (_statusEtiquetas.isNotEmpty
+                                  ? _statusEtiquetas
+                                  : 'Gerando etiquetas...')
+                              : 'Salvando alterações...',
                           style: AppCss.mediumBold.setColor(AppColors.primaryMain),
                         ),
                       ],
@@ -587,10 +633,11 @@ class _PedidoTecnicoCreatePageState
               onTap: () => _gerarPdf(completo: true),
             ),
             _sidebarAction(
-              tooltip: 'Etiquetas',
+              tooltip: _gerandoEtiquetas ? 'Gerando etiquetas...' : 'Etiquetas',
               icon: Icons.label_outline,
               color: const Color(0xFF7C3AED),
               onTap: _gerarEtiqueta,
+              loading: _gerandoEtiquetas,
             ),
           ],
           const SizedBox(height: 8),
@@ -604,13 +651,14 @@ class _PedidoTecnicoCreatePageState
     required IconData icon,
     required Color color,
     required VoidCallback onTap,
+    bool loading = false,
   }) {
     return Tooltip(
       message: tooltip,
       preferBelow: false,
       waitDuration: const Duration(milliseconds: 300),
       child: InkWell(
-        onTap: onTap,
+        onTap: loading ? null : onTap,
         borderRadius: BorderRadius.circular(8),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
@@ -621,7 +669,15 @@ class _PedidoTecnicoCreatePageState
             color: color.withValues(alpha: 0.10),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(icon, size: 18, color: color),
+          child: loading
+              ? Center(
+                  child: SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: color),
+                  ),
+                )
+              : Icon(icon, size: 18, color: color),
         ),
       ),
     );
@@ -1240,7 +1296,7 @@ class _PedidoTecnicoCreatePageState
               : ListView.separated(
                   padding: const EdgeInsets.all(10),
                   itemCount: selecionados.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 5),
+                  separatorBuilder: (_, _) => const SizedBox(height: 5),
                   itemBuilder: (_, i) => _tileSelecionado(selecionados[i]),
                 ),
         ),

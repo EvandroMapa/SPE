@@ -186,6 +186,7 @@ class _PedidoTecnicoCreatePageState
       pedido: pedido,
       detalhamento: det,
       formasCadastradas: formas,
+      bitolas: BackendClient.bitolas.data,
     );
     await Printing.layoutPdf(
       onLayout: (format) async => pdfBytes,

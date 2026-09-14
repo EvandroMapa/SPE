@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
+import 'package:acoplan/app/core/client/backend_client.dart';
+import 'package:acoplan/app/core/client/models/bitola_model.dart';
 import 'package:acoplan/app/core/client/models/forma_model.dart';
 import 'package:acoplan/app/core/client/models/pedido_tecnico_model.dart';
 import 'package:acoplan/app/core/client/models/detalhamento_model.dart';
@@ -12,6 +14,8 @@ class PdfEtiquetaPedidoTecnico {
   static const _corPreto = PdfColors.black;
   static const _corBranco = PdfColors.white;
 
+  static List<BitolaModel> _bitolas = [];
+
   static final _formato = PdfPageFormat(
     9 * PdfPageFormat.cm,
     14 * PdfPageFormat.cm,
@@ -22,19 +26,22 @@ class PdfEtiquetaPedidoTecnico {
   static final _sTarjaId = pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: _corBranco, letterSpacing: 1.2);
   static final _sTarjaLabel = pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold, color: _corBranco, letterSpacing: 0.7);
   static final _sTarjaValor = pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: _corBranco);
-  static final _sTarjaGrande = pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold, color: _corBranco);
+  static final _sTarjaGrande = pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold, color: _corBranco);
   static final _sLabel = pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold, color: _corPreto, letterSpacing: 0.7);
   static final _sValor = pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: _corPreto);
   static final _sMini = pw.TextStyle(fontSize: 7, color: _corPreto);
   static final _sMiniBold = pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold, color: _corPreto);
-  static final _sTrechoLinha = pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: _corPreto);
 
   // ── Gerador principal ────────────────────────────────────────────────────
   static Future<Uint8List> gerar({
     required PedidoTecnicoModel pedido,
     required DetalhamentoModel detalhamento,
     required List<FormaModel> formasCadastradas,
+    List<BitolaModel>? bitolas,
   }) async {
+    _bitolas = (bitolas != null && bitolas.isNotEmpty)
+        ? bitolas
+        : BackendClient.bitolas.data;
     final pdf = pw.Document();
     for (final elem in pedido.elementos) {
       final elemDetalhamento = detalhamento.elementos.where((e) => e.id == elem.elementoId).firstOrNull;
@@ -84,6 +91,7 @@ class PdfEtiquetaPedidoTecnico {
     FormaModel? formaDef,
   }) {
     final id = pedido.identificador.isNotEmpty ? pedido.identificador : 'PT ${pedido.codigo.toString().padLeft(3, '0')}';
+    final pesoPos = _calcularPesoPosicao(pos);
     final bitolaStr = pos.bitolaNome.split('-').first.trim();
     final compUnit = pos.comprimentos.values.fold<double>(0.0, (s, v) => s + v);
     final compCorteRaw = pos.comprimentoDeCorte > 0 ? pos.comprimentoDeCorte : compUnit.toDouble();
@@ -135,11 +143,6 @@ class PdfEtiquetaPedidoTecnico {
       compCorteStr = '${compCorteRaw == compCorteRaw.roundToDouble() ? compCorteRaw.toInt() : compCorteRaw.toStringAsFixed(1)} cm';
     }
 
-    // Trechos: "A=30  B=40  C=86*"
-    final trechosStr = pos.comprimentos.entries
-        .map((e) => '${e.key}=${e.value}cm${(pos.variaveis[e.key] ?? false) ? '*' : ''}')
-        .join('   ');
-
     return pw.Padding(
       padding: const pw.EdgeInsets.all(7),
       child: pw.Column(
@@ -168,24 +171,34 @@ class PdfEtiquetaPedidoTecnico {
           ),
           pw.SizedBox(height: 3),
 
-          // 3 ── ELEMENTO
-          _boxPreta(radius: 5, vPad: 4,
-            child: pw.Row(children: [
-              pw.Expanded(child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-                pw.Text('ELEMENTO', style: _sTarjaLabel),
-                pw.Text(elem.elementoNome.isEmpty ? '-' : elem.elementoNome, style: _sTarjaGrande, maxLines: 1),
-              ])),
-              pw.Container(width: 0.8, height: 24, color: _corBranco),
-              pw.SizedBox(width: 8),
-              pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.center, children: [
-                pw.Text('QTDE', style: _sTarjaLabel),
-                pw.Text('${elem.quantidadeSolicitada}', style: _sTarjaValor),
-              ]),
-            ]),
+          // 3 ── ELEMENTO (palavra "ELEMENTO" suprimida, fonte ampliada)
+          _boxPreta(radius: 5, vPad: 5,
+            child: pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.center,
+              children: [
+                pw.Expanded(
+                  child: pw.Text(
+                    elem.elementoNome.isEmpty ? '-' : elem.elementoNome,
+                    style: _sTarjaGrande,
+                    maxLines: 1,
+                  ),
+                ),
+                pw.Container(width: 0.8, height: 26, color: _corBranco),
+                pw.SizedBox(width: 8),
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.center,
+                  mainAxisSize: pw.MainAxisSize.min,
+                  children: [
+                    pw.Text('QTDE', style: _sTarjaLabel),
+                    pw.Text('${elem.quantidadeSolicitada}', style: _sTarjaValor),
+                  ],
+                ),
+              ],
+            ),
           ),
           pw.SizedBox(height: 3),
 
-          // 4 ── POSIÇÃO
+          // 4 ── POSIÇÃO (FORMA substituída por PESO)
           _boxBranca(radius: 5, vPad: 4,
             child: pw.Column(children: [
               pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceAround, children: [
@@ -195,7 +208,7 @@ class PdfEtiquetaPedidoTecnico {
                 pw.Container(width: 0.8, height: 28, color: _corPreto),
                 _col('BITOLA', bitolaStr),
                 pw.Container(width: 0.8, height: 28, color: _corPreto),
-                _col('FORMA', pos.formaCodigo),
+                _col('PESO', '${pesoPos.toStringAsFixed(2)} kg'),
               ]),
               pw.Container(margin: const pw.EdgeInsets.symmetric(vertical: 3), height: 0.8, color: _corPreto),
               pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceAround, children: [
@@ -246,6 +259,53 @@ class PdfEtiquetaPedidoTecnico {
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────
+  static double _massaLinear(PosicaoModel pos) {
+    final produto = _bitolas.where((p) => p.id == pos.bitolaId).firstOrNull;
+    if (produto != null && produto.massaFinal > 0) {
+      return produto.massaFinal;
+    }
+    final str = pos.bitolaNome.split('-').first.replaceAll(RegExp(r'[^0-9.]'), '');
+    final d = double.tryParse(str) ?? 0;
+    return (d * d) / 162;
+  }
+
+  static double _calcularPesoPosicao(PosicaoModel pos) {
+    final w = _massaLinear(pos);
+    if (w <= 0 || pos.qtde <= 0) return 0;
+
+    final temVar = pos.variaveisConfig.isNotEmpty &&
+        pos.variaveis.values.any((v) => v);
+
+    if (!temVar) {
+      final somaCm = pos.comprimentos.values.fold<double>(0.0, (s, v) => s + v);
+      return (somaCm / 100.0) * w * pos.qtde;
+    }
+
+    double pesoTotal = 0;
+    for (int peca = 0; peca < pos.qtde; peca++) {
+      double somaCm = 0.0;
+      for (final entry in pos.comprimentos.entries) {
+        final trecho = entry.key;
+        final isVar = pos.variaveis[trecho] ?? false;
+        if (isVar) {
+          final config = pos.variaveisConfig[trecho]
+              ?? pos.variaveisConfig.values.firstOrNull;
+          if (config != null && config.inicial > 0 && config.final_ > 0) {
+            final expandidas = config.medidasExpandidas(pos.multiplicador);
+            somaCm += peca < expandidas.length
+                ? expandidas[peca].toDouble()
+                : (expandidas.isNotEmpty ? expandidas.last.toDouble() : 0.0);
+          } else {
+            somaCm += entry.value;
+          }
+        } else {
+          somaCm += entry.value;
+        }
+      }
+      pesoTotal += (somaCm / 100.0) * w;
+    }
+    return pesoTotal;
+  }
   static pw.Widget _boxPreta({required pw.Widget child, double radius = 5, double vPad = 6}) =>
       pw.Container(
         width: double.infinity,
@@ -286,22 +346,6 @@ class PdfEtiquetaPedidoTecnico {
         pw.Text('($mult x ${qtde ~/ mult})', style: pw.TextStyle(fontSize: 6, color: _corPreto)),
       ],
     ]);
-  }
-
-  static List<pw.Widget> _variaveisExpandidas(PosicaoModel pos) {
-    final result = <pw.Widget>[];
-    for (final entry in pos.variaveis.entries.where((e) => e.value)) {
-      final config = pos.variaveisConfig[entry.key] ?? pos.variaveisConfig.values.firstOrNull;
-      if (config == null || config.inicial <= 0) continue;
-      final expandidas = config.medidasExpandidas(pos.multiplicador);
-      final medidasStr = expandidas.isNotEmpty ? expandidas.join(', ') : config.medidas.join(', ');
-      result.add(pw.SizedBox(height: 2));
-      result.add(pw.Text(
-        '${entry.key}* ${pos.multiplicador > 1 ? 'x${pos.multiplicador}  ' : ''}> $medidasStr cm',
-        style: _sMini,
-      ));
-    }
-    return result;
   }
 
   // ── Desenho da forma — labels desenhados NO canvas para coordenadas corretas
@@ -362,10 +406,11 @@ class PdfEtiquetaPedidoTecnico {
         final cW = constraints!.maxWidth > 0 ? constraints.maxWidth : 200.0;
         final cH = constraints.maxHeight > 0 ? constraints.maxHeight : 150.0;
 
-    final pad = math.min(cW, cH) * 0.12;
+      final pad = math.min(cW, cH) * 0.12;
       final dw = cW - pad * 2, dh = cH - pad * 2;
       final lw = mxX - mnX, lh = mxY - mnY;
-      final esc = (lw == 0 && lh == 0) ? 1.0 : math.min(dw / (lw == 0 ? 1 : lw), dh / (lh == 0 ? 1 : lh));
+      final escBase = (lw == 0 && lh == 0) ? 1.0 : math.min(dw / (lw == 0 ? 1 : lw), dh / (lh == 0 ? 1 : lh));
+      final esc = escBase * 0.60;
       final ox = (cW - lw * esc) / 2 - mnX * esc;
       final oy = (cH - lh * esc) / 2 - mnY * esc;
 
@@ -398,8 +443,8 @@ class PdfEtiquetaPedidoTecnico {
         } else {
           label = (medidas[trecho] ?? itens[i].comprimento).toString();
         }
-        final boxW = label.length * 2.5 + 5;
-        const boxH = 7.0;
+        final boxW = label.length * 4.5 + 6;
+        const boxH = 9.0;
         final lx = (midX - boxW / 2).clamp(1.0, cW - boxW);
         final ly = (midY - boxH / 2).clamp(1.0, cH - boxH);
         labels.add((x: lx, y: ly, texto: label));
@@ -465,13 +510,19 @@ class PdfEtiquetaPedidoTecnico {
               left: lbl.x,
               top: lbl.y,
               child: pw.Container(
-                padding: const pw.EdgeInsets.symmetric(horizontal: 2, vertical: 0.5),
-                decoration: pw.BoxDecoration(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 2.5, vertical: 1),
+                decoration: const pw.BoxDecoration(
                   color: _corPreto,
-                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(2)),
+                  borderRadius: pw.BorderRadius.all(pw.Radius.circular(2)),
                 ),
-                child: pw.Text(lbl.texto,
-                    style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: _corBranco)),
+                child: pw.Text(
+                  lbl.texto,
+                  style: pw.TextStyle(
+                    fontSize: 8.5,
+                    fontWeight: pw.FontWeight.bold,
+                    color: _corBranco,
+                  ),
+                ),
               ),
             ),
         ]),
@@ -488,6 +539,7 @@ class PdfEtiquetaPedidoTecnico {
     required PosicaoModel pos,
   }) {
     final id = pedido.identificador.isNotEmpty ? pedido.identificador : 'PT ${pedido.codigo.toString().padLeft(3, '0')}';
+    final pesoPos = _calcularPesoPosicao(pos);
 
     // Medidas expandidas por trecho variável
     final medidasPorTrecho = <String, List<int>>{};
@@ -511,14 +563,14 @@ class PdfEtiquetaPedidoTecnico {
           ),
           pw.SizedBox(height: 3),
 
-          // POS / BITOLA / FORMA / QTDE
+          // POS / BITOLA / PESO / QTDE
           _boxBranca(radius: 5, vPad: 4,
             child: pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceAround, children: [
               _col('POS', '${pos.posicao}', fontSize: 15),
               pw.Container(width: 0.8, height: 28, color: _corPreto),
               _col('BITOLA', pos.bitolaNome.split('-').first.trim()),
               pw.Container(width: 0.8, height: 28, color: _corPreto),
-              _col('FORMA', pos.formaCodigo),
+              _col('PESO', '${pesoPos.toStringAsFixed(2)} kg'),
               pw.Container(width: 0.8, height: 28, color: _corPreto),
               _colQtdeMult(pos),
             ]),
@@ -630,6 +682,7 @@ class PdfEtiquetaPedidoTecnico {
     required PosicaoModel pos,
   }) {
     final id = pedido.identificador.isNotEmpty ? pedido.identificador : 'PT ${pedido.codigo.toString().padLeft(3, '0')}';
+    final pesoPos = _calcularPesoPosicao(pos);
 
     // Comprimento total por peça
     final comprimentosPorPeca = <double>[];
@@ -673,14 +726,14 @@ class PdfEtiquetaPedidoTecnico {
           ),
           pw.SizedBox(height: 3),
 
-          // POS / BITOLA / FORMA / QTDE
+          // POS / BITOLA / PESO / QTDE
           _boxBranca(radius: 5, vPad: 4,
             child: pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceAround, children: [
               _col('POS', '${pos.posicao}', fontSize: 15),
               pw.Container(width: 0.8, height: 28, color: _corPreto),
               _col('BITOLA', pos.bitolaNome.split('-').first.trim()),
               pw.Container(width: 0.8, height: 28, color: _corPreto),
-              _col('FORMA', pos.formaCodigo),
+              _col('PESO', '${pesoPos.toStringAsFixed(2)} kg'),
               pw.Container(width: 0.8, height: 28, color: _corPreto),
               _colQtdeMult(pos),
             ]),

@@ -113,7 +113,7 @@ class PosicaoCreateModel {
   PosicaoCreateModel() : id = HashService.get;
 
   PosicaoCreateModel.fromModel(PosicaoModel modelo) : id = modelo.id {
-    posicao.text = modelo.posicao > 0 ? modelo.posicao.toString() : '';
+    posicao.text = modelo.posicao;
     qtde.text = modelo.qtde > 0 ? modelo.qtde.toString() : '';
     comprimentos = Map<String, double>.from(modelo.comprimentos);
     variaveis = Map<String, bool>.from(modelo.variaveis);
@@ -130,7 +130,7 @@ class PosicaoCreateModel {
 
   PosicaoModel toPosicaoModel() => PosicaoModel(
         id: id,
-        posicao: int.tryParse(posicao.text) ?? 0,
+        posicao: posicao.text.trim(),
         bitolaId: bitolaSelecionada?.id ?? '',
         bitolaNome: bitolaSelecionada?.label ?? '',
         formaId: formaSelecionada?.id ?? '',

@@ -7,6 +7,7 @@ import 'package:acoplan/app/core/utils/global_resource.dart';
 import 'package:acoplan/app/modules/usuario/ui/usuario_tipo_page.dart';
 import 'package:acoplan/app/modules/usuario/ui/usuarios_page.dart';
 import 'package:acoplan/app/modules/backup/ui/backups_page.dart';
+import 'package:acoplan/app/modules/config/config_gerais_page.dart';
 import 'package:acoplan/app/modules/config/plugin_cad_page.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -68,9 +69,7 @@ class ConfigPage extends StatelessWidget {
             Icons.settings_suggest_outlined,
             'Configurações Gerais',
             'Parâmetros globais do sistema',
-            () {
-              // Placeholder
-            },
+            () => push(context, const ConfigGeraisPage()),
           ),
           const Divisor(),
           _buildItem(

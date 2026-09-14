@@ -427,12 +427,12 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> with Fo
       if (_pNum.text.trim().isEmpty) return;    // campo vazio: ignora
       final elem = _elemAtual;
       if (elem == null) return;
-      final num = int.tryParse(_pNum.text) ?? 0;
-      final existe = elem.posicoes.any((p) => (int.tryParse(p.posicao.text) ?? -1) == num);
+      final posTexto = _pNum.text.trim().toUpperCase();
+      final existe = elem.posicoes.any((p) => p.posicao.text.trim().toUpperCase() == posTexto);
       if (existe) {
         NotificationService.showNegative(
           'Posição já existe',
-          'Clique na posição $num para editá-la',
+          'Clique na posição $posTexto para editá-la',
           position: NotificationPosition.bottom,
         );
         Future.microtask(() {
@@ -1943,8 +1943,12 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> with Fo
                 const SizedBox(height: 4),
                 TextField(
                   controller: _pNum.controller, focusNode: _pNum.focus,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  keyboardType: TextInputType.text,
+                  textCapitalization: TextCapitalization.characters,
+                  inputFormatters: [
+                    LengthLimitingTextInputFormatter(6),
+                    FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9_\-]')),
+                  ],
                   style: AppCss.smallRegular,
                   readOnly: _editandoPosicao,
                   decoration: InputDecoration(
@@ -1971,11 +1975,11 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> with Fo
                   ),
                   onSubmitted: (_) {
                     // Só avança se não houver duplicata (o listener de foco também verifica)
-                    final num = int.tryParse(_pNum.text) ?? 0;
+                    final posTexto = _pNum.text.trim().toUpperCase();
                     final elem = _elemAtual;
                     final duplicata = _posicaoSelecionada == null &&
                         elem != null &&
-                        elem.posicoes.any((p) => (int.tryParse(p.posicao.text) ?? -1) == num);
+                        elem.posicoes.any((p) => p.posicao.text.trim().toUpperCase() == posTexto);
                     if (!duplicata) _fnBitola.requestFocus();
                   },
                 ),
@@ -2133,7 +2137,11 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> with Fo
                           child: Row(
                             children: [
                               Text(
-                                'N${p.posicao.text}',
+                                p.posicao.text.trim().toUpperCase().startsWith('N')
+                                    ? p.posicao.text.trim().toUpperCase()
+                                    : (int.tryParse(p.posicao.text.trim()) != null
+                                        ? 'N${p.posicao.text.trim()}'
+                                        : p.posicao.text.trim().toUpperCase()),
                                 style: AppCss.minimumBold.setColor(Colors.white).setSize(13),
                               ),
                               Text(
@@ -2566,7 +2574,8 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> with Fo
   }
 
   void _addPos(ElementoCreateModel elem) async {
-    if (_pNum.text.trim().isEmpty) return;
+    final posTexto = _pNum.text.trim().toUpperCase();
+    if (posTexto.isEmpty) return;
     // Validar campos obrigatórios
     if (_pBitola == null) {
       NotificationService.showNegative('Bitola obrigatória', 'Informe a bitola antes de continuar', position: NotificationPosition.bottom);
@@ -2578,12 +2587,11 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> with Fo
       _fnForma.requestFocus();
       return;
     }
-    final num = int.tryParse(_pNum.text) ?? 0;
     
-    // Se posição com esse número já existe e não está em edição, bloquear
-    final posExistente = elem.posicoes.where((p) => (int.tryParse(p.posicao.text) ?? -1) == num).firstOrNull;
+    // Se posição com esse identificador já existe e não está em edição, bloquear
+    final posExistente = elem.posicoes.where((p) => p.posicao.text.trim().toUpperCase() == posTexto).firstOrNull;
     if (posExistente != null && _posicaoSelecionada == null) {
-      NotificationService.showNegative('Posição já existe', 'Clique na posição $num para editá-la', position: NotificationPosition.bottom);
+      NotificationService.showNegative('Posição já existe', 'Clique na posição $posTexto para editá-la', position: NotificationPosition.bottom);
       return;
     }
     if (posExistente != null && _posicaoSelecionada != null) {
@@ -2630,7 +2638,7 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> with Fo
       return;
     }
     final n = PosicaoCreateModel();
-    n.posicao.text = _pNum.text;
+    n.posicao.text = posTexto;
     n.bitolaSelecionada = _pBitola;
     n.formaSelecionada = _pForma;
     n.descontoDobraSnapshot = _pForma!.descontoDobra;

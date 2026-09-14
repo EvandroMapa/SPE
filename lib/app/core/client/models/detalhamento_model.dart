@@ -352,7 +352,7 @@ class ElementoModel {
 
 class PosicaoModel {
   final String id;
-  final int posicao;
+  final String posicao;
   final String bitolaId;
   final String bitolaNome;
   final String formaId;
@@ -394,7 +394,7 @@ class PosicaoModel {
 
   factory PosicaoModel.empty() => PosicaoModel(
         id: HashService.get,
-        posicao: 0,
+        posicao: '',
         bitolaId: '',
         bitolaNome: '',
         formaId: '',
@@ -410,7 +410,7 @@ class PosicaoModel {
   factory PosicaoModel.fromSupabaseMap(Map<String, dynamic> map) {
     return PosicaoModel(
       id: map['id'] ?? '',
-      posicao: int.tryParse(map['posicao']?.toString() ?? '0') ?? 0,
+      posicao: (map['posicao']?.toString() ?? '').trim(),
       bitolaId: map['bitola_id'] ?? '',
       bitolaNome: map['bitola_nome'] ?? '',
       formaId: map['forma_id'] ?? '',

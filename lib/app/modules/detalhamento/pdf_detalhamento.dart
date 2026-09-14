@@ -151,7 +151,7 @@ class PdfDetalhamento {
                                   pw.Row(
                                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                                     children: [
-                                      buildColumn('Posição', pos.posicao.toString(), isBold: true),
+                                      buildColumn('Posição', pos.posicao, isBold: true),
                                       buildColumn('Bitola', bitolaStr),
                                       buildColumn('Qtde', pos.qtde.toString()),
                                       buildColumn('Compr. Unit', '$compUnitario'),

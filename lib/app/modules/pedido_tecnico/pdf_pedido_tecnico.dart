@@ -407,7 +407,7 @@ class PdfPedidoTecnico {
                           ...elemDetalhamento.posicoes.map((pos) =>
                               pw.TableRow(
                                 children: [
-                                  _celTbl('${pos.posicao}', estCelula,
+                                  _celTbl(pos.posicao, estCelula,
                                       align: pw.Alignment.center),
                                   _celTbl(pos.bitolaNome, estCelula),
                                   _celTbl(pos.formaCodigo, estCelula),

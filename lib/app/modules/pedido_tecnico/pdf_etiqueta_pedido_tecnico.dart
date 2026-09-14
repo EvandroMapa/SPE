@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
+import 'package:acoplan/app/app_controller.dart';
 import 'package:acoplan/app/core/client/backend_client.dart';
 import 'package:acoplan/app/core/client/models/bitola_model.dart';
 import 'package:acoplan/app/core/client/models/forma_model.dart';
@@ -9,7 +10,7 @@ import 'package:acoplan/app/core/client/models/trecho_variavel_config.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
-/// Etiqueta 9 × 14 cm — impressora térmica — só preto/branco
+/// Etiqueta 8.7 × 13.7 cm — impressora térmica — só preto/branco
 class PdfEtiquetaPedidoTecnico {
   static const _corPreto = PdfColors.black;
   static const _corBranco = PdfColors.white;
@@ -17,8 +18,8 @@ class PdfEtiquetaPedidoTecnico {
   static List<BitolaModel> _bitolas = [];
 
   static final _formato = PdfPageFormat(
-    9 * PdfPageFormat.cm,
-    14 * PdfPageFormat.cm,
+    8.7 * PdfPageFormat.cm,
+    13.7 * PdfPageFormat.cm,
     marginAll: 0,
   );
 
@@ -41,8 +42,10 @@ class PdfEtiquetaPedidoTecnico {
     required DetalhamentoModel detalhamento,
     required List<FormaModel> formasCadastradas,
     List<BitolaModel>? bitolas,
+    bool? rotacionar180,
     void Function(int atual, int total)? onProgress,
   }) async {
+    final bool deveRotacionar = rotacionar180 ?? appCtrl.etiquetaRotacao180;
     _bitolas = (bitolas != null && bitolas.isNotEmpty)
         ? bitolas
         : BackendClient.bitolas.data;
@@ -78,13 +81,16 @@ class PdfEtiquetaPedidoTecnico {
         pdf.addPage(pw.Page(
           pageFormat: _formato,
           margin: pw.EdgeInsets.zero,
-          build: (_) => _buildEtiqueta(
-            pedido: pedido,
-            detalhamento: detalhamento,
-            elem: elem,
-            elemDetalhamento: elemDetalhamento,
-            pos: pos,
-            formaDef: formaDef,
+          build: (_) => _wrapRotacao(
+            _buildEtiqueta(
+              pedido: pedido,
+              detalhamento: detalhamento,
+              elem: elem,
+              elemDetalhamento: elemDetalhamento,
+              pos: pos,
+              formaDef: formaDef,
+            ),
+            rotacionar180: deveRotacionar,
           ),
         ));
         paginaAtual++;
@@ -96,9 +102,12 @@ class PdfEtiquetaPedidoTecnico {
           pdf.addPage(pw.Page(
             pageFormat: _formato,
             margin: pw.EdgeInsets.zero,
-            build: (_) => _buildEtiquetaTrechosVar(
-              pedido: pedido, elem: elem, elemDetalhamento: elemDetalhamento,
-              pos: pos,
+            build: (_) => _wrapRotacao(
+              _buildEtiquetaTrechosVar(
+                pedido: pedido, elem: elem, elemDetalhamento: elemDetalhamento,
+                pos: pos,
+              ),
+              rotacionar180: deveRotacionar,
             ),
           ));
           paginaAtual++;
@@ -106,9 +115,12 @@ class PdfEtiquetaPedidoTecnico {
           pdf.addPage(pw.Page(
             pageFormat: _formato,
             margin: pw.EdgeInsets.zero,
-            build: (_) => _buildEtiquetaComprimentos(
-              pedido: pedido, elem: elem, elemDetalhamento: elemDetalhamento,
-              pos: pos,
+            build: (_) => _wrapRotacao(
+              _buildEtiquetaComprimentos(
+                pedido: pedido, elem: elem, elemDetalhamento: elemDetalhamento,
+                pos: pos,
+              ),
+              rotacionar180: deveRotacionar,
             ),
           ));
           paginaAtual++;
@@ -128,6 +140,13 @@ class PdfEtiquetaPedidoTecnico {
   }
 
   // ── Layout ───────────────────────────────────────────────────────────────
+  static pw.Widget _wrapRotacao(pw.Widget child, {bool rotacionar180 = false}) {
+    if (!rotacionar180) return child;
+    return pw.Transform.rotateBox(
+      angle: math.pi,
+      child: child,
+    );
+  }
   static pw.Widget _buildEtiqueta({
     required PedidoTecnicoModel pedido,
     required DetalhamentoModel detalhamento,
@@ -289,7 +308,7 @@ class PdfEtiquetaPedidoTecnico {
           _boxBranca(radius: 5, vPad: 4,
             child: pw.Column(children: [
               pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceAround, children: [
-                _col('POS', '${pos.posicao}'),
+                _col('POS', pos.posicao),
                 pw.Container(width: 0.8, height: 28, color: _corPreto),
                 _colQtdeMult(pos),
                 pw.Container(width: 0.8, height: 28, color: _corPreto),
@@ -707,7 +726,7 @@ class PdfEtiquetaPedidoTecnico {
           // POS / BITOLA / PESO / QTDE
           _boxBranca(radius: 5, vPad: 4,
             child: pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceAround, children: [
-              _col('POS', '${pos.posicao}'),
+              _col('POS', pos.posicao),
               pw.Container(width: 0.8, height: 28, color: _corPreto),
               _col('BITOLA', _limpar(pos.bitolaNome.split('-').first.trim())),
               pw.Container(width: 0.8, height: 28, color: _corPreto),
@@ -874,7 +893,7 @@ class PdfEtiquetaPedidoTecnico {
           // POS / BITOLA / PESO / QTDE
           _boxBranca(radius: 5, vPad: 4,
             child: pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceAround, children: [
-              _col('POS', '${pos.posicao}'),
+              _col('POS', pos.posicao),
               pw.Container(width: 0.8, height: 28, color: _corPreto),
               _col('BITOLA', _limpar(pos.bitolaNome.split('-').first.trim())),
               pw.Container(width: 0.8, height: 28, color: _corPreto),

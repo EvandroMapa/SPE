@@ -20,6 +20,9 @@ class AppController {
   final AppStream<UsuarioModel?> usuarioStream = AppStream<UsuarioModel?>.seed(null);
   UsuarioModel? get usuario => usuarioStream.valueOrNull;
 
+  final AppStream<bool> etiquetaRotacao180Stream = AppStream<bool>.seed(false);
+  bool get etiquetaRotacao180 => etiquetaRotacao180Stream.value;
+
   Future<void> onInit() async {
     final cachedUser = await AppRepository.get();
     if (cachedUser != null) {
@@ -29,8 +32,9 @@ class AppController {
       usuarioCtrl.usuarioStream.add(finalUser);
     }
     
-    // Sincroniza a chave de API global a partir do Supabase
+    // Sincroniza a chave de API global e configurações gerais a partir do Supabase
     await syncGlobalApiKey();
+    await syncEtiquetaRotacao180();
   }
 
   Future<void> setCurrentUser(UsuarioModel user, bool keepConnected) async {
@@ -42,8 +46,9 @@ class AppController {
       await AppRepository.removeUser();
     }
     
-    // Sincroniza a chave de API global a partir do Supabase ao logar
+    // Sincroniza configurações ao logar
     await syncGlobalApiKey();
+    await syncEtiquetaRotacao180();
   }
 
   void logout() {
@@ -89,6 +94,44 @@ class AppController {
       await SupabaseService.client.from('configuracoes').upsert({
         'chave': 'gemini_api_key',
         'valor': apiKey.trim(),
+      });
+    } catch (e) {
+      // Ignora silenciosamente caso a tabela 'configuracoes' ainda não exista no Supabase
+    }
+  }
+
+  Future<void> syncEtiquetaRotacao180() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final localVal = prefs.getBool('etiqueta_rotacao_180') ?? false;
+      etiquetaRotacao180Stream.add(localVal);
+
+      final response = await SupabaseService.client
+          .from('configuracoes')
+          .select('valor')
+          .eq('chave', 'etiqueta_rotacao_180')
+          .maybeSingle();
+
+      if (response != null) {
+        final dbVal = response['valor'] == 'true';
+        if (dbVal != localVal) {
+          await prefs.setBool('etiqueta_rotacao_180', dbVal);
+          etiquetaRotacao180Stream.add(dbVal);
+        }
+      }
+    } catch (e) {
+      // Ignora silenciosamente caso a tabela 'configuracoes' ainda não exista no Supabase
+    }
+  }
+
+  Future<void> saveEtiquetaRotacao180(bool valor) async {
+    etiquetaRotacao180Stream.add(valor);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('etiqueta_rotacao_180', valor);
+      await SupabaseService.client.from('configuracoes').upsert({
+        'chave': 'etiqueta_rotacao_180',
+        'valor': valor ? 'true' : 'false',
       });
     } catch (e) {
       // Ignora silenciosamente caso a tabela 'configuracoes' ainda não exista no Supabase

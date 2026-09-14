@@ -2,6 +2,7 @@ import 'package:acoplan/app/app_controller.dart';
 import 'package:acoplan/app/core/enums/app_module.dart';
 import 'package:acoplan/app/core/utils/app_colors.dart';
 import 'package:acoplan/app/core/utils/app_css.dart';
+import 'package:acoplan/app/core/utils/app_env.dart';
 import 'package:acoplan/app/modules/base/base_controller.dart';
 import 'package:acoplan/app/modules/config/config_page.dart';
 import 'package:flutter/material.dart';
@@ -59,23 +60,45 @@ class _AppDrawerMenuState extends State<AppDrawerMenu> {
                         ),
                       ),
                     ),
-                    // Botão Configurações
-                    InkWell(
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        Navigator.of(context).push(MaterialPageRoute(
-                          builder: (_) => const ConfigPage(),
-                        ));
-                      },
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        child: const Icon(
-                          Icons.settings_outlined,
-                          color: Colors.white70,
-                          size: 22,
+                    // Botão Versão e Configurações
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            'v$kAppVersion • $kBuildHash',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: 6),
+                        InkWell(
+                          onTap: () {
+                            Navigator.of(context).pop();
+                            Navigator.of(context).push(MaterialPageRoute(
+                              builder: (_) => const ConfigPage(),
+                            ));
+                          },
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            child: const Icon(
+                              Icons.settings_outlined,
+                              color: Colors.white70,
+                              size: 22,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

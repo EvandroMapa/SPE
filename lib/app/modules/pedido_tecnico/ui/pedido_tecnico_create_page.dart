@@ -75,11 +75,17 @@ class _PedidoTecnicoCreatePageState
     super.dispose();
   }
 
+  PedidoTecnicoModel? get _pedidoAtual {
+    final id = widget.pedido?.id ?? pedidoTecnicoCtrl.form.id;
+    if (id == null || id.isEmpty) return widget.pedido;
+    return BackendClient.pedidosTecnicos.data
+        .where((p) => p.id == id)
+        .firstOrNull ?? widget.pedido;
+  }
+
   Future<void> _confirmDelete() async {
-    // Buscar pedido atualizado do cache (widget.pedido é estático)
-    final pedido = BackendClient.pedidosTecnicos.data
-        .where((p) => p.id == widget.pedido!.id)
-        .firstOrNull ?? widget.pedido!;
+    final pedido = _pedidoAtual;
+    if (pedido == null) return;
 
     // Bloquear exclusão se o pedido tem elementos
     if (pedido.elementos.isNotEmpty) {
@@ -112,7 +118,7 @@ class _PedidoTecnicoCreatePageState
       builder: (ctx) => AlertDialog(
         title: const Text('Excluir Pedido Técnico'),
         content: Text(
-            'Deseja realmente excluir o Pedido Técnico ${widget.pedido!.codigo}?\nEsta ação não poderá ser desfeita e os elementos voltarão a ficar disponíveis.'),
+            'Deseja realmente excluir o Pedido Técnico ${pedido.codigo}?\nEsta ação não poderá ser desfeita e os elementos voltarão a ficar disponíveis.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -131,7 +137,7 @@ class _PedidoTecnicoCreatePageState
     );
 
     if (confirmar == true && mounted) {
-      await BackendClient.pedidosTecnicos.delete(widget.pedido!);
+      await BackendClient.pedidosTecnicos.delete(pedido);
       if (mounted) {
         pop(context);
         NotificationService.showPositive(
@@ -144,14 +150,11 @@ class _PedidoTecnicoCreatePageState
   }
 
   void _gerarPdf({required bool completo}) async {
-    if (widget.pedido == null) return;
-    // Buscar pedido atualizado do cache (widget.pedido é estático)
-    final pedido = BackendClient.pedidosTecnicos.data
-        .where((p) => p.id == widget.pedido!.id)
-        .firstOrNull ?? widget.pedido!;
+    final pedido = _pedidoAtual;
+    if (pedido == null) return;
     final det = BackendClient.detalhamentos.data
         .where((p) => p.id == pedido.detalhamentoId)
-        .firstOrNull;
+        .firstOrNull ?? _detalhamentoSel;
 
     final pdfBytes = await PdfPedidoTecnico.gerar(
       pedido: pedido,
@@ -168,17 +171,14 @@ class _PedidoTecnicoCreatePageState
   }
 
   void _gerarEtiqueta() async {
-    if (widget.pedido == null) {
+    final pedido = _pedidoAtual;
+    if (pedido == null) {
       NotificationService.showNegative('Pedido não salvo', 'Salve o pedido antes de gerar etiquetas.', position: NotificationPosition.bottom);
       return;
     }
-    // Buscar pedido atualizado do cache (widget.pedido é estático)
-    final pedido = BackendClient.pedidosTecnicos.data
-        .where((p) => p.id == widget.pedido!.id)
-        .firstOrNull ?? widget.pedido!;
     final det = BackendClient.detalhamentos.data
         .where((p) => p.id == pedido.detalhamentoId)
-        .firstOrNull;
+        .firstOrNull ?? _detalhamentoSel;
     if (det == null) return;
 
     final formas = BackendClient.formas.data;
@@ -194,8 +194,8 @@ class _PedidoTecnicoCreatePageState
   }
 
   void _cancelarOuReabrir() {
-    if (widget.pedido == null) return;
-    final pedido = widget.pedido!;
+    final pedido = _pedidoAtual;
+    if (pedido == null) return;
     if (pedido.isAberto) {
       showDialog(
         context: context,
@@ -264,7 +264,7 @@ class _PedidoTecnicoCreatePageState
   bool get _hasUnsavedChanges {
     final form = pedidoTecnicoCtrl.form;
     if (form.isEdit) {
-      return _obsCtrl.text.trim() != (widget.pedido?.observacao ?? '');
+      return _obsCtrl.text.trim() != (_pedidoAtual?.observacao ?? '');
     } else {
       return _clienteSel != null ||
           _obraSel != null ||
@@ -380,15 +380,15 @@ class _PedidoTecnicoCreatePageState
             ),
           ),
         ),
-        actions: widget.pedido != null
+        actions: _pedidoAtual != null
             ? [
                 Tooltip(
-                  message: widget.pedido!.isAberto
+                  message: _pedidoAtual!.isAberto
                       ? 'Cancelar Pedido'
                       : 'Reabrir Pedido',
                   child: IconButton(
                     icon: Icon(
-                      widget.pedido!.isAberto
+                      _pedidoAtual!.isAberto
                           ? Icons.pause_circle_outline
                           : Icons.play_circle_outline,
                       color: Colors.white70,
@@ -1970,18 +1970,26 @@ class _PedidoTecnicoCreatePageState
           .expand((e) {
             // Calcular peso unitário (1 peça) a partir das posições
             final pesoUnitCalculado = e.calcularPesoUnitario(bitolas);
-            final pesoUnit = e.pesoTotal > 0 && e.quantidade > 0
-                ? e.pesoTotal / e.quantidade
+            final pesoUnit = e.pesoTotal > 0 && e.quantidadeExpandida > 0
+                ? e.pesoTotal / e.quantidadeExpandida
                 : pesoUnitCalculado;
-            final pesoTotalCalc = pesoUnit * e.quantidade;
-            return e.todosNomes.map((nome) => ElementoModel(
-                  id: e.id,
-                  nome: nome,
-                  quantidade: e.quantidade,
-                  pesoTotal: pesoTotalCalc,
-                  posicoes: e.posicoes,
-                  elementosEquivalentes: const [],
-                ));
+            return e.todosNomes.map((nome) {
+              final qtdeItem = nome == e.nome
+                  ? e.quantidade
+                  : (e.elementosEquivalentes
+                          .where((eq) => eq.nome == nome)
+                          .firstOrNull
+                          ?.quantidade ??
+                      1);
+              return ElementoModel(
+                id: e.id,
+                nome: nome,
+                quantidade: qtdeItem,
+                pesoTotal: pesoUnit * qtdeItem,
+                posicoes: e.posicoes,
+                elementosEquivalentes: const [],
+              );
+            });
           })
           .where((e) => _elementosSelecionados.containsKey(_chave(e)))
           .map((e) => ElementoSelecionadoModel.fromElementoModel(

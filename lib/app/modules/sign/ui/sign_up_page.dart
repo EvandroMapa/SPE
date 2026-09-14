@@ -1,6 +1,7 @@
 import 'package:acoplan/app/core/components/app_scaffold.dart';
 import 'package:acoplan/app/core/models/text_controller.dart';
 import 'package:acoplan/app/core/utils/app_colors.dart';
+import 'package:acoplan/app/core/utils/app_env.dart';
 import 'package:acoplan/app/modules/sign/sign_controller.dart';
 import 'package:flutter/material.dart';
 
@@ -69,27 +70,32 @@ class SignUpPageState extends State<SignUpPage>
           ),
         ),
         child: Center(
-          child: FadeTransition(
-            opacity: _fadeAnim,
-            child: SlideTransition(
-              position: _slideAnim,
-              child: Container(
-                width: 400,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 40,
-                  vertical: 44,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.25),
-                      blurRadius: 40,
-                      offset: const Offset(0, 16),
-                    ),
-                  ],
-                ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+            child: FadeTransition(
+              opacity: _fadeAnim,
+              child: SlideTransition(
+                position: _slideAnim,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 400,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 40,
+                        vertical: 44,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.25),
+                            blurRadius: 40,
+                            offset: const Offset(0, 16),
+                          ),
+                        ],
+                      ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -253,11 +259,23 @@ class SignUpPageState extends State<SignUpPage>
                   ],
                 ),
               ),
-            ),
+              const SizedBox(height: 16),
+              Text(
+                'v$kAppVersion • $kBuildHash',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.white.withValues(alpha: 0.35),
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ],
           ),
         ),
       ),
-    );
+    ),
+  ),
+),
+);
   }
 
   Widget _buildField({

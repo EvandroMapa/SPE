@@ -228,8 +228,11 @@ class ElementoModel {
   /// Quantidade total: qtdePai + soma das quantidades dos equivalentes
   int get quantidadeExpandida => quantidade + elementosEquivalentes.fold(0, (s, e) => s + e.quantidade);
 
-  /// Peso expandido aproximado (usa peso_total do banco × qtde expandida)
-  double get pesoExpandido => pesoTotal * quantidadeExpandida;
+  /// Peso unitário de 1 peça (peso_total do banco dividido pela quantidade expandida)
+  double get pesoUnitario => quantidadeExpandida > 0 ? pesoTotal / quantidadeExpandida : 0;
+
+  /// O peso_total do elemento no banco já é o peso total expandido (pai + equivalentes)
+  double get pesoExpandido => pesoTotal;
 
   factory ElementoModel.empty() => ElementoModel(
         id: HashService.get,

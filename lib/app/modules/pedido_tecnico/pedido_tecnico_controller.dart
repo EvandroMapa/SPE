@@ -49,8 +49,8 @@ class PedidoTecnicoController {
       // Calcular peso unitário (1 peça) a partir das posições
       // Usa o valor do banco se disponível, senão calcula on-the-fly
       final pesoUnitCalculado = elem.calcularPesoUnitario(bitolas);
-      final pesoUnit = elem.pesoTotal > 0 && elem.quantidade > 0
-          ? elem.pesoTotal / elem.quantidade
+      final pesoUnit = elem.pesoTotal > 0 && elem.quantidadeExpandida > 0
+          ? elem.pesoTotal / elem.quantidadeExpandida
           : pesoUnitCalculado;
 
       // Itera sobre [pai, ...equivalentes] com a quantidade correta de cada um

@@ -54,8 +54,12 @@ class PedidoTecnicoModel {
 
   bool get isAberto => status == 'aberto';
 
-  double get pesoTotal =>
-      elementos.fold(0.0, (s, e) => s + e.pesoTotal);
+  double get pesoTotal {
+    final pesoResumo =
+        double.tryParse(resumoAco?['peso_total']?.toString() ?? '0') ?? 0;
+    if (pesoResumo > 0) return pesoResumo;
+    return elementos.fold(0.0, (s, e) => s + e.pesoTotal);
+  }
 
   factory PedidoTecnicoModel.fromSupabaseMap(
     Map<String, dynamic> map,

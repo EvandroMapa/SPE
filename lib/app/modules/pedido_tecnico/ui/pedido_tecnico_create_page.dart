@@ -14,6 +14,7 @@ import 'package:acoplan/app/modules/pedido_tecnico/pedido_tecnico_view_model.dar
 import 'package:acoplan/app/modules/pedido_tecnico/pdf_pedido_tecnico.dart';
 import 'package:acoplan/app/modules/pedido_tecnico/pdf_etiqueta_pedido_tecnico.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:overlay_support/overlay_support.dart';
 import 'package:printing/printing.dart';
 
@@ -39,6 +40,7 @@ class _PedidoTecnicoCreatePageState
   final _obsCtrl = TextEditingController();
 
   final Map<String, int> _elementosSelecionados = {};
+  Map<String, int> _elementosSelecionadosSalvos = {};
 
   String _chave(ElementoModel e) => '${e.id}_${e.nome}';
 
@@ -68,6 +70,7 @@ class _PedidoTecnicoCreatePageState
       for (final e in p.elementos) {
         _elementosSelecionados['${e.elementoId}_${e.elementoNome}'] = e.quantidadeSolicitada;
       }
+      _elementosSelecionadosSalvos = Map.from(_elementosSelecionados);
     }
   }
 
@@ -222,6 +225,7 @@ class _PedidoTecnicoCreatePageState
       await Future.delayed(const Duration(milliseconds: 100));
 
       await Printing.layoutPdf(
+        format: PdfEtiquetaPedidoTecnico.formato,
         onLayout: (format) async => pdfBytes,
         name: '${pedido.identificador.isNotEmpty ? pedido.identificador : 'PT-${pedido.codigo}'} - Etiquetas',
       );
@@ -304,7 +308,11 @@ class _PedidoTecnicoCreatePageState
     return list;
   }
 
+  bool get _temAlteracoesPendentesElementos =>
+      !mapEquals(_elementosSelecionados, _elementosSelecionadosSalvos);
+
   bool get _hasUnsavedChanges {
+    if (_temAlteracoesPendentesElementos) return true;
     final form = pedidoTecnicoCtrl.form;
     if (form.isEdit) {
       return _obsCtrl.text.trim() != (_pedidoAtual?.observacao ?? '');
@@ -332,7 +340,7 @@ class _PedidoTecnicoCreatePageState
         ),
         content: Text(
           isEdit 
-            ? 'Você alterou a observação. Deseja salvar antes de sair?'
+            ? 'Você tem alterações não salvas. Deseja salvar antes de sair?'
             : 'Você iniciou um novo pedido mas não selecionou elementos.\nDeseja salvar este pedido vazio antes de sair?',
         ),
         actions: [
@@ -360,7 +368,7 @@ class _PedidoTecnicoCreatePageState
     if (result == 1) {
       if (mounted) pop(context);
     } else if (result == 2) {
-      await _autoSalvarPedido();
+      await _salvarPedido(auto: true);
       if (mounted) pop(context);
     }
   }
@@ -787,7 +795,7 @@ class _PedidoTecnicoCreatePageState
           onTap: _detalhamentoSel != null
               ? () async {
                   if (!form.isEdit) {
-                    await _autoSalvarPedido();
+                    await _salvarPedido(auto: true);
                   }
                   setState(() => _sel = _Sec.elementos);
                 }
@@ -984,7 +992,6 @@ class _PedidoTecnicoCreatePageState
                         }
                       }
                     });
-                    _autoSalvarPedido();
                   },
                   borderRadius: BorderRadius.circular(8),
                   child: Container(
@@ -1240,7 +1247,6 @@ class _PedidoTecnicoCreatePageState
                 InkWell(
                   onTap: () {
                     setState(() => _elementosSelecionados.clear());
-                    _autoSalvarPedido();
                   },
                   borderRadius: BorderRadius.circular(8),
                   child: Container(
@@ -1347,6 +1353,55 @@ class _PedidoTecnicoCreatePageState
                 ),
                 const SizedBox(height: 10),
               ],
+              // Botão Salvar — aparece quando há alterações pendentes
+              if (_temAlteracoesPendentesElementos)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: InkWell(
+                    onTap: _salvando ? null : () => _salvarPedido(),
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF10B981),
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF10B981).withValues(alpha: 0.30),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Center(
+                        child: _salvando
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.save_outlined,
+                                      size: 17, color: Colors.white),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'SALVAR ELEMENTOS',
+                                    style: AppCss.minimumBold
+                                        .setColor(Colors.white)
+                                        .setSize(12)
+                                        .setLetterSpacing(0.8),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -1393,7 +1448,6 @@ class _PedidoTecnicoCreatePageState
           setState(() {
             _elementosSelecionados[_chave(elem)] = elem.quantidade;
           });
-          _autoSalvarPedido();
         }
       },
       borderRadius: BorderRadius.circular(10),
@@ -1736,7 +1790,6 @@ class _PedidoTecnicoCreatePageState
           _elementosSelecionados[_chave(elem)] = resultado;
         }
       });
-      _autoSalvarPedido();
     }
   }
 
@@ -1865,7 +1918,6 @@ class _PedidoTecnicoCreatePageState
     return InkWell(
       onTap: () {
         setState(() => _elementosSelecionados.remove(_chave(elem)));
-        _autoSalvarPedido();
       },
       borderRadius: BorderRadius.circular(10),
       child: Container(
@@ -1890,7 +1942,6 @@ class _PedidoTecnicoCreatePageState
               setState(() {
                 _elementosSelecionados.remove(_chave(elem));
               });
-              _autoSalvarPedido();
             },
             borderRadius: BorderRadius.circular(8),
             child: Tooltip(
@@ -1998,19 +2049,13 @@ class _PedidoTecnicoCreatePageState
     );
   }
 
-  bool _needsSave = false;
-
-  Future<void> _autoSalvarPedido() async {
+  Future<void> _salvarPedido({bool auto = false}) async {
     final detalhamento = _detalhamentoSel;
     if (detalhamento == null) return;
     
-    if (_salvando) {
-      _needsSave = true;
-      return;
-    }
+    if (_salvando) return;
 
     setState(() => _salvando = true);
-    _needsSave = false;
 
     try {
       final form = pedidoTecnicoCtrl.form;
@@ -2057,12 +2102,12 @@ class _PedidoTecnicoCreatePageState
 
       pedidoTecnicoCtrl.formStream.update();
 
-      await pedidoTecnicoCtrl.salvar(auto: true);
+      final ok = await pedidoTecnicoCtrl.salvar(auto: auto);
+      if (ok) {
+        _elementosSelecionadosSalvos = Map.from(_elementosSelecionados);
+      }
     } finally {
       if (mounted) setState(() => _salvando = false);
-      if (_needsSave) {
-        _autoSalvarPedido();
-      }
     }
   }
 }

@@ -115,12 +115,12 @@ class PedidoTecnicoSupabaseCollection {
   }
 
   /// Atualiza dados gerais do pedido (sem alterar elementos)
+  /// Não faz fetch() — use `atualizarCompleto()` para fluxo otimizado.
   Future<void> atualizar(PedidoTecnicoModel model) async {
     await SupabaseService.client
         .from(name)
         .update(model.toSupabaseMap())
         .eq('id', model.id);
-    await fetch();
   }
 
   Future<void> atualizarElementos(
@@ -130,10 +130,11 @@ class PedidoTecnicoSupabaseCollection {
         .from('pedido_tecnico_elementos')
         .delete()
         .eq('pedido_id', pedidoId);
-    for (final elem in elementos) {
+    if (elementos.isNotEmpty) {
+      // Batch insert: envia todos os elementos numa única chamada
       await SupabaseService.client
           .from('pedido_tecnico_elementos')
-          .insert(elem.toSupabaseMap(pedidoId));
+          .insert(elementos.map((e) => e.toSupabaseMap(pedidoId)).toList());
     }
     // Gravar resumo_aco se disponível
     if (resumoAco != null) {
@@ -142,6 +143,34 @@ class PedidoTecnicoSupabaseCollection {
           .update({'resumo_aco': resumoAco})
           .eq('id', pedidoId);
     }
+  }
+
+  /// Fluxo otimizado: atualiza pedido + elementos + resumo em sequência,
+  /// com UM ÚNICO fetch() no final. Evita 3 fetches redundantes.
+  Future<void> atualizarCompleto(
+    PedidoTecnicoModel model, {
+    Map<String, dynamic>? resumoAco,
+  }) async {
+    // 1. Atualizar dados gerais do pedido
+    final mapUpdate = model.toSupabaseMap();
+    if (resumoAco != null) mapUpdate['resumo_aco'] = resumoAco;
+    await SupabaseService.client
+        .from(name)
+        .update(mapUpdate)
+        .eq('id', model.id);
+
+    // 2. Delete + batch insert dos elementos
+    await SupabaseService.client
+        .from('pedido_tecnico_elementos')
+        .delete()
+        .eq('pedido_id', model.id);
+    if (model.elementos.isNotEmpty) {
+      await SupabaseService.client
+          .from('pedido_tecnico_elementos')
+          .insert(model.elementos.map((e) => e.toSupabaseMap(model.id)).toList());
+    }
+
+    // 3. Único fetch no final
     await fetch();
   }
 

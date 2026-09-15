@@ -137,10 +137,10 @@ class PedidoTecnicoController {
       final modelComResumo = model.copyWith(resumoAco: resumoAco);
 
       if (form.isEdit) {
-        await BackendClient.pedidosTecnicos.atualizar(modelComResumo);
-        await BackendClient.pedidosTecnicos
-            .atualizarElementos(modelComResumo.id, modelComResumo.elementos,
-                resumoAco: resumoAco);
+        await BackendClient.pedidosTecnicos.atualizarCompleto(
+          modelComResumo,
+          resumoAco: resumoAco,
+        );
         if (!auto) {
           NotificationService.showPositive(
             'Pedido atualizado',

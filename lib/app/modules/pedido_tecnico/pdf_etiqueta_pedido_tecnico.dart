@@ -10,16 +10,16 @@ import 'package:acoplan/app/core/client/models/trecho_variavel_config.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
-/// Etiqueta 8.7 × 13.7 cm — impressora térmica — só preto/branco
+/// Etiqueta 9.0 × 14.0 cm — impressora térmica — só preto/branco
 class PdfEtiquetaPedidoTecnico {
   static const _corPreto = PdfColors.black;
   static const _corBranco = PdfColors.white;
 
   static List<BitolaModel> _bitolas = [];
 
-  static final _formato = PdfPageFormat(
-    8.7 * PdfPageFormat.cm,
-    13.7 * PdfPageFormat.cm,
+  static final formato = PdfPageFormat(
+    9.0 * PdfPageFormat.cm,
+    14.0 * PdfPageFormat.cm,
     marginAll: 0,
   );
 
@@ -79,7 +79,7 @@ class PdfEtiquetaPedidoTecnico {
         final formaDef = formasMap[pos.formaCodigo];
         // Etiqueta principal
         pdf.addPage(pw.Page(
-          pageFormat: _formato,
+          pageFormat: formato,
           margin: pw.EdgeInsets.zero,
           build: (_) => _wrapRotacao(
             _buildEtiqueta(
@@ -100,7 +100,7 @@ class PdfEtiquetaPedidoTecnico {
         if (temVar) {
           // Etiqueta 2: trechos variáveis
           pdf.addPage(pw.Page(
-            pageFormat: _formato,
+            pageFormat: formato,
             margin: pw.EdgeInsets.zero,
             build: (_) => _wrapRotacao(
               _buildEtiquetaTrechosVar(
@@ -113,7 +113,7 @@ class PdfEtiquetaPedidoTecnico {
           paginaAtual++;
           // Etiqueta 3: comprimentos + comprimento de corte
           pdf.addPage(pw.Page(
-            pageFormat: _formato,
+            pageFormat: formato,
             margin: pw.EdgeInsets.zero,
             build: (_) => _wrapRotacao(
               _buildEtiquetaComprimentos(

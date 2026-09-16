@@ -132,25 +132,59 @@ class PedidoTecnicoController {
     try {
       final model = form.toPedidoTecnicoModel();
 
+      // ── Calcular sequenciaInicio por elemento ──────────────────────────────
+      // Ordena os elementos por nome (ordem natural: V1, V2, V10...) para garantir
+      // sequência coerente com o relatório e etiquetas, e acumula o contador pelas
+      // posições (com qtde > 0).
+      final detalhamento = BackendClient.detalhamentos.data
+          .where((d) => d.id == form.detalhamentoId)
+          .firstOrNull;
+
+      final elementosOrdenados = List<PedidoTecnicoElementoModel>.from(model.elementos)
+        ..sort((a, b) => compararNatural(a.elementoNome, b.elementoNome));
+
+      int seq = 1;
+      final elementosComSeq = elementosOrdenados.map((elem) {
+        final ini = seq;
+        final elemDet = detalhamento?.elementos
+            .where((e) => e.id == elem.elementoId)
+            .firstOrNull;
+        final numPos = elemDet?.posicoes.where((p) => p.qtde > 0).length ?? 0;
+        seq += numPos > 0 ? numPos : 1; // reserva ao menos 1 slot mesmo sem posições
+        return PedidoTecnicoElementoModel(
+          id: elem.id,
+          pedidoId: elem.pedidoId,
+          elementoId: elem.elementoId,
+          elementoNome: elem.elementoNome,
+          elementoQuantidade: elem.elementoQuantidade,
+          quantidadeSolicitada: elem.quantidadeSolicitada,
+          pesoTotal: elem.pesoTotal,
+          sequenciaInicio: ini,
+        );
+      }).toList();
+
+      final modelComSeq = model.copyWith(elementos: elementosComSeq);
+      // ──────────────────────────────────────────────────────────────────────
+
       // Calcular resumo de aço (totais por bitola e elemento)
-      final resumoAco = _calcularResumoAco(model);
-      final modelComResumo = model.copyWith(resumoAco: resumoAco);
+      final resumoAco = _calcularResumoAco(modelComSeq);
+      final modelFinal = modelComSeq.copyWith(resumoAco: resumoAco);
 
       if (form.isEdit) {
         await BackendClient.pedidosTecnicos.atualizarCompleto(
-          modelComResumo,
+          modelFinal,
           resumoAco: resumoAco,
         );
         if (!auto) {
           NotificationService.showPositive(
             'Pedido atualizado',
-            '${model.elementos.length} elemento(s) no pedido ${model.codigo}',
+            '${modelFinal.elementos.length} elemento(s) no pedido ${modelFinal.codigo}',
             position: NotificationPosition.bottom,
           );
         }
       } else {
         final createdModel =
-            await BackendClient.pedidosTecnicos.criar(modelComResumo);
+            await BackendClient.pedidosTecnicos.criar(modelFinal);
         form.id = createdModel.id;
         form.codigo = createdModel.codigo;
         form.identificador = createdModel.identificador;
@@ -158,7 +192,7 @@ class PedidoTecnicoController {
         if (!auto) {
           NotificationService.showPositive(
             'Pedido criado',
-            '${model.elementos.length} elemento(s) cadastrado(s)',
+            '${modelFinal.elementos.length} elemento(s) cadastrado(s)',
             position: NotificationPosition.bottom,
           );
         }

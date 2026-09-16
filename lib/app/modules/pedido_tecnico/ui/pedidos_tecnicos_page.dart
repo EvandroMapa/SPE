@@ -117,7 +117,7 @@ class _PedidosTecnicosPageState extends State<PedidosTecnicosPage> {
                   padding: const EdgeInsets.symmetric(
                       vertical: 12, horizontal: 16),
                   itemCount: filtered.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
                   itemBuilder: (context, index) {
                     return _PedidoCard(
                       pedido: filtered[index],

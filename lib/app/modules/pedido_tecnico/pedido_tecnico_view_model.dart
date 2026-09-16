@@ -59,6 +59,7 @@ class PedidoTecnicoCreateModel {
                   elementoQuantidade: e.quantidade,
                   quantidadeSolicitada: e.quantidadeSolicitada,
                   pesoTotal: e.pesoSolicitado,
+                  sequenciaInicio: e.sequenciaInicio, // propagado; será sobrescrito no controller
                 ))
             .toList(),
       );
@@ -83,6 +84,7 @@ class PedidoTecnicoCreateModel {
               quantidade: e.elementoQuantidade,
               quantidadeSolicitada: e.quantidadeSolicitada,
               pesoTotal: e.pesoTotal,
+              sequenciaInicio: e.sequenciaInicio,
             ))
         .toList();
     return m;
@@ -96,6 +98,8 @@ class ElementoSelecionadoModel {
   final int quantidade;
   int quantidadeSolicitada;
   final double pesoTotal;
+  /// Sequência de início: preenchida pelo controller ao salvar.
+  int? sequenciaInicio;
 
   ElementoSelecionadoModel({
     required this.elementoId,
@@ -103,6 +107,7 @@ class ElementoSelecionadoModel {
     required this.quantidade,
     int? quantidadeSolicitada,
     required this.pesoTotal,
+    this.sequenciaInicio,
   }) : quantidadeSolicitada = quantidadeSolicitada ?? quantidade;
 
   /// Peso proporcional à quantidade solicitada

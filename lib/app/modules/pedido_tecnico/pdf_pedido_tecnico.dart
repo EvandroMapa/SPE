@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:acoplan/app/core/client/models/bitola_model.dart';
 import 'package:acoplan/app/core/client/models/pedido_tecnico_model.dart';
 import 'package:acoplan/app/core/client/models/detalhamento_model.dart';
+import 'package:acoplan/app/core/utils/global_resource.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -520,6 +521,346 @@ class PdfPedidoTecnico {
             ),
           ),
         ],
+      );
+
+  // ── Relatório de Elementos (grid de cards) ───────────────────────────────
+  static Future<Uint8List> gerarElementos({
+    required PedidoTecnicoModel pedido,
+    DetalhamentoModel? detalhamento,
+    List<BitolaModel> produtos = const [],
+  }) async {
+    _produtos = produtos;
+    final pdf = pw.Document();
+    final fmtData = DateFormat('dd/MM/yyyy');
+    final fmtHora = DateFormat('HH:mm');
+    final agora = DateTime.now();
+
+    const corPrimaria = PdfColor.fromInt(0xFF0F172A);
+    const corFundoCabecalho = PdfColor.fromInt(0xFFF1F5F9);
+    const corBorda = PdfColor.fromInt(0xFFE2E8F0);
+    const corVerde = PdfColor.fromInt(0xFF10B981);
+    const corSubcard = PdfColor.fromInt(0xFFF8FAFC);
+    const corCinzaTexto = PdfColor.fromInt(0xFF64748B);
+    const corCinzaClaro = PdfColor.fromInt(0xFF94A3B8);
+
+    // ── Constrói um sub-card de posição (SEQ) ──
+    pw.Widget buildOsCard(PosicaoModel pos, int qtdeSol, String seqLabel) {
+      final qtdeTotal = pos.qtde * qtdeSol;
+      // Bitola: usa só a parte antes do traço se for muito longa
+      final bitola = pos.bitolaNome.length > 18
+          ? pos.bitolaNome.substring(0, 17)
+          : pos.bitolaNome;
+      return pw.Container(
+        padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 5),
+        decoration: pw.BoxDecoration(
+          color: corSubcard,
+          border: pw.Border.all(color: corBorda, width: 0.5),
+          borderRadius: const pw.BorderRadius.all(pw.Radius.circular(3)),
+        ),
+        child: pw.Column(
+          mainAxisAlignment: pw.MainAxisAlignment.center,
+          crossAxisAlignment: pw.CrossAxisAlignment.center,
+          children: [
+            pw.Text(
+              'SEQ $seqLabel',
+              style: pw.TextStyle(
+                fontSize: 10,
+                fontWeight: pw.FontWeight.bold,
+                color: corPrimaria,
+              ),
+            ),
+            pw.SizedBox(height: 1),
+            pw.Text(
+              'Pos ${pos.posicao}',
+              style: pw.TextStyle(fontSize: 6, color: corCinzaClaro),
+            ),
+            pw.SizedBox(height: 2),
+            pw.Text(
+              bitola,
+              style: pw.TextStyle(fontSize: 7, color: corCinzaTexto),
+              textAlign: pw.TextAlign.center,
+            ),
+            pw.SizedBox(height: 2),
+            pw.Text(
+              '× $qtdeTotal',
+              style: pw.TextStyle(
+                fontSize: 8,
+                fontWeight: pw.FontWeight.bold,
+                color: corVerde,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // ── Constrói um card de elemento ──
+    pw.Widget buildElementCard(PedidoTecnicoElementoModel elem) {
+      final elemDet = detalhamento?.elementos
+          .where((e) => e.id == elem.elementoId)
+          .firstOrNull;
+      final posicoes = (elemDet?.posicoes ?? <PosicaoModel>[])
+          .where((p) => p.qtde > 0)
+          .toList();
+      final qtdeSol = elem.quantidadeSolicitada;
+
+      // Sub-cards em fileiras de 2, com SEQ calculado por índice
+      final osRows = <pw.Widget>[];
+      for (int i = 0; i < posicoes.length; i += 2) {
+        final hasRight = i + 1 < posicoes.length;
+        final seqL = elem.sequenciaDaPosicao(i);
+        final seqR = elem.sequenciaDaPosicao(i + 1);
+        final lblL = seqL != null ? '$seqL' : '—';
+        final lblR = seqR != null ? '$seqR' : '—';
+        osRows.add(pw.Row(
+          children: [
+            pw.Expanded(child: buildOsCard(posicoes[i], qtdeSol, lblL)),
+            pw.SizedBox(width: 3),
+            pw.Expanded(
+              child: hasRight
+                  ? buildOsCard(posicoes[i + 1], qtdeSol, lblR)
+                  : pw.SizedBox(),
+            ),
+          ],
+        ));
+        if (i + 2 < posicoes.length) osRows.add(pw.SizedBox(height: 3));
+      }
+
+      return pw.Container(
+        decoration: pw.BoxDecoration(
+          border: pw.Border.all(color: corBorda, width: 0.5),
+          borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+        ),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+          children: [
+            // Header do card
+            pw.Container(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              decoration: const pw.BoxDecoration(
+                color: corPrimaria,
+                borderRadius: pw.BorderRadius.only(
+                  topLeft: pw.Radius.circular(4),
+                  topRight: pw.Radius.circular(4),
+                ),
+              ),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Expanded(
+                    child: pw.Text(
+                      elem.elementoNome,
+                      style: pw.TextStyle(
+                        fontSize: 9,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.white,
+                      ),
+                    ),
+                  ),
+                  pw.Text(
+                    '× $qtdeSol',
+                    style: pw.TextStyle(fontSize: 8, color: corCinzaClaro),
+                  ),
+                ],
+              ),
+            ),
+            // Área dos sub-cards
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(4),
+              child: posicoes.isEmpty
+                  ? pw.Padding(
+                      padding: const pw.EdgeInsets.symmetric(vertical: 6),
+                      child: pw.Text(
+                        'Sem posições',
+                        style: pw.TextStyle(fontSize: 7, color: PdfColors.grey),
+                        textAlign: pw.TextAlign.center,
+                      ),
+                    )
+                  : pw.Column(children: osRows),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // ── Agrupa elementos em fileiras de 3 (ordenados por elemento + OS) ──
+    final List<pw.Widget> linhas = [];
+    final elems = List<PedidoTecnicoElementoModel>.from(pedido.elementos)
+      ..sort((a, b) {
+        final cmp = compararNatural(a.elementoNome, b.elementoNome);
+        if (cmp != 0) return cmp;
+        return (a.sequenciaInicio ?? 0).compareTo(b.sequenciaInicio ?? 0);
+      });
+    for (int i = 0; i < elems.length; i += 3) {
+      final grupo = elems.sublist(i, (i + 3).clamp(0, elems.length));
+      final rowCells = <pw.Widget>[];
+      for (int j = 0; j < grupo.length; j++) {
+        if (j > 0) rowCells.add(pw.SizedBox(width: 5));
+        rowCells.add(pw.Expanded(child: buildElementCard(grupo[j])));
+      }
+      // Preenchimento para manter 3 colunas
+      for (int j = grupo.length; j < 3; j++) {
+        rowCells.add(pw.SizedBox(width: 5));
+        rowCells.add(pw.Expanded(child: pw.SizedBox()));
+      }
+      linhas.add(pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: rowCells,
+      ));
+      linhas.add(pw.SizedBox(height: 6));
+    }
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(20),
+        header: (_) => pw.Container(
+          padding: const pw.EdgeInsets.only(bottom: 10),
+          decoration: const pw.BoxDecoration(
+            border: pw.Border(
+              bottom: pw.BorderSide(color: corBorda, width: 1),
+            ),
+          ),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'PEDIDO TÉCNICO',
+                    style: pw.TextStyle(
+                      fontSize: 16,
+                      fontWeight: pw.FontWeight.bold,
+                      color: corPrimaria,
+                    ),
+                  ),
+                  pw.SizedBox(height: 2),
+                  pw.Text(
+                    'Relatório de Elementos',
+                    style: pw.TextStyle(fontSize: 9, color: corCinzaTexto),
+                  ),
+                ],
+              ),
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 8),
+                decoration: pw.BoxDecoration(
+                  color: corPrimaria,
+                  borderRadius:
+                      const pw.BorderRadius.all(pw.Radius.circular(6)),
+                ),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  children: [
+                    pw.Text(
+                      pedido.identificador.isNotEmpty
+                          ? pedido.identificador
+                          : 'PT ${pedido.codigo.toString().padLeft(4, '0')}',
+                      style: pw.TextStyle(
+                        fontSize: 13,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.white,
+                      ),
+                    ),
+                    pw.Text(
+                      pedido.isAberto ? 'ABERTO' : 'CANCELADO',
+                      style: pw.TextStyle(
+                        fontSize: 7,
+                        color: pedido.isAberto
+                            ? const PdfColor.fromInt(0xFF6EE7B7)
+                            : PdfColors.grey400,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        footer: (ctx) => pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            pw.Text(
+              'Gerado em ${fmtData.format(agora)} às ${fmtHora.format(agora)}',
+              style: pw.TextStyle(fontSize: 7, color: PdfColors.grey600),
+            ),
+            pw.Text(
+              'Página ${ctx.pageNumber} de ${ctx.pagesCount}',
+              style: pw.TextStyle(fontSize: 7, color: PdfColors.grey600),
+            ),
+          ],
+        ),
+        build: (ctx) => [
+          // Barra de informações
+          pw.Container(
+            padding: const pw.EdgeInsets.all(10),
+            margin: const pw.EdgeInsets.only(bottom: 12),
+            decoration: pw.BoxDecoration(
+              color: corFundoCabecalho,
+              borderRadius:
+                  const pw.BorderRadius.all(pw.Radius.circular(6)),
+              border: pw.Border.all(color: corBorda, width: 0.5),
+            ),
+            child: pw.Row(
+              children: [
+                _infoColElem('CLIENTE', pedido.clienteNome),
+                pw.SizedBox(width: 10),
+                _infoColElem('OBRA', pedido.obraNome),
+                pw.SizedBox(width: 10),
+                _infoColElem(
+                    'DATA', fmtData.format(pedido.criadoEm.toLocal())),
+                pw.SizedBox(width: 10),
+                _infoColElem('ELEMENTOS', '${pedido.elementos.length}'),
+                pw.SizedBox(width: 10),
+                _infoColElem(
+                  'PESO TOTAL',
+                  pedido.pesoTotal > 0
+                      ? '${pedido.pesoTotal.toStringAsFixed(2)} kg'
+                      : '-',
+                  corValor: corVerde,
+                ),
+              ],
+            ),
+          ),
+          // Grid de cards
+          ...linhas,
+        ],
+      ),
+    );
+
+    return pdf.save();
+  }
+
+  static pw.Widget _infoColElem(
+    String label,
+    String valor, {
+    PdfColor? corValor,
+  }) =>
+      pw.Expanded(
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(
+              label,
+              style: pw.TextStyle(
+                fontSize: 7,
+                fontWeight: pw.FontWeight.bold,
+                color: const PdfColor.fromInt(0xFF64748B),
+              ),
+            ),
+            pw.SizedBox(height: 2),
+            pw.Text(
+              valor,
+              style: pw.TextStyle(
+                fontSize: 8,
+                color: corValor ?? const PdfColor.fromInt(0xFF0F172A),
+                fontWeight:
+                    corValor != null ? pw.FontWeight.bold : pw.FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
       );
 
   // ── Massa linear (kg/m) ──────────────────────────────────────────────────

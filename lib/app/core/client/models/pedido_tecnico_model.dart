@@ -173,6 +173,10 @@ class PedidoTecnicoElementoModel {
   final int elementoQuantidade;
   final int quantidadeSolicitada;
   final double pesoTotal;
+  /// Número sequencial da primeira posição deste elemento no pedido.
+  /// As demais posições recebem sequenciaInicio+1, sequenciaInicio+2...
+  /// null = pedido antigo (ainda não recalculado).
+  final int? sequenciaInicio;
 
   PedidoTecnicoElementoModel({
     required this.id,
@@ -182,7 +186,13 @@ class PedidoTecnicoElementoModel {
     required this.elementoQuantidade,
     int? quantidadeSolicitada,
     required this.pesoTotal,
+    this.sequenciaInicio,
   }) : quantidadeSolicitada = quantidadeSolicitada ?? elementoQuantidade;
+
+  /// Retorna o número de sequência da posição de índice [indicePosicao] (base 0).
+  /// Retorna null se ainda não houver sequência gravada.
+  int? sequenciaDaPosicao(int indicePosicao) =>
+      sequenciaInicio != null ? sequenciaInicio! + indicePosicao : null;
 
   factory PedidoTecnicoElementoModel.fromSupabaseMap(
       Map<String, dynamic> map) {
@@ -197,17 +207,22 @@ class PedidoTecnicoElementoModel {
           int.tryParse(map['quantidade_solicitada']?.toString() ?? '') ?? elemQtde,
       pesoTotal:
           double.tryParse(map['peso_total']?.toString() ?? '0') ?? 0.0,
+      sequenciaInicio: int.tryParse(map['sequencia_inicio']?.toString() ?? ''),
     );
   }
 
-  Map<String, dynamic> toSupabaseMap(String pedidoId) => {
-        'pedido_id': pedidoId,
-        'elemento_id': elementoId,
-        'elemento_nome': elementoNome,
-        'elemento_quantidade': elementoQuantidade,
-        'quantidade_solicitada': quantidadeSolicitada,
-        'peso_total': pesoTotal,
-      };
+  Map<String, dynamic> toSupabaseMap(String pedidoId) {
+    final map = <String, dynamic>{
+      'pedido_id': pedidoId,
+      'elemento_id': elementoId,
+      'elemento_nome': elementoNome,
+      'elemento_quantidade': elementoQuantidade,
+      'quantidade_solicitada': quantidadeSolicitada,
+      'peso_total': pesoTotal,
+    };
+    if (sequenciaInicio != null) map['sequencia_inicio'] = sequenciaInicio;
+    return map;
+  }
 
   Map<String, dynamic> toMap() => {
         'id': id,
@@ -217,5 +232,6 @@ class PedidoTecnicoElementoModel {
         'elemento_quantidade': elementoQuantidade,
         'quantidade_solicitada': quantidadeSolicitada,
         'peso_total': pesoTotal,
+        'sequencia_inicio': sequenciaInicio,
       };
 }

@@ -7,6 +7,7 @@ import 'package:acoplan/app/core/client/models/forma_model.dart';
 import 'package:acoplan/app/core/client/models/pedido_tecnico_model.dart';
 import 'package:acoplan/app/core/client/models/detalhamento_model.dart';
 import 'package:acoplan/app/core/client/models/trecho_variavel_config.dart';
+import 'package:acoplan/app/core/utils/global_resource.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
@@ -54,82 +55,134 @@ class PdfEtiquetaPedidoTecnico {
     final elemMap = {for (final e in detalhamento.elementos) e.id: e};
     final formasMap = {for (final f in formasCadastradas) f.codigo: f};
 
-    // Pré-contagem de páginas para feedback de progresso preciso
+    // 1. Coleta todas as posições válidas de todos os elementos
+    final itens = <_ItemEtiqueta>[];
     int totalPaginas = 0;
-    for (final elem in pedido.elementos) {
-      if (elem.quantidadeSolicitada <= 0) continue;
-      final elemDet = elemMap[elem.elementoId];
-      if (elemDet == null) continue;
-      for (final pos in elemDet.posicoes) {
-        if (pos.qtde <= 0) continue;
-        totalPaginas++;
-        final temVar = pos.variaveis.values.any((v) => v) && pos.variaveisConfig.isNotEmpty;
-        if (temVar) totalPaginas += 2;
-      }
-    }
 
-    final pdf = pw.Document(compress: false);
-    int paginaAtual = 0;
     for (final elem in pedido.elementos) {
       if (elem.quantidadeSolicitada <= 0) continue;
       final elemDetalhamento = elemMap[elem.elementoId];
       if (elemDetalhamento == null) continue;
-      for (final pos in elemDetalhamento.posicoes) {
-        if (pos.qtde <= 0) continue;
+
+      // Posições com qtde > 0, na mesma ordem usada no cálculo do sequencial
+      final posicoesValidas = elemDetalhamento.posicoes
+          .where((p) => p.qtde > 0)
+          .toList();
+
+      for (int posIdx = 0; posIdx < posicoesValidas.length; posIdx++) {
+        final pos = posicoesValidas[posIdx];
+        final seq = elem.sequenciaDaPosicao(posIdx);
+        final seqLabel = seq != null ? '$seq' : '—';
         final formaDef = formasMap[pos.formaCodigo];
-        // Etiqueta principal
+        final temVar = pos.variaveis.values.any((v) => v) && pos.variaveisConfig.isNotEmpty;
+
+        totalPaginas += temVar ? 3 : 1;
+
+        itens.add(_ItemEtiqueta(
+          elem: elem,
+          elemDetalhamento: elemDetalhamento,
+          pos: pos,
+          seq: seq,
+          seqLabel: seqLabel,
+          formaDef: formaDef,
+          temVar: temVar,
+          diametroBitola: _extrairDiametroBitola(pos),
+          comprimentoCorte: _extrairComprimentoCorte(pos),
+        ));
+      }
+    }
+
+    // 2. Ordena etiquetas:
+    //    1º Bitola (ordem natural pelo diâmetro em mm: 4.2, 5.0, 6.3, 8.0, 10.0, 12.5...)
+    //    2º Comprimento de corte (crescente)
+    //    3º Sequência (SEQ)
+    //    4º Elemento
+    //    5º Posição
+    itens.sort((a, b) {
+      final cmpDiam = a.diametroBitola.compareTo(b.diametroBitola);
+      if (cmpDiam != 0) return cmpDiam;
+
+      final cmpBitolaNome = compararNatural(a.pos.bitolaNome, b.pos.bitolaNome);
+      if (cmpBitolaNome != 0) return cmpBitolaNome;
+
+      final cmpCorte = a.comprimentoCorte.compareTo(b.comprimentoCorte);
+      if (cmpCorte != 0) return cmpCorte;
+
+      final sA = a.seq ?? 999999;
+      final sB = b.seq ?? 999999;
+      final cmpSeq = sA.compareTo(sB);
+      if (cmpSeq != 0) return cmpSeq;
+
+      final cmpElem = compararNatural(a.elem.elementoNome, b.elem.elementoNome);
+      if (cmpElem != 0) return cmpElem;
+
+      return compararNatural(a.pos.posicao, b.pos.posicao);
+    });
+
+    // 3. Gera as páginas das etiquetas na ordem definida
+    final pdf = pw.Document(compress: false);
+    int paginaAtual = 0;
+
+    for (final item in itens) {
+      // Etiqueta principal
+      pdf.addPage(pw.Page(
+        pageFormat: formato,
+        margin: pw.EdgeInsets.zero,
+        build: (_) => _wrapRotacao(
+          _buildEtiqueta(
+            pedido: pedido,
+            detalhamento: detalhamento,
+            elem: item.elem,
+            elemDetalhamento: item.elemDetalhamento,
+            pos: item.pos,
+            formaDef: item.formaDef,
+            seqLabel: item.seqLabel,
+          ),
+          rotacionar180: deveRotacionar,
+        ),
+      ));
+      paginaAtual++;
+
+      // Se tem trecho variável → DUAS etiquetas extras
+      if (item.temVar) {
+        // Etiqueta 2: trechos variáveis
         pdf.addPage(pw.Page(
           pageFormat: formato,
           margin: pw.EdgeInsets.zero,
           build: (_) => _wrapRotacao(
-            _buildEtiqueta(
+            _buildEtiquetaTrechosVar(
               pedido: pedido,
-              detalhamento: detalhamento,
-              elem: elem,
-              elemDetalhamento: elemDetalhamento,
-              pos: pos,
-              formaDef: formaDef,
+              elem: item.elem,
+              elemDetalhamento: item.elemDetalhamento,
+              pos: item.pos,
+              seqLabel: item.seqLabel,
             ),
             rotacionar180: deveRotacionar,
           ),
         ));
         paginaAtual++;
 
-        // Se tem trecho variável → DUAS etiquetas extras
-        final temVar = pos.variaveis.values.any((v) => v) && pos.variaveisConfig.isNotEmpty;
-        if (temVar) {
-          // Etiqueta 2: trechos variáveis
-          pdf.addPage(pw.Page(
-            pageFormat: formato,
-            margin: pw.EdgeInsets.zero,
-            build: (_) => _wrapRotacao(
-              _buildEtiquetaTrechosVar(
-                pedido: pedido, elem: elem, elemDetalhamento: elemDetalhamento,
-                pos: pos,
-              ),
-              rotacionar180: deveRotacionar,
+        // Etiqueta 3: comprimentos + comprimento de corte
+        pdf.addPage(pw.Page(
+          pageFormat: formato,
+          margin: pw.EdgeInsets.zero,
+          build: (_) => _wrapRotacao(
+            _buildEtiquetaComprimentos(
+              pedido: pedido,
+              elem: item.elem,
+              elemDetalhamento: item.elemDetalhamento,
+              pos: item.pos,
+              seqLabel: item.seqLabel,
             ),
-          ));
-          paginaAtual++;
-          // Etiqueta 3: comprimentos + comprimento de corte
-          pdf.addPage(pw.Page(
-            pageFormat: formato,
-            margin: pw.EdgeInsets.zero,
-            build: (_) => _wrapRotacao(
-              _buildEtiquetaComprimentos(
-                pedido: pedido, elem: elem, elemDetalhamento: elemDetalhamento,
-                pos: pos,
-              ),
-              rotacionar180: deveRotacionar,
-            ),
-          ));
-          paginaAtual++;
-        }
+            rotacionar180: deveRotacionar,
+          ),
+        ));
+        paginaAtual++;
+      }
 
-        if (onProgress != null && (paginaAtual % 3 == 0 || paginaAtual == totalPaginas)) {
-          onProgress(paginaAtual, totalPaginas);
-          await Future.delayed(Duration.zero);
-        }
+      if (onProgress != null && (paginaAtual % 3 == 0 || paginaAtual == totalPaginas)) {
+        onProgress(paginaAtual, totalPaginas);
+        await Future.delayed(Duration.zero);
       }
     }
     if (onProgress != null) {
@@ -154,6 +207,7 @@ class PdfEtiquetaPedidoTecnico {
     required ElementoModel elemDetalhamento,
     required PosicaoModel pos,
     FormaModel? formaDef,
+    required String seqLabel,
   }) {
     final id = _limpar(pedido.identificador.isNotEmpty ? pedido.identificador : 'PT ${pedido.codigo.toString().padLeft(3, '0')}');
     final pesoPos = _calcularPesoPosicao(pos);
@@ -215,13 +269,13 @@ class PdfEtiquetaPedidoTecnico {
     }
 
     return pw.Padding(
-      padding: const pw.EdgeInsets.all(7),
+      padding: const pw.EdgeInsets.all(5),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.stretch,
         children: [
-          // 1 ── IDENTIFICADOR + OS
-          _buildTarjaLocalizadorOs(id, pedido.codigo),
-          pw.SizedBox(height: 3),
+          // 1 ── IDENTIFICADOR + SEQ
+          _buildTarjaLocalizadorSeq(id, seqLabel),
+          pw.SizedBox(height: 2),
 
           // 2 ── CLIENTE / OBRA / PAVIMENTO
           pw.Container(
@@ -270,7 +324,7 @@ class PdfEtiquetaPedidoTecnico {
               ],
             ),
           ),
-          pw.SizedBox(height: 3),
+          pw.SizedBox(height: 2),
 
           // 3 ── ELEMENTO (palavra "ELEMENTO" suprimida, centralizado, fonte ampliada)
           _boxPreta(radius: 5, vPad: 5,
@@ -302,7 +356,7 @@ class PdfEtiquetaPedidoTecnico {
               ],
             ),
           ),
-          pw.SizedBox(height: 3),
+          pw.SizedBox(height: 2),
 
           // 4 ── POSIÇÃO (fontes equalizadas com a de PESO)
           _boxBranca(radius: 5, vPad: 4,
@@ -332,9 +386,7 @@ class PdfEtiquetaPedidoTecnico {
               ]),
             ]),
           ),
-          pw.SizedBox(height: 3),
-
-
+          pw.SizedBox(height: 2),
 
           // 6 ── DESENHO — expande para ocupar espaço restante
           pw.Expanded(
@@ -353,14 +405,14 @@ class PdfEtiquetaPedidoTecnico {
             ),
           ),
 
-          // 7 ── RODAPÉ (Tarja Localizador + OS repetida)
-          pw.SizedBox(height: 3),
+          // 7 ── RODAPÉ (Tarja Localizador + SEQ repetida)
+          pw.SizedBox(height: 2),
           if (pedido.detalhamentoCodigo > 0)
             pw.Padding(
-              padding: const pw.EdgeInsets.only(bottom: 2, left: 2),
+              padding: const pw.EdgeInsets.only(bottom: 1, left: 2),
               child: pw.Text('Det. ${pedido.detalhamentoCodigo}', style: _sMini),
             ),
-          _buildTarjaLocalizadorOs(id, pedido.codigo),
+          _buildTarjaLocalizadorSeq(id, seqLabel),
         ],
       ),
     );
@@ -387,6 +439,21 @@ class PdfEtiquetaPedidoTecnico {
         .replaceAll('Ç', 'C').replaceAll('ç', 'c')
         .replaceAll('Ø', 'D').replaceAll('ø', 'd')
         .replaceAll('–', '-').replaceAll('—', '-');
+  }
+
+  static double _extrairDiametroBitola(PosicaoModel pos) {
+    final produto = _bitolasMap[pos.bitolaId] ??
+        _bitolas.where((p) => p.id == pos.bitolaId).firstOrNull;
+    if (produto != null && produto.diametro > 0) {
+      return produto.diametro;
+    }
+    final str = pos.bitolaNome.split('-').first.replaceAll(RegExp(r'[^0-9.]'), '');
+    return double.tryParse(str) ?? 0.0;
+  }
+
+  static double _extrairComprimentoCorte(PosicaoModel pos) {
+    if (pos.comprimentoDeCorte > 0) return pos.comprimentoDeCorte;
+    return pos.comprimentos.values.fold<double>(0.0, (s, v) => s + v);
   }
 
   static double _massaLinear(PosicaoModel pos) {
@@ -442,7 +509,7 @@ class PdfEtiquetaPedidoTecnico {
     }
     return pesoTotal;
   }
-  static pw.Widget _buildTarjaLocalizadorOs(String localizador, int codigoOS) {
+  static pw.Widget _buildTarjaLocalizadorSeq(String localizador, String seqLabel) {
     return _boxPreta(
       radius: 5,
       vPad: 4,
@@ -464,9 +531,9 @@ class PdfEtiquetaPedidoTecnico {
             crossAxisAlignment: pw.CrossAxisAlignment.center,
             mainAxisSize: pw.MainAxisSize.min,
             children: [
-              pw.Text('OS', style: _sTarjaLabel),
+              pw.Text('SEQ', style: _sTarjaLabel),
               pw.SizedBox(height: 1),
-              pw.Text('$codigoOS', style: _sTarjaOs),
+              pw.Text(seqLabel, style: _sTarjaOs),
             ],
           ),
           pw.SizedBox(width: 4),
@@ -699,6 +766,7 @@ class PdfEtiquetaPedidoTecnico {
     required PedidoTecnicoElementoModel elem,
     required ElementoModel elemDetalhamento,
     required PosicaoModel pos,
+    required String seqLabel,
   }) {
     final id = _limpar(pedido.identificador.isNotEmpty ? pedido.identificador : 'PT ${pedido.codigo.toString().padLeft(3, '0')}');
     final pesoPos = _calcularPesoPosicao(pos);
@@ -719,8 +787,8 @@ class PdfEtiquetaPedidoTecnico {
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.stretch,
         children: [
-          // 1 ── IDENTIFICADOR + OS
-          _buildTarjaLocalizadorOs(id, pedido.codigo),
+          // 1 ── IDENTIFICADOR + SEQ
+          _buildTarjaLocalizadorSeq(id, seqLabel),
           pw.SizedBox(height: 3),
 
           // POS / BITOLA / PESO / QTDE
@@ -823,13 +891,13 @@ class PdfEtiquetaPedidoTecnico {
             ),
           ),
 
-          // RODAPÉ (Tarja Localizador + OS repetida)
+          // RODAPÉ (Tarja Localizador + SEQ repetida)
           pw.SizedBox(height: 3),
           pw.Padding(
             padding: const pw.EdgeInsets.only(bottom: 2, left: 2),
             child: pw.Text('Pos ${pos.posicao}  |  ${pos.qtde} pecas', style: _sMini),
           ),
-          _buildTarjaLocalizadorOs(id, pedido.codigo),
+          _buildTarjaLocalizadorSeq(id, seqLabel),
         ],
       ),
     );
@@ -841,6 +909,7 @@ class PdfEtiquetaPedidoTecnico {
     required PedidoTecnicoElementoModel elem,
     required ElementoModel elemDetalhamento,
     required PosicaoModel pos,
+    required String seqLabel,
   }) {
     final id = _limpar(pedido.identificador.isNotEmpty ? pedido.identificador : 'PT ${pedido.codigo.toString().padLeft(3, '0')}');
     final pesoPos = _calcularPesoPosicao(pos);
@@ -886,8 +955,8 @@ class PdfEtiquetaPedidoTecnico {
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.stretch,
         children: [
-          // 1 ── IDENTIFICADOR + OS
-          _buildTarjaLocalizadorOs(id, pedido.codigo),
+          // 1 ── IDENTIFICADOR + SEQ
+          _buildTarjaLocalizadorSeq(id, seqLabel),
           pw.SizedBox(height: 3),
 
           // POS / BITOLA / PESO / QTDE
@@ -1009,15 +1078,39 @@ class PdfEtiquetaPedidoTecnico {
             ),
           ),
 
-          // RODAPÉ (Tarja Localizador + OS repetida)
+          // RODAPÉ (Tarja Localizador + SEQ repetida)
           pw.SizedBox(height: 3),
           pw.Padding(
             padding: const pw.EdgeInsets.only(bottom: 2, left: 2),
             child: pw.Text('Pos ${pos.posicao}  |  ${pos.qtde} pecas', style: _sMini),
           ),
-          _buildTarjaLocalizadorOs(id, pedido.codigo),
+          _buildTarjaLocalizadorSeq(id, seqLabel),
         ],
       ),
     );
   }
+}
+
+class _ItemEtiqueta {
+  final PedidoTecnicoElementoModel elem;
+  final ElementoModel elemDetalhamento;
+  final PosicaoModel pos;
+  final int? seq;
+  final String seqLabel;
+  final FormaModel? formaDef;
+  final bool temVar;
+  final double diametroBitola;
+  final double comprimentoCorte;
+
+  _ItemEtiqueta({
+    required this.elem,
+    required this.elemDetalhamento,
+    required this.pos,
+    required this.seq,
+    required this.seqLabel,
+    required this.formaDef,
+    required this.temVar,
+    required this.diametroBitola,
+    required this.comprimentoCorte,
+  });
 }

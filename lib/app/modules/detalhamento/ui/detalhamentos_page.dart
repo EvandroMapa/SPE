@@ -72,7 +72,7 @@ class _DetalhamentosPageState extends State<DetalhamentosPage> {
               controller: _searchCtrl,
               onChanged: (val) => setState(() => _filter = val),
               decoration: InputDecoration(
-                hintText: 'Buscar por cliente, obra ou código...',
+                hintText: 'Buscar por cliente, desenho, pavimento, obra ou código...',
                 prefixIcon: const Icon(Icons.search, size: 20),
                 suffixIcon: _filter.isNotEmpty
                     ? IconButton(
@@ -123,6 +123,8 @@ class _DetalhamentosPageState extends State<DetalhamentosPage> {
                   final query = _filter.toLowerCase();
                   return p.clienteNome.toLowerCase().contains(query) ||
                       p.obraNome.toLowerCase().contains(query) ||
+                      p.desenho.toLowerCase().contains(query) ||
+                      p.pavimento.toLowerCase().contains(query) ||
                       p.codigo.toString().contains(query);
                 }).toList();
 
@@ -156,7 +158,7 @@ class _DetalhamentosPageState extends State<DetalhamentosPage> {
                 return ListView.separated(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   itemCount: filtered.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 4),
+                  separatorBuilder: (_, _) => const SizedBox(height: 4),
                   itemBuilder: (context, index) {
                     final detalhamento = filtered[index];
                     return _DetalhamentoCard(
@@ -455,26 +457,23 @@ class _DetalhamentoCard extends StatelessWidget {
             ),
             title: Builder(
               builder: (context) {
-                // Busca o código do cliente e prefixo da obra em memória
+                // Busca o prefixo da obra em memória
                 String prefixo = '';
-                int codigoCliente = 0;
                 for (final c in BackendClient.clientes.data) {
                   if (c.id == detalhamento.clienteId) {
-                    codigoCliente = c.codigo;
-                  }
-                  for (final o in c.obras) {
-                    if (o.id == detalhamento.obraId) {
-                      prefixo = o.prefixo;
-                      break;
+                    for (final o in c.obras) {
+                      if (o.id == detalhamento.obraId) {
+                        prefixo = o.prefixo;
+                        break;
+                      }
                     }
+                    break;
                   }
-                  if (prefixo.isNotEmpty && codigoCliente > 0) break;
                 }
-                final codStr = codigoCliente > 0 ? '$codigoCliente - ' : '';
                 return Text(
                   prefixo.isNotEmpty
-                      ? '$codStr${detalhamento.clienteNome} - $prefixo'
-                      : '$codStr${detalhamento.clienteNome}',
+                      ? '${detalhamento.clienteNome} - $prefixo'
+                      : detalhamento.clienteNome,
                   style: AppCss.smallBold.setSize(14),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -485,13 +484,33 @@ class _DetalhamentoCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 2),
-                if (detalhamento.obraNome.isNotEmpty)
-                  Text(
-                    detalhamento.obraNome,
-                    style: AppCss.minimumRegular.setColor(Colors.grey[600]!).setSize(12),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                Builder(
+                  builder: (context) {
+                    final d = detalhamento.desenho.trim();
+                    final p = detalhamento.pavimento.trim();
+                    String linhaDesenhoPavimento;
+                    if (d.isNotEmpty && p.isNotEmpty) {
+                      linhaDesenhoPavimento = '$d - $p';
+                    } else if (d.isNotEmpty) {
+                      linhaDesenhoPavimento = d;
+                    } else if (p.isNotEmpty) {
+                      linhaDesenhoPavimento = p;
+                    } else {
+                      linhaDesenhoPavimento = detalhamento.obraNome;
+                    }
+                    if (linhaDesenhoPavimento.isEmpty) {
+                      return const SizedBox.shrink();
+                    }
+                    return Text(
+                      linhaDesenhoPavimento,
+                      style: AppCss.minimumRegular
+                          .setColor(Colors.grey[600]!)
+                          .setSize(12),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    );
+                  },
+                ),
                 const SizedBox(height: 3),
                 Row(children: [
                   Icon(Icons.layers_outlined, size: 12, color: Colors.grey[500]),

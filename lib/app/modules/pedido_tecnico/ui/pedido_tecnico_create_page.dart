@@ -46,6 +46,8 @@ class _PedidoTecnicoCreatePageState
 
   bool _salvando = false;
   bool _bloqueadosExpandido = false;
+  final Set<String> _expandidosDisp = {};
+  final Set<String> _expandidosSel = {};
   bool _gerandoEtiquetas = false;
   String _statusEtiquetas = '';
 
@@ -53,6 +55,7 @@ class _PedidoTecnicoCreatePageState
   void initState() {
     super.initState();
     pedidoTecnicoCtrl.init(widget.pedido);
+    _obsCtrl.addListener(_onObsChanged);
 
     // Se editando, restaurar seleções
     if (widget.pedido != null) {
@@ -74,8 +77,37 @@ class _PedidoTecnicoCreatePageState
     }
   }
 
+  void _onObsChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _avisoSalvarParaImprimir() {
+    NotificationService.showPending(
+      'Alterações pendentes',
+      'Salve as alterações do pedido antes de gerar relatórios ou etiquetas.',
+      position: NotificationPosition.bottom,
+    );
+  }
+
+  void _avisoSalvarParaExcluir() {
+    NotificationService.showPending(
+      'Alterações pendentes',
+      'Salve as alterações do pedido antes de excluir.',
+      position: NotificationPosition.bottom,
+    );
+  }
+
+  void _avisoSalvarParaCancelar() {
+    NotificationService.showPending(
+      'Alterações pendentes',
+      'Salve as alterações do pedido antes de alterar o status.',
+      position: NotificationPosition.bottom,
+    );
+  }
+
   @override
   void dispose() {
+    _obsCtrl.removeListener(_onObsChanged);
     _obsCtrl.dispose();
     super.dispose();
   }
@@ -89,6 +121,10 @@ class _PedidoTecnicoCreatePageState
   }
 
   Future<void> _confirmDelete() async {
+    if (_hasUnsavedChanges) {
+      _avisoSalvarParaExcluir();
+      return;
+    }
     final pedido = _pedidoAtual;
     if (pedido == null) return;
 
@@ -154,7 +190,11 @@ class _PedidoTecnicoCreatePageState
     }
   }
 
-  void _gerarPdf({required bool completo}) async {
+  void _gerarPdf() async {
+    if (_hasUnsavedChanges) {
+      _avisoSalvarParaImprimir();
+      return;
+    }
     final pedido = _pedidoAtual;
     if (pedido == null) return;
     final det = BackendClient.detalhamentos.data
@@ -164,18 +204,44 @@ class _PedidoTecnicoCreatePageState
     final pdfBytes = await PdfPedidoTecnico.gerar(
       pedido: pedido,
       detalhamento: det,
-      completo: completo,
+      completo: true,
       produtos: BackendClient.bitolas.data,
     );
     await Printing.layoutPdf(
       onLayout: (format) async => pdfBytes,
-      name: completo
-          ? 'PT-${pedido.codigo} - ${pedido.clienteNome} (Completo)'
-          : 'PT-${pedido.codigo} - ${pedido.clienteNome} (Resumido)',
+      name: 'PT-${pedido.codigo} - ${pedido.clienteNome} (Completo)',
+    );
+  }
+
+  void _gerarElementos() async {
+    if (_hasUnsavedChanges) {
+      _avisoSalvarParaImprimir();
+      return;
+    }
+    final pedido = _pedidoAtual;
+    if (pedido == null) return;
+    final det = BackendClient.detalhamentos.data
+        .where((p) => p.id == pedido.detalhamentoId)
+        .firstOrNull ?? _detalhamentoSel;
+
+    final pdfBytes = await PdfPedidoTecnico.gerarElementos(
+      pedido: pedido,
+      detalhamento: det,
+      produtos: BackendClient.bitolas.data,
+    );
+    await Printing.layoutPdf(
+      onLayout: (format) async => pdfBytes,
+      name: pedido.identificador.isNotEmpty
+          ? '${pedido.identificador} - Elementos'
+          : 'PT-${pedido.codigo} - ${pedido.clienteNome} (Elementos)',
     );
   }
 
   void _gerarEtiqueta() async {
+    if (_hasUnsavedChanges) {
+      _avisoSalvarParaImprimir();
+      return;
+    }
     if (_gerandoEtiquetas) return;
     final pedido = _pedidoAtual;
     if (pedido == null) {
@@ -241,6 +307,10 @@ class _PedidoTecnicoCreatePageState
   }
 
   void _cancelarOuReabrir() {
+    if (_hasUnsavedChanges) {
+      _avisoSalvarParaCancelar();
+      return;
+    }
     final pedido = _pedidoAtual;
     if (pedido == null) return;
     if (pedido.isAberto) {
@@ -433,28 +503,27 @@ class _PedidoTecnicoCreatePageState
         ),
         actions: _pedidoAtual != null
             ? [
-                Tooltip(
-                  message: _pedidoAtual!.isAberto
+                _appBarAction(
+                  tooltip: _pedidoAtual!.isAberto
                       ? 'Cancelar Pedido'
                       : 'Reabrir Pedido',
-                  child: IconButton(
-                    icon: Icon(
-                      _pedidoAtual!.isAberto
-                          ? Icons.pause_circle_outline
-                          : Icons.play_circle_outline,
-                      color: Colors.white70,
-                      size: 20,
-                    ),
-                    onPressed: _cancelarOuReabrir,
-                  ),
+                  tooltipDesabilitado:
+                      'Salve as alterações antes de ${_pedidoAtual!.isAberto ? 'cancelar' : 'reabrir'} o pedido',
+                  icon: _pedidoAtual!.isAberto
+                      ? Icons.pause_circle_outline
+                      : Icons.play_circle_outline,
+                  habilitado: !_hasUnsavedChanges,
+                  onDisabledTap: _avisoSalvarParaCancelar,
+                  onTap: _cancelarOuReabrir,
                 ),
-                Tooltip(
-                  message: 'Excluir Pedido',
-                  child: IconButton(
-                    icon: const Icon(Icons.delete_outline,
-                        color: Colors.white70, size: 20),
-                    onPressed: _confirmDelete,
-                  ),
+                _appBarAction(
+                  tooltip: 'Excluir Pedido',
+                  tooltipDesabilitado:
+                      'Salve as alterações antes de excluir o pedido',
+                  icon: Icons.delete_outline,
+                  habilitado: !_hasUnsavedChanges,
+                  onDisabledTap: _avisoSalvarParaExcluir,
+                  onTap: _confirmDelete,
                 ),
                 const SizedBox(width: 4),
               ]
@@ -579,6 +648,7 @@ class _PedidoTecnicoCreatePageState
     }
 
     final elementosHabilitado = form.isEdit;
+    final podeImprimir = !_hasUnsavedChanges;
 
     return Container(
       width: 60,
@@ -629,21 +699,30 @@ class _PedidoTecnicoCreatePageState
             ),
             const SizedBox(height: 4),
             _sidebarAction(
-              tooltip: 'PDF Resumido',
-              icon: Icons.summarize_outlined,
+              tooltip: 'Elementos',
+              icon: Icons.grid_view_rounded,
               color: Colors.deepOrange,
-              onTap: () => _gerarPdf(completo: false),
+              habilitado: podeImprimir,
+              tooltipDesabilitado: 'Salve as alterações antes de imprimir',
+              onDisabledTap: _avisoSalvarParaImprimir,
+              onTap: _gerarElementos,
             ),
             _sidebarAction(
               tooltip: 'PDF Completo',
               icon: Icons.picture_as_pdf_outlined,
               color: Colors.orange,
-              onTap: () => _gerarPdf(completo: true),
+              habilitado: podeImprimir,
+              tooltipDesabilitado: 'Salve as alterações antes de imprimir',
+              onDisabledTap: _avisoSalvarParaImprimir,
+              onTap: _gerarPdf,
             ),
             _sidebarAction(
               tooltip: _gerandoEtiquetas ? 'Gerando etiquetas...' : 'Etiquetas',
               icon: Icons.label_outline,
               color: const Color(0xFF7C3AED),
+              habilitado: podeImprimir,
+              tooltipDesabilitado: 'Salve as alterações antes de gerar etiquetas',
+              onDisabledTap: _avisoSalvarParaImprimir,
               onTap: _gerarEtiqueta,
               loading: _gerandoEtiquetas,
             ),
@@ -654,38 +733,78 @@ class _PedidoTecnicoCreatePageState
     );
   }
 
+  Widget _appBarAction({
+    required String tooltip,
+    required String tooltipDesabilitado,
+    required IconData icon,
+    required bool habilitado,
+    required VoidCallback onTap,
+    required VoidCallback onDisabledTap,
+  }) {
+    return Tooltip(
+      message: habilitado ? tooltip : tooltipDesabilitado,
+      preferBelow: false,
+      waitDuration: const Duration(milliseconds: 300),
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 200),
+        opacity: habilitado ? 1.0 : 0.35,
+        child: IconButton(
+          icon: Icon(icon, color: Colors.white, size: 20),
+          onPressed: habilitado ? onTap : onDisabledTap,
+        ),
+      ),
+    );
+  }
+
   Widget _sidebarAction({
     required String tooltip,
     required IconData icon,
     required Color color,
     required VoidCallback onTap,
     bool loading = false,
+    bool habilitado = true,
+    String? tooltipDesabilitado,
+    VoidCallback? onDisabledTap,
   }) {
+    final finalColor = habilitado ? color : Colors.grey[400]!;
+    final finalBgColor =
+        habilitado ? color.withValues(alpha: 0.10) : Colors.transparent;
+    final finalTooltip =
+        habilitado ? tooltip : (tooltipDesabilitado ?? 'Salve as alterações primeiro');
+
     return Tooltip(
-      message: tooltip,
+      message: finalTooltip,
       preferBelow: false,
       waitDuration: const Duration(milliseconds: 300),
       child: InkWell(
-        onTap: loading ? null : onTap,
+        onTap: loading
+            ? null
+            : (habilitado ? onTap : onDisabledTap),
         borderRadius: BorderRadius.circular(8),
-        child: AnimatedContainer(
+        child: AnimatedOpacity(
           duration: const Duration(milliseconds: 200),
-          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.10),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: loading
-              ? Center(
-                  child: SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: color),
+          opacity: habilitado ? 1.0 : 0.35,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: finalBgColor,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: loading
+                ? Center(
+                    child: SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: color),
+                    ),
+                  )
+                : Center(
+                    child: Icon(icon, size: 18, color: finalColor),
                   ),
-                )
-              : Icon(icon, size: 18, color: color),
+          ),
         ),
       ),
     );
@@ -966,30 +1085,30 @@ class _PedidoTecnicoCreatePageState
                     Text(
                       _detalhamentoSel != null
                           ? 'Elementos — ${_detalhamentoSel!.labelExibicao}'
-                          : 'Elementos do Detalhamento',
-                      style: AppCss.mediumBold.setSize(15),
+                          : 'Elementos Disponíveis',
+                      style: AppCss.mediumBold
+                          .setSize(15)
+                          .setColor(const Color(0xFF1E293B)),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '$totalDisp disponível(is)${totalParciais > 0 ? ' · $totalParciais parcial(is)' : ''}${totalBloq > 0 ? ' · $totalBloq bloqueado(s)' : ''}',
+                      '$totalDisp disponíveis'
+                      '${totalParciais > 0 ? ' · $totalParciais parcial(is)' : ''}'
+                      '${totalBloq > 0 ? ' · $totalBloq em outro pedido' : ''}',
                       style: AppCss.minimumRegular
-                          .setColor(Colors.grey[600]!)
+                          .setColor(Colors.grey[500]!)
                           .setSize(11),
                     ),
                   ],
                 ),
               ),
-              if (totalDisp > 0)
+              if (apenasDisponiveis.isNotEmpty)
                 InkWell(
                   onTap: () {
                     setState(() {
-                      for (final vm in todosVm) {
-                        if (vm.estaDisponivel &&
-                            !_elementosSelecionados
-                                .containsKey(_chave(vm.elemento))) {
-                          _elementosSelecionados[_chave(vm.elemento)] =
-                              vm.elemento.quantidade;
-                        }
+                      for (final vm in apenasDisponiveis) {
+                        _elementosSelecionados[_chave(vm.elemento)] =
+                            vm.elemento.quantidade;
                       }
                     });
                   },
@@ -1001,8 +1120,7 @@ class _PedidoTecnicoCreatePageState
                       color: AppColors.primaryMain.withValues(alpha: 0.10),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                          color:
-                              AppColors.primaryMain.withValues(alpha: 0.20)),
+                          color: AppColors.primaryMain.withValues(alpha: 0.25)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -1194,6 +1312,8 @@ class _PedidoTecnicoCreatePageState
       }
     }
 
+    final seqsPedido = _calcularSequenciasInicio(selecionados.map((v) => v.elemento));
+
     return Column(
       children: [
         // Header
@@ -1303,7 +1423,10 @@ class _PedidoTecnicoCreatePageState
                   padding: const EdgeInsets.all(10),
                   itemCount: selecionados.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 5),
-                  itemBuilder: (_, i) => _tileSelecionado(selecionados[i]),
+                  itemBuilder: (_, i) => _tileSelecionado(
+                    selecionados[i],
+                    sequenciaInicio: seqsPedido[_chave(selecionados[i].elemento)],
+                  ),
                 ),
         ),
         // Resumo + Botão
@@ -1437,182 +1560,670 @@ class _PedidoTecnicoCreatePageState
     );
   }
 
-  // ── Tile: Elemento Disponível ──────────────────────────
-  Widget _tileDisponivel(ElementoDetalhamentoViewModel vm) {
-    final elem = vm.elemento;
-    return InkWell(
-      onTap: () {
-        if (elem.quantidade > 1) {
-          _mostrarDialogQuantidade(elem);
-        } else {
-          setState(() {
-            _elementosSelecionados[_chave(elem)] = elem.quantidade;
-          });
-        }
-      },
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+  // ── Cálculo de Sequências (SEQ/OS) por Elemento ────────────
+  Map<String, int> _calcularSequenciasInicio(Iterable<ElementoModel> elementos) {
+    final ordenados = List<ElementoModel>.from(elementos)
+      ..sort((a, b) => compararNatural(a.nome, b.nome));
+
+    final mapa = <String, int>{};
+    int seq = 1;
+    for (final elem in ordenados) {
+      mapa[_chave(elem)] = seq;
+      final numPos = elem.posicoes.where((p) => p.qtde > 0).length;
+      seq += numPos > 0 ? numPos : 1;
+    }
+    return mapa;
+  }
+
+  // ── Tabela de Posições (expandida) ─────────────────────────
+  Widget _buildTabelaPosicoes(
+    ElementoModel elem, {
+    int? qtdeSolicitada,
+    bool isDireita = false,
+    int? sequenciaInicio,
+  }) {
+    final posicoes = elem.posicoes;
+    final corBorda = isDireita
+        ? AppColors.primaryMain.withValues(alpha: 0.18)
+        : const Color(0xFFE2E8F0);
+
+    if (posicoes.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFFCBD5E1)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 4,
-              offset: const Offset(0, 1),
-            ),
-          ],
+          color: isDireita
+              ? AppColors.primaryMain.withValues(alpha: 0.04)
+              : const Color(0xFFF8FAFC),
+          borderRadius: const BorderRadius.only(
+            bottomLeft: Radius.circular(10),
+            bottomRight: Radius.circular(10),
+          ),
+          border: Border(top: BorderSide(color: corBorda, width: 1)),
         ),
-        child: Row(
-          children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: const Color(0xFF10B981).withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                    color:
-                        const Color(0xFF10B981).withValues(alpha: 0.30)),
-              ),
-              child: const Icon(Icons.add,
-                  color: Color(0xFF10B981), size: 17),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    elem.nome.isEmpty ? 'Elemento' : elem.nome,
-                    style: AppCss.smallBold.setSize(14),
+        child: Center(
+          child: Text(
+            'Nenhuma posição cadastrada neste elemento',
+            style: AppCss.minimumRegular.setColor(Colors.grey[500]!).setSize(11),
+          ),
+        ),
+      );
+    }
+
+    int seqOffset = 0;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+      decoration: BoxDecoration(
+        color: isDireita
+            ? AppColors.primaryMain.withValues(alpha: 0.04)
+            : const Color(0xFFF8FAFC),
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(10),
+          bottomRight: Radius.circular(10),
+        ),
+        border: Border(top: BorderSide(color: corBorda, width: 1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Cabeçalho da tabela
+          Padding(
+            padding: const EdgeInsets.only(bottom: 5, left: 4, right: 4),
+            child: Row(
+              children: [
+                if (isDireita)
+                  SizedBox(
+                    width: 38,
+                    child: Text(
+                      'SEQ',
+                      style: AppCss.minimumBold
+                          .setColor(AppColors.primaryMain)
+                          .setSize(10)
+                          .setLetterSpacing(0.5),
+                    ),
                   ),
-                  const SizedBox(height: 3),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.blueGrey.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          'Qtde: ${elem.quantidade}',
-                          style: AppCss.minimumBold
-                              .setColor(Colors.blueGrey[600]!)
-                              .setSize(11),
-                        ),
+                SizedBox(
+                  width: 40,
+                  child: Text(
+                    'POS',
+                    style: AppCss.minimumBold
+                        .setColor(Colors.grey[600]!)
+                        .setSize(10)
+                        .setLetterSpacing(0.5),
+                  ),
+                ),
+                Expanded(
+                  flex: 3,
+                  child: Text(
+                    'BITOLA',
+                    style: AppCss.minimumBold
+                        .setColor(Colors.grey[600]!)
+                        .setSize(10)
+                        .setLetterSpacing(0.5),
+                  ),
+                ),
+                SizedBox(
+                  width: 46,
+                  child: Text(
+                    'FORMA',
+                    style: AppCss.minimumBold
+                        .setColor(Colors.grey[600]!)
+                        .setSize(10)
+                        .setLetterSpacing(0.5),
+                  ),
+                ),
+                SizedBox(
+                  width: qtdeSolicitada != null && qtdeSolicitada > 1 ? 84 : 48,
+                  child: Text(
+                    qtdeSolicitada != null && qtdeSolicitada > 1 ? 'TOTAL (UN)' : 'QTDE',
+                    textAlign: TextAlign.center,
+                    style: AppCss.minimumBold
+                        .setColor(Colors.grey[600]!)
+                        .setSize(10)
+                        .setLetterSpacing(0.5),
+                  ),
+                ),
+                SizedBox(
+                  width: 90,
+                  child: Text(
+                    'COMPRIMENTO',
+                    textAlign: TextAlign.right,
+                    style: AppCss.minimumBold
+                        .setColor(Colors.grey[600]!)
+                        .setSize(10)
+                        .setLetterSpacing(0.5),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Linhas das posições
+          ...posicoes.asMap().entries.map((entry) {
+            final idx = entry.key;
+            final pos = entry.value;
+            final temQtde = pos.qtde > 0;
+            final int? seqPos = (isDireita && sequenciaInicio != null)
+                ? (temQtde ? sequenciaInicio + seqOffset : null)
+                : null;
+            if (isDireita && temQtde) seqOffset++;
+
+            final bitolaStr = pos.bitolaNome.split('-').first.trim();
+            final formaStr = pos.formaCodigo.isNotEmpty ? pos.formaCodigo : '—';
+            final corte = pos.comprimentoDeCorte > 0
+                ? pos.comprimentoDeCorte
+                : pos.comprimentos.values.fold<double>(0.0, (s, v) => s + v);
+            final corteStr = corte > 0
+                ? (corte == corte.roundToDouble() ? '${corte.toInt()} cm' : '${corte.toStringAsFixed(1)} cm')
+                : '—';
+            final temVar = pos.variaveis.values.any((v) => v);
+            final isEven = idx % 2 == 0;
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              decoration: BoxDecoration(
+                color: isEven
+                    ? (isDireita ? Colors.white.withValues(alpha: 0.65) : Colors.white)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Row(
+                children: [
+                  // SEQ (somente no painel da direita — Pedido Técnico)
+                  if (isDireita)
+                    SizedBox(
+                      width: 38,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (seqPos != null)
+                            Tooltip(
+                              message: 'Sequência no Pedido Técnico: $seqPos',
+                              preferBelow: false,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 4, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primaryMain.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(
+                                    color: AppColors.primaryMain.withValues(alpha: 0.25),
+                                    width: 0.5,
+                                  ),
+                                ),
+                                child: Text(
+                                  '$seqPos',
+                                  style: AppCss.minimumBold
+                                      .setColor(AppColors.primaryMain)
+                                      .setSize(10),
+                                ),
+                              ),
+                            )
+                          else
+                            Text(
+                              '—',
+                              style: AppCss.minimumRegular
+                                  .setColor(Colors.grey[400]!)
+                                  .setSize(10),
+                            ),
+                        ],
                       ),
-                      if (elem.pesoTotal > 0) ...[
-                        const SizedBox(width: 8),
-                        Text(
-                          '${elem.pesoTotal.toStringAsFixed(1)} kg',
-                          style: AppCss.minimumBold
-                              .setColor(const Color(0xFF10B981))
-                              .setSize(12),
+                    ),
+                  // POS
+                  SizedBox(
+                    width: 40,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: isDireita
+                                ? AppColors.primaryMain.withValues(alpha: 0.10)
+                                : const Color(0xFF10B981).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            pos.posicao.isNotEmpty ? pos.posicao : '${idx + 1}',
+                            style: AppCss.minimumBold
+                                .setColor(isDireita
+                                    ? AppColors.primaryMain
+                                    : const Color(0xFF047857))
+                                .setSize(10),
+                          ),
                         ),
                       ],
-                    ],
+                    ),
+                  ),
+                  // BITOLA
+                  Expanded(
+                    flex: 3,
+                    child: Text(
+                      bitolaStr,
+                      style: AppCss.minimumBold
+                          .setSize(11)
+                          .setColor(const Color(0xFF1E293B)),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  // FORMA
+                  SizedBox(
+                    width: 46,
+                    child: Text(
+                      formaStr,
+                      style: AppCss.minimumRegular
+                          .setSize(11)
+                          .setColor(Colors.grey[700]!),
+                    ),
+                  ),
+                  // QTDE
+                  SizedBox(
+                    width: qtdeSolicitada != null && qtdeSolicitada > 1 ? 84 : 48,
+                    child: qtdeSolicitada != null && qtdeSolicitada > 1
+                        ? RichText(
+                            textAlign: TextAlign.center,
+                            text: TextSpan(
+                              children: [
+                                TextSpan(
+                                  text: '${pos.qtde * qtdeSolicitada}',
+                                  style: AppCss.minimumBold
+                                      .setColor(AppColors.primaryMain)
+                                      .setSize(11),
+                                ),
+                                TextSpan(
+                                  text: ' (${pos.qtde})',
+                                  style: AppCss.minimumRegular
+                                      .setColor(Colors.grey[500]!)
+                                      .setSize(9),
+                                ),
+                              ],
+                            ),
+                          )
+                        : Text(
+                            '${pos.qtde}',
+                            textAlign: TextAlign.center,
+                            style: AppCss.minimumBold
+                                .setSize(11)
+                                .setColor(const Color(0xFF1E293B)),
+                          ),
+                  ),
+                  // COMPRIMENTO
+                  SizedBox(
+                    width: 90,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Text(
+                          corteStr,
+                          style: AppCss.minimumRegular
+                              .setSize(11)
+                              .setColor(Colors.grey[800]!),
+                        ),
+                        if (temVar) ...[
+                          const SizedBox(width: 3),
+                          Tooltip(
+                            message: 'Comprimento variável',
+                            preferBelow: false,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 3, vertical: 0.5),
+                              decoration: BoxDecoration(
+                                color: Colors.amber.withValues(alpha: 0.20),
+                                borderRadius: BorderRadius.circular(3),
+                              ),
+                              child: Text(
+                                'v',
+                                style: AppCss.minimumBold
+                                    .setColor(Colors.amber[900]!)
+                                    .setSize(8),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                 ],
               ),
-            ),
-          ],
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  // ── Tile: Elemento Disponível ──────────────────────────
+  Widget _tileDisponivel(ElementoDetalhamentoViewModel vm, {int? sequenciaInicio}) {
+    final elem = vm.elemento;
+    final chave = _chave(elem);
+    final isExpandido = _expandidosDisp.contains(chave);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isExpandido
+              ? const Color(0xFF10B981).withValues(alpha: 0.45)
+              : const Color(0xFFCBD5E1),
+          width: isExpandido ? 1.5 : 1.0,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                InkWell(
+                  onTap: () {
+                    if (elem.quantidade > 1) {
+                      _mostrarDialogQuantidade(elem);
+                    } else {
+                      setState(() {
+                        _elementosSelecionados[_chave(elem)] = elem.quantidade;
+                      });
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(8),
+                  child: Tooltip(
+                    message: 'Adicionar ao pedido',
+                    preferBelow: false,
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                            color: const Color(0xFF10B981).withValues(alpha: 0.30)),
+                      ),
+                      child: const Icon(Icons.add,
+                          color: Color(0xFF10B981), size: 17),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: InkWell(
+                    onTap: () {
+                      if (elem.quantidade > 1) {
+                        _mostrarDialogQuantidade(elem);
+                      } else {
+                        setState(() {
+                          _elementosSelecionados[_chave(elem)] = elem.quantidade;
+                        });
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          elem.nome.isEmpty ? 'Elemento' : elem.nome,
+                          style: AppCss.smallBold.setSize(14),
+                        ),
+                        const SizedBox(height: 3),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.blueGrey.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                'Qtde: ${elem.quantidade}',
+                                style: AppCss.minimumBold
+                                    .setColor(Colors.blueGrey[600]!)
+                                    .setSize(11),
+                              ),
+                            ),
+                            if (elem.pesoTotal > 0) ...[
+                              const SizedBox(width: 8),
+                              Text(
+                                '${elem.pesoTotal.toStringAsFixed(1)} kg',
+                                style: AppCss.minimumBold
+                                    .setColor(const Color(0xFF10B981))
+                                    .setSize(12),
+                              ),
+                            ],
+                            const SizedBox(width: 8),
+                            Text(
+                              '${elem.posicoes.length} pos.',
+                              style: AppCss.minimumRegular
+                                  .setColor(Colors.grey[500]!)
+                                  .setSize(11),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                // Botão de expandir/recolher posições
+                InkWell(
+                  onTap: () {
+                    setState(() {
+                      if (isExpandido) {
+                        _expandidosDisp.remove(chave);
+                      } else {
+                        _expandidosDisp.add(chave);
+                      }
+                    });
+                  },
+                  borderRadius: BorderRadius.circular(8),
+                  child: Tooltip(
+                    message: isExpandido ? 'Ocultar posições' : 'Ver posições',
+                    preferBelow: false,
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: isExpandido
+                            ? const Color(0xFF10B981).withValues(alpha: 0.12)
+                            : Colors.grey[100],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: AnimatedRotation(
+                        turns: isExpandido ? 0.5 : 0,
+                        duration: const Duration(milliseconds: 200),
+                        child: Icon(
+                          Icons.keyboard_arrow_down,
+                          size: 18,
+                          color: isExpandido
+                              ? const Color(0xFF10B981)
+                              : Colors.grey[600],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (isExpandido)
+            _buildTabelaPosicoes(
+              elem,
+              isDireita: false,
+              sequenciaInicio: sequenciaInicio,
+            ),
+        ],
       ),
     );
   }
 
   // ── Tile: Parcialmente alocado (restante na esquerda) ──
-  Widget _tileParcial(ElementoDetalhamentoViewModel vm) {
+  Widget _tileParcial(ElementoDetalhamentoViewModel vm, {int? sequenciaInicio}) {
     final elem = vm.elemento;
-    final qtdeSel = _elementosSelecionados[_chave(elem)] ?? 0;
+    final chave = _chave(elem);
+    final isExpandido = _expandidosDisp.contains(chave);
+    final qtdeSel = _elementosSelecionados[chave] ?? 0;
     final restante = elem.quantidade - qtdeSel;
 
-    return InkWell(
-      onTap: () => _mostrarDialogQuantidade(
-        elem,
-        qtdeInicial: restante,
-        qtdeMaxima: restante,
-        somarAoExistente: true,
-      ),
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-        decoration: BoxDecoration(
-          color: AppColors.primaryMain.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-              color: AppColors.primaryMain.withValues(alpha: 0.30)),
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.primaryMain.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isExpandido
+              ? AppColors.primaryMain.withValues(alpha: 0.50)
+              : AppColors.primaryMain.withValues(alpha: 0.30),
+          width: isExpandido ? 1.5 : 1.0,
         ),
-        child: Row(
-          children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: AppColors.primaryMain.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                    color: AppColors.primaryMain.withValues(alpha: 0.30)),
-              ),
-              child: Icon(Icons.pie_chart_outline,
-                  color: AppColors.primaryMain, size: 16),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    elem.nome.isEmpty ? 'Elemento' : elem.nome,
-                    style: AppCss.smallBold.setSize(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                InkWell(
+                  onTap: () => _mostrarDialogQuantidade(
+                    elem,
+                    qtdeInicial: restante,
+                    qtdeMaxima: restante,
+                    somarAoExistente: true,
                   ),
-                  const SizedBox(height: 3),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 7, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.amber.withValues(alpha: 0.18),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                              color: Colors.amber.withValues(alpha: 0.35)),
-                        ),
-                        child: Text(
-                          '$restante restante(s)',
-                          style: AppCss.minimumBold
-                              .setColor(Colors.amber[800]!)
-                              .setSize(10),
-                        ),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Tooltip(
+                    message: 'Adicionar restante',
+                    preferBelow: false,
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryMain.withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                            color: AppColors.primaryMain.withValues(alpha: 0.30)),
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '$qtdeSel de ${elem.quantidade} no pedido',
-                        style: AppCss.minimumRegular
-                            .setColor(Colors.grey[500]!)
-                            .setSize(11),
-                      ),
-                      if (elem.pesoTotal > 0) ...[
-                        const SizedBox(width: 8),
+                      child: Icon(Icons.pie_chart_outline,
+                          color: AppColors.primaryMain, size: 16),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: InkWell(
+                    onTap: () => _mostrarDialogQuantidade(
+                      elem,
+                      qtdeInicial: restante,
+                      qtdeMaxima: restante,
+                      somarAoExistente: true,
+                    ),
+                    borderRadius: BorderRadius.circular(6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Text(
-                          '${(elem.pesoTotal / elem.quantidade * restante).toStringAsFixed(1)} kg',
-                          style: AppCss.minimumBold
-                              .setColor(const Color(0xFF10B981))
-                              .setSize(11),
+                          elem.nome.isEmpty ? 'Elemento' : elem.nome,
+                          style: AppCss.smallBold.setSize(14),
+                        ),
+                        const SizedBox(height: 3),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.amber.withValues(alpha: 0.18),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                    color: Colors.amber.withValues(alpha: 0.35)),
+                              ),
+                              child: Text(
+                                '$restante restante(s)',
+                                style: AppCss.minimumBold
+                                    .setColor(Colors.amber[800]!)
+                                    .setSize(10),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '$qtdeSel de ${elem.quantidade} no pedido',
+                              style: AppCss.minimumRegular
+                                  .setColor(Colors.grey[500]!)
+                                  .setSize(11),
+                            ),
+                            if (elem.pesoTotal > 0) ...[
+                              const SizedBox(width: 8),
+                              Text(
+                                '${(elem.pesoTotal / elem.quantidade * restante).toStringAsFixed(1)} kg',
+                                style: AppCss.minimumBold
+                                    .setColor(const Color(0xFF10B981))
+                                    .setSize(11),
+                              ),
+                            ],
+                            const SizedBox(width: 8),
+                            Text(
+                              '${elem.posicoes.length} pos.',
+                              style: AppCss.minimumRegular
+                                  .setColor(Colors.grey[500]!)
+                                  .setSize(11),
+                            ),
+                          ],
                         ),
                       ],
-                    ],
+                    ),
                   ),
-
-                ],
-              ),
+                ),
+                const SizedBox(width: 6),
+                InkWell(
+                  onTap: () {
+                    setState(() {
+                      if (isExpandido) {
+                        _expandidosDisp.remove(chave);
+                      } else {
+                        _expandidosDisp.add(chave);
+                      }
+                    });
+                  },
+                  borderRadius: BorderRadius.circular(8),
+                  child: Tooltip(
+                    message: isExpandido ? 'Ocultar posições' : 'Ver posições',
+                    preferBelow: false,
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: isExpandido
+                            ? AppColors.primaryMain.withValues(alpha: 0.14)
+                            : Colors.grey[100],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: AnimatedRotation(
+                        turns: isExpandido ? 0.5 : 0,
+                        duration: const Duration(milliseconds: 200),
+                        child: Icon(
+                          Icons.keyboard_arrow_down,
+                          size: 18,
+                          color: isExpandido
+                              ? AppColors.primaryMain
+                              : Colors.grey[600],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+          if (isExpandido)
+            _buildTabelaPosicoes(
+              elem,
+              isDireita: false,
+              sequenciaInicio: sequenciaInicio,
+            ),
+        ],
       ),
     );
   }
@@ -1823,110 +2434,171 @@ class _PedidoTecnicoCreatePageState
   }
 
   // ── Tile: Elemento Bloqueado ───────────────────────────
-  Widget _tileBloqueado(ElementoDetalhamentoViewModel vm) {
+  Widget _tileBloqueado(ElementoDetalhamentoViewModel vm, {int? sequenciaInicio}) {
     final elem = vm.elemento;
-    return Tooltip(
-      message: 'Em uso no Pedido Técnico ${vm.identificadorPedidoOcupante}',
-      preferBelow: false,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-        decoration: BoxDecoration(
-          color: Colors.orange.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-              color: Colors.orange.withValues(alpha: 0.30)),
+    final chave = _chave(elem);
+    final isExpandido = _expandidosDisp.contains(chave);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isExpandido
+              ? Colors.orange.withValues(alpha: 0.50)
+              : Colors.orange.withValues(alpha: 0.30),
+          width: isExpandido ? 1.5 : 1.0,
         ),
-        child: Opacity(
-          opacity: 0.65,
-          child: Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.lock_outline,
+                      color: Colors.orange, size: 16),
                 ),
-                child: const Icon(Icons.lock_outline,
-                    color: Colors.orange, size: 16),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      elem.nome.isEmpty ? 'Elemento' : elem.nome,
-                      style: AppCss.smallBold
-                          .setSize(13)
-                          .setColor(Colors.grey[700]!),
-                    ),
-                    const SizedBox(height: 3),
-                    Row(
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Tooltip(
+                    message: 'Em uso no Pedido Técnico ${vm.identificadorPedidoOcupante}',
+                    preferBelow: false,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            '${vm.identificadorPedidoOcupante}',
-                            style: AppCss.minimumBold
-                                .setColor(Colors.orange)
-                                .setSize(10),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
                         Text(
-                          'Qtde: ${elem.quantidade}',
-                          style: AppCss.minimumRegular
-                              .setColor(Colors.grey[500]!)
-                              .setSize(11),
+                          elem.nome.isEmpty ? 'Elemento' : elem.nome,
+                          style: AppCss.smallBold
+                              .setSize(13)
+                              .setColor(Colors.grey[700]!),
                         ),
-                        if (elem.pesoTotal > 0) ...[
-                          const SizedBox(width: 8),
-                          Text(
-                            '${elem.pesoTotal.toStringAsFixed(1)} kg',
-                            style: AppCss.minimumBold
-                                .setColor(const Color(0xFF10B981).withValues(alpha: 0.7))
-                                .setSize(11),
-                          ),
-                        ],
+                        const SizedBox(height: 3),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                '${vm.identificadorPedidoOcupante}',
+                                style: AppCss.minimumBold
+                                    .setColor(Colors.orange)
+                                    .setSize(10),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Qtde: ${elem.quantidade}',
+                              style: AppCss.minimumRegular
+                                  .setColor(Colors.grey[500]!)
+                                  .setSize(11),
+                            ),
+                            if (elem.pesoTotal > 0) ...[
+                              const SizedBox(width: 8),
+                              Text(
+                                '${elem.pesoTotal.toStringAsFixed(1)} kg',
+                                style: AppCss.minimumBold
+                                    .setColor(const Color(0xFF10B981).withValues(alpha: 0.7))
+                                    .setSize(11),
+                              ),
+                            ],
+                            const SizedBox(width: 8),
+                            Text(
+                              '${elem.posicoes.length} pos.',
+                              style: AppCss.minimumRegular
+                                  .setColor(Colors.grey[500]!)
+                                  .setSize(11),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 6),
+                InkWell(
+                  onTap: () {
+                    setState(() {
+                      if (isExpandido) {
+                        _expandidosDisp.remove(chave);
+                      } else {
+                        _expandidosDisp.add(chave);
+                      }
+                    });
+                  },
+                  borderRadius: BorderRadius.circular(8),
+                  child: Tooltip(
+                    message: isExpandido ? 'Ocultar posições' : 'Ver posições',
+                    preferBelow: false,
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: isExpandido
+                            ? Colors.orange.withValues(alpha: 0.15)
+                            : Colors.grey[100],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: AnimatedRotation(
+                        turns: isExpandido ? 0.5 : 0,
+                        duration: const Duration(milliseconds: 200),
+                        child: Icon(
+                          Icons.keyboard_arrow_down,
+                          size: 18,
+                          color: isExpandido
+                              ? Colors.orange
+                              : Colors.grey[600],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
+          if (isExpandido)
+            _buildTabelaPosicoes(
+              elem,
+              isDireita: false,
+              sequenciaInicio: sequenciaInicio,
+            ),
+        ],
       ),
     );
   }
 
   // ── Tile: Elemento Selecionado ─────────────────────────
-  Widget _tileSelecionado(ElementoDetalhamentoViewModel vm) {
+  Widget _tileSelecionado(ElementoDetalhamentoViewModel vm, {int? sequenciaInicio}) {
     final elem = vm.elemento;
-    final qtdeSolicitada = _elementosSelecionados[_chave(elem)] ?? elem.quantidade;
+    final chave = _chave(elem);
+    final isExpandido = _expandidosSel.contains(chave);
+    final qtdeSolicitada = _elementosSelecionados[chave] ?? elem.quantidade;
     final pesoUnitario =
         elem.quantidade > 0 ? elem.pesoTotal / elem.quantidade : 0.0;
     final pesoParcial = pesoUnitario * qtdeSolicitada;
     final isParcial = qtdeSolicitada < elem.quantidade;
 
-    return InkWell(
-      onTap: () {
-        setState(() => _elementosSelecionados.remove(_chave(elem)));
-      },
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+    return Container(
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.90),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-            color: AppColors.primaryMain.withValues(alpha: 0.35)),
+          color: isExpandido
+              ? AppColors.primaryMain.withValues(alpha: 0.55)
+              : AppColors.primaryMain.withValues(alpha: 0.35),
+          width: isExpandido ? 1.5 : 1.0,
+        ),
         boxShadow: [
           BoxShadow(
             color: AppColors.primaryMain.withValues(alpha: 0.06),
@@ -1935,116 +2607,185 @@ class _PedidoTecnicoCreatePageState
           ),
         ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          InkWell(
-            onTap: () {
-              setState(() {
-                _elementosSelecionados.remove(_chave(elem));
-              });
-            },
-            borderRadius: BorderRadius.circular(8),
-            child: Tooltip(
-              message: 'Remover do pedido',
-              preferBelow: false,
-              child: Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryMain,
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primaryMain.withValues(alpha: 0.30),
-                      blurRadius: 4,
-                      offset: const Offset(0, 1),
-                    ),
-                  ],
-                ),
-                child: const Icon(Icons.check,
-                    color: Colors.white, size: 17),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
               children: [
-                Text(
-                  elem.nome.isEmpty ? 'Elemento' : elem.nome,
-                  style: AppCss.smallBold.setSize(14),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 7, vertical: 2),
+                InkWell(
+                  onTap: () {
+                    setState(() {
+                      _elementosSelecionados.remove(chave);
+                      _expandidosSel.remove(chave);
+                    });
+                  },
+                  borderRadius: BorderRadius.circular(8),
+                  child: Tooltip(
+                    message: 'Remover do pedido',
+                    preferBelow: false,
+                    child: Container(
+                      width: 32,
+                      height: 32,
                       decoration: BoxDecoration(
-                        color: isParcial
-                            ? Colors.amber.withValues(alpha: 0.18)
-                            : AppColors.primaryMain
-                                .withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                          color: isParcial
-                              ? Colors.amber.withValues(alpha: 0.35)
-                              : AppColors.primaryMain
-                                  .withValues(alpha: 0.25),
-                        ),
+                        color: AppColors.primaryMain,
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primaryMain.withValues(alpha: 0.30),
+                            blurRadius: 4,
+                            offset: const Offset(0, 1),
+                          ),
+                        ],
                       ),
-                      child: Text(
-                        'Qtde: $qtdeSolicitada',
-                        style: AppCss.minimumBold
-                            .setColor(isParcial
-                                ? Colors.amber[800]!
-                                : AppColors.primaryMain)
-                            .setSize(11),
+                      child: const Icon(Icons.check,
+                          color: Colors.white, size: 17),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: InkWell(
+                    onTap: () {
+                      setState(() {
+                        _elementosSelecionados.remove(chave);
+                        _expandidosSel.remove(chave);
+                      });
+                    },
+                    borderRadius: BorderRadius.circular(6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          elem.nome.isEmpty ? 'Elemento' : elem.nome,
+                          style: AppCss.smallBold.setSize(14),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: isParcial
+                                    ? Colors.amber.withValues(alpha: 0.18)
+                                    : AppColors.primaryMain
+                                        .withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: isParcial
+                                      ? Colors.amber.withValues(alpha: 0.35)
+                                      : AppColors.primaryMain
+                                          .withValues(alpha: 0.25),
+                                ),
+                              ),
+                              child: Text(
+                                'Qtde: $qtdeSolicitada',
+                                style: AppCss.minimumBold
+                                    .setColor(isParcial
+                                        ? Colors.amber[800]!
+                                        : AppColors.primaryMain)
+                                    .setSize(11),
+                              ),
+                            ),
+                            if (pesoParcial > 0) ...[
+                              const SizedBox(width: 8),
+                              Text(
+                                '${pesoParcial.toStringAsFixed(1)} kg',
+                                style: AppCss.minimumBold
+                                    .setColor(const Color(0xFF10B981))
+                                    .setSize(12),
+                              ),
+                            ],
+                            const SizedBox(width: 8),
+                            Text(
+                              '${elem.posicoes.length} pos.',
+                              style: AppCss.minimumRegular
+                                  .setColor(Colors.grey[500]!)
+                                  .setSize(11),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                // Botão editar qtde (se > 1)
+                if (elem.quantidade > 1) ...[
+                  const SizedBox(width: 6),
+                  InkWell(
+                    onTap: () => _mostrarDialogQuantidade(elem, isEdicao: true),
+                    borderRadius: BorderRadius.circular(6),
+                    child: Tooltip(
+                      message: 'Alterar quantidade',
+                      preferBelow: false,
+                      child: Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryMain
+                              .withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(7),
+                          border: Border.all(
+                              color: AppColors.primaryMain
+                                  .withValues(alpha: 0.20)),
+                        ),
+                        child: Icon(Icons.edit_outlined,
+                            size: 14, color: AppColors.primaryMain),
                       ),
                     ),
-                    if (pesoParcial > 0) ...[
-                      const SizedBox(width: 8),
-                      Text(
-                        '${pesoParcial.toStringAsFixed(1)} kg',
-                        style: AppCss.minimumBold
-                            .setColor(const Color(0xFF10B981))
-                            .setSize(12),
+                  ),
+                ],
+                const SizedBox(width: 6),
+                // Botão expandir posições
+                InkWell(
+                  onTap: () {
+                    setState(() {
+                      if (isExpandido) {
+                        _expandidosSel.remove(chave);
+                      } else {
+                        _expandidosSel.add(chave);
+                      }
+                    });
+                  },
+                  borderRadius: BorderRadius.circular(8),
+                  child: Tooltip(
+                    message: isExpandido ? 'Ocultar posições' : 'Ver posições',
+                    preferBelow: false,
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: isExpandido
+                            ? AppColors.primaryMain.withValues(alpha: 0.14)
+                            : Colors.grey[100],
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                    ],
-                    // Botão editar qtde (se > 1)
-                    if (elem.quantidade > 1) ...[
-                      const Spacer(),
-                      InkWell(
-                        onTap: () => _mostrarDialogQuantidade(elem),
-                        borderRadius: BorderRadius.circular(6),
-                        child: Tooltip(
-                          message: 'Alterar quantidade',
-                          preferBelow: false,
-                          child: Container(
-                            width: 28,
-                            height: 28,
-                            decoration: BoxDecoration(
-                              color: AppColors.primaryMain
-                                  .withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(7),
-                              border: Border.all(
-                                  color: AppColors.primaryMain
-                                      .withValues(alpha: 0.20)),
-                            ),
-                            child: Icon(Icons.edit_outlined,
-                                size: 14, color: AppColors.primaryMain),
-                          ),
+                      child: AnimatedRotation(
+                        turns: isExpandido ? 0.5 : 0,
+                        duration: const Duration(milliseconds: 200),
+                        child: Icon(
+                          Icons.keyboard_arrow_down,
+                          size: 18,
+                          color: isExpandido
+                              ? AppColors.primaryMain
+                              : Colors.grey[600],
                         ),
                       ),
-                    ],
-                  ],
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
+          if (isExpandido)
+            _buildTabelaPosicoes(
+              elem,
+              qtdeSolicitada: qtdeSolicitada,
+              isDireita: true,
+              sequenciaInicio: sequenciaInicio,
+            ),
         ],
-      ),
       ),
     );
   }

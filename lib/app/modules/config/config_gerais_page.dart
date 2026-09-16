@@ -16,6 +16,7 @@ class ConfigGeraisPage extends StatefulWidget {
 class _ConfigGeraisPageState extends State<ConfigGeraisPage> {
   late bool _rotacionar180Inicial;
   late bool _rotacionar180;
+
   bool _salvando = false;
 
   bool get _temAlteracoes => _rotacionar180 != _rotacionar180Inicial;
@@ -31,10 +32,12 @@ class _ConfigGeraisPageState extends State<ConfigGeraisPage> {
     setState(() => _salvando = true);
     try {
       await appCtrl.saveEtiquetaRotacao180(_rotacionar180);
+
       _rotacionar180Inicial = _rotacionar180;
+
       NotificationService.showPositive(
         'Configurações Salvas',
-        'Orientação da etiqueta atualizada com sucesso.',
+        'Parâmetros atualizados com sucesso.',
         position: NotificationPosition.bottom,
       );
     } catch (e) {
@@ -61,7 +64,7 @@ class _ConfigGeraisPageState extends State<ConfigGeraisPage> {
           ],
         ),
         content: Text(
-          'Você fez alterações na orientação da etiqueta que ainda não foram salvas.\nDeseja descartar as alterações e sair?',
+          'Você fez alterações nas configurações que ainda não foram salvas.\nDeseja descartar as alterações e sair?',
           style: AppCss.smallRegular,
         ),
         actions: [

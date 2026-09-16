@@ -35,3 +35,29 @@ void setWebTitle(String title) {
     ApplicationSwitcherDescription(label: title),
   );
 }
+
+/// Compara duas strings considerando blocos numéricos (ordenação natural).
+/// Exemplo: "V1", "V2", "V10" em vez de "V1", "V10", "V2".
+int compararNatural(String a, String b) {
+  if (a == b) return 0;
+  final regExp = RegExp(r'(\d+)|(\D+)');
+  final matchesA = regExp.allMatches(a.toLowerCase()).map((m) => m.group(0)!).toList();
+  final matchesB = regExp.allMatches(b.toLowerCase()).map((m) => m.group(0)!).toList();
+  final len = matchesA.length < matchesB.length ? matchesA.length : matchesB.length;
+  for (int i = 0; i < len; i++) {
+    final tokenA = matchesA[i];
+    final tokenB = matchesB[i];
+    final numA = int.tryParse(tokenA);
+    final numB = int.tryParse(tokenB);
+    if (numA != null && numB != null) {
+      final cmp = numA.compareTo(numB);
+      if (cmp != 0) return cmp;
+    } else {
+      final cmp = tokenA.compareTo(tokenB);
+      if (cmp != 0) return cmp;
+    }
+  }
+  final cmpLen = matchesA.length.compareTo(matchesB.length);
+  if (cmpLen != 0) return cmpLen;
+  return a.compareTo(b);
+}

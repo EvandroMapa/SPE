@@ -1476,53 +1476,104 @@ class _PedidoTecnicoCreatePageState
                 ),
                 const SizedBox(height: 10),
               ],
-              // Botão Salvar — aparece quando há alterações pendentes
+              // Botões Cancelar / Salvar — aparecem quando há alterações pendentes
               if (_temAlteracoesPendentesElementos)
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
-                  child: InkWell(
-                    onTap: _salvando ? null : () => _salvarPedido(),
-                    borderRadius: BorderRadius.circular(10),
-                    child: Container(
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF10B981),
-                        borderRadius: BorderRadius.circular(10),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF10B981).withValues(alpha: 0.30),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Center(
-                        child: _salvando
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
+                  child: Row(
+                    children: [
+                      // Cancelar
+                      Expanded(
+                        child: InkWell(
+                          onTap: _salvando ? null : () => _cancelarAlteracoesElementos(),
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            height: 42,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: Colors.red.withValues(alpha: 0.35),
+                                width: 1.2,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.red.withValues(alpha: 0.08),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
                                 ),
-                              )
-                            : Row(
+                              ],
+                            ),
+                            child: Center(
+                              child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Icon(Icons.save_outlined,
-                                      size: 17, color: Colors.white),
-                                  const SizedBox(width: 8),
+                                  Icon(Icons.close_rounded,
+                                      size: 17, color: Colors.red[600]),
+                                  const SizedBox(width: 6),
                                   Text(
-                                    'SALVAR ELEMENTOS',
+                                    'CANCELAR',
                                     style: AppCss.minimumBold
-                                        .setColor(Colors.white)
+                                        .setColor(Colors.red[600]!)
                                         .setSize(12)
                                         .setLetterSpacing(0.8),
                                   ),
                                 ],
                               ),
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                      // Salvar
+                      Expanded(
+                        child: InkWell(
+                          onTap: _salvando ? null : () => _salvarPedido(),
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            height: 42,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF10B981),
+                              borderRadius: BorderRadius.circular(10),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF10B981)
+                                      .withValues(alpha: 0.30),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Center(
+                              child: _salvando
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.save_outlined,
+                                            size: 17, color: Colors.white),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          'SALVAR',
+                                          style: AppCss.minimumBold
+                                              .setColor(Colors.white)
+                                              .setSize(12)
+                                              .setLetterSpacing(0.8),
+                                        ),
+                                      ],
+                                    ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
             ],
@@ -2788,6 +2839,51 @@ class _PedidoTecnicoCreatePageState
         ],
       ),
     );
+  }
+
+  Future<void> _cancelarAlteracoesElementos() async {
+    final descartar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 26),
+            SizedBox(width: 8),
+            Text('Descartar alterações?'),
+          ],
+        ),
+        content: const Text(
+          'As alterações feitas nos elementos serão canceladas e voltarão ao estado salvo anterior.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Continuar editando'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red[700],
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Descartar'),
+          ),
+        ],
+      ),
+    );
+
+    if (descartar == true && mounted) {
+      setState(() {
+        _elementosSelecionados
+          ..clear()
+          ..addAll(_elementosSelecionadosSalvos);
+      });
+      NotificationService.showNeutral(
+        'Alterações descartadas',
+        'Os elementos voltaram ao estado salvo.',
+        position: NotificationPosition.bottom,
+      );
+    }
   }
 
   Future<void> _salvarPedido({bool auto = false}) async {

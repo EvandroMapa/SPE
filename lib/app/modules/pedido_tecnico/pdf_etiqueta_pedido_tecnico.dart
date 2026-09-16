@@ -57,7 +57,6 @@ class PdfEtiquetaPedidoTecnico {
 
     // 1. Coleta todas as posições válidas de todos os elementos
     final itens = <_ItemEtiqueta>[];
-    int totalPaginas = 0;
 
     for (final elem in pedido.elementos) {
       if (elem.quantidadeSolicitada <= 0) continue;
@@ -75,8 +74,7 @@ class PdfEtiquetaPedidoTecnico {
         final seqLabel = seq != null ? '$seq' : '—';
         final formaDef = formasMap[pos.formaCodigo];
         final temVar = pos.variaveis.values.any((v) => v) && pos.variaveisConfig.isNotEmpty;
-
-        totalPaginas += temVar ? 3 : 1;
+        final chaveGrupo = _gerarChaveGrupo(pos, temVar);
 
         itens.add(_ItemEtiqueta(
           elem: elem,
@@ -88,6 +86,7 @@ class PdfEtiquetaPedidoTecnico {
           temVar: temVar,
           diametroBitola: _extrairDiametroBitola(pos),
           comprimentoCorte: _extrairComprimentoCorte(pos),
+          chaveGrupo: chaveGrupo,
         ));
       }
     }
@@ -95,9 +94,10 @@ class PdfEtiquetaPedidoTecnico {
     // 2. Ordena etiquetas:
     //    1º Bitola (ordem natural pelo diâmetro em mm: 4.2, 5.0, 6.3, 8.0, 10.0, 12.5...)
     //    2º Comprimento de corte (crescente)
-    //    3º Sequência (SEQ)
-    //    4º Elemento
-    //    5º Posição
+    //    3º Chave do Grupo (posições geometricamente idênticas ficam contíguas)
+    //    4º Sequência (SEQ)
+    //    5º Elemento
+    //    6º Posição
     itens.sort((a, b) {
       final cmpDiam = a.diametroBitola.compareTo(b.diametroBitola);
       if (cmpDiam != 0) return cmpDiam;
@@ -107,6 +107,9 @@ class PdfEtiquetaPedidoTecnico {
 
       final cmpCorte = a.comprimentoCorte.compareTo(b.comprimentoCorte);
       if (cmpCorte != 0) return cmpCorte;
+
+      final cmpChave = a.chaveGrupo.compareTo(b.chaveGrupo);
+      if (cmpChave != 0) return cmpChave;
 
       final sA = a.seq ?? 999999;
       final sB = b.seq ?? 999999;
@@ -119,70 +122,124 @@ class PdfEtiquetaPedidoTecnico {
       return compararNatural(a.pos.posicao, b.pos.posicao);
     });
 
-    // 3. Gera as páginas das etiquetas na ordem definida
+    // 3. Agrupa itens contíguos com a mesma chave geométrica (sem variáveis)
+    final grupos = <List<_ItemEtiqueta>>[];
+    for (final item in itens) {
+      if (grupos.isEmpty) {
+        grupos.add([item]);
+      } else {
+        final ultimoGrupo = grupos.last;
+        final primeiroDoUltimo = ultimoGrupo.first;
+        if (!item.temVar &&
+            !primeiroDoUltimo.temVar &&
+            item.chaveGrupo == primeiroDoUltimo.chaveGrupo) {
+          ultimoGrupo.add(item);
+        } else {
+          grupos.add([item]);
+        }
+      }
+    }
+
+    // 4. Calcula total de páginas (incluindo totalizadoras para grupos com 2+ itens)
+    int totalPaginas = 0;
+    for (final grupo in grupos) {
+      if (grupo.length > 1) {
+        totalPaginas += 1; // Etiqueta totalizadora
+      }
+      for (final item in grupo) {
+        totalPaginas += item.temVar ? 3 : 1;
+      }
+    }
+
+    // 5. Gera as páginas das etiquetas na ordem definida
     final pdf = pw.Document(compress: false);
     int paginaAtual = 0;
 
-    for (final item in itens) {
-      // Etiqueta principal
-      pdf.addPage(pw.Page(
-        pageFormat: formato,
-        margin: pw.EdgeInsets.zero,
-        build: (_) => _wrapRotacao(
-          _buildEtiqueta(
-            pedido: pedido,
-            detalhamento: detalhamento,
-            elem: item.elem,
-            elemDetalhamento: item.elemDetalhamento,
-            pos: item.pos,
-            formaDef: item.formaDef,
-            seqLabel: item.seqLabel,
-          ),
-          rotacionar180: deveRotacionar,
-        ),
-      ));
-      paginaAtual++;
-
-      // Se tem trecho variável → DUAS etiquetas extras
-      if (item.temVar) {
-        // Etiqueta 2: trechos variáveis
+    for (final grupo in grupos) {
+      // Se for grupo de 2 ou mais posições idênticas, gera a ETIQUETA TOTALIZADORA antes
+      if (grupo.length > 1) {
         pdf.addPage(pw.Page(
           pageFormat: formato,
           margin: pw.EdgeInsets.zero,
           build: (_) => _wrapRotacao(
-            _buildEtiquetaTrechosVar(
+            _buildEtiquetaTotalizadora(
               pedido: pedido,
-              elem: item.elem,
-              elemDetalhamento: item.elemDetalhamento,
-              pos: item.pos,
-              seqLabel: item.seqLabel,
+              detalhamento: detalhamento,
+              grupo: grupo,
             ),
             rotacionar180: deveRotacionar,
           ),
         ));
         paginaAtual++;
 
-        // Etiqueta 3: comprimentos + comprimento de corte
-        pdf.addPage(pw.Page(
-          pageFormat: formato,
-          margin: pw.EdgeInsets.zero,
-          build: (_) => _wrapRotacao(
-            _buildEtiquetaComprimentos(
-              pedido: pedido,
-              elem: item.elem,
-              elemDetalhamento: item.elemDetalhamento,
-              pos: item.pos,
-              seqLabel: item.seqLabel,
-            ),
-            rotacionar180: deveRotacionar,
-          ),
-        ));
-        paginaAtual++;
+        if (onProgress != null && (paginaAtual % 3 == 0 || paginaAtual == totalPaginas)) {
+          onProgress(paginaAtual, totalPaginas);
+          await Future.delayed(Duration.zero);
+        }
       }
 
-      if (onProgress != null && (paginaAtual % 3 == 0 || paginaAtual == totalPaginas)) {
-        onProgress(paginaAtual, totalPaginas);
-        await Future.delayed(Duration.zero);
+      // Em seguida, gera as etiquetas de cada posição do grupo
+      for (final item in grupo) {
+        // Etiqueta principal
+        pdf.addPage(pw.Page(
+          pageFormat: formato,
+          margin: pw.EdgeInsets.zero,
+          build: (_) => _wrapRotacao(
+            _buildEtiqueta(
+              pedido: pedido,
+              detalhamento: detalhamento,
+              elem: item.elem,
+              elemDetalhamento: item.elemDetalhamento,
+              pos: item.pos,
+              formaDef: item.formaDef,
+              seqLabel: item.seqLabel,
+            ),
+            rotacionar180: deveRotacionar,
+          ),
+        ));
+        paginaAtual++;
+
+        // Se tem trecho variável → DUAS etiquetas extras
+        if (item.temVar) {
+          // Etiqueta 2: trechos variáveis
+          pdf.addPage(pw.Page(
+            pageFormat: formato,
+            margin: pw.EdgeInsets.zero,
+            build: (_) => _wrapRotacao(
+              _buildEtiquetaTrechosVar(
+                pedido: pedido,
+                elem: item.elem,
+                elemDetalhamento: item.elemDetalhamento,
+                pos: item.pos,
+                seqLabel: item.seqLabel,
+              ),
+              rotacionar180: deveRotacionar,
+            ),
+          ));
+          paginaAtual++;
+
+          // Etiqueta 3: comprimentos + comprimento de corte
+          pdf.addPage(pw.Page(
+            pageFormat: formato,
+            margin: pw.EdgeInsets.zero,
+            build: (_) => _wrapRotacao(
+              _buildEtiquetaComprimentos(
+                pedido: pedido,
+                elem: item.elem,
+                elemDetalhamento: item.elemDetalhamento,
+                pos: item.pos,
+                seqLabel: item.seqLabel,
+              ),
+              rotacionar180: deveRotacionar,
+            ),
+          ));
+          paginaAtual++;
+        }
+
+        if (onProgress != null && (paginaAtual % 3 == 0 || paginaAtual == totalPaginas)) {
+          onProgress(paginaAtual, totalPaginas);
+          await Future.delayed(Duration.zero);
+        }
       }
     }
     if (onProgress != null) {
@@ -454,6 +511,32 @@ class PdfEtiquetaPedidoTecnico {
   static double _extrairComprimentoCorte(PosicaoModel pos) {
     if (pos.comprimentoDeCorte > 0) return pos.comprimentoDeCorte;
     return pos.comprimentos.values.fold<double>(0.0, (s, v) => s + v);
+  }
+
+  /// Gera a chave única de agrupamento baseada na geometria estrita:
+  /// bitola + código da forma + sequência e tamanho exato de cada trecho + corte.
+  /// Posições com trechos variáveis nunca são agrupadas.
+  static String _gerarChaveGrupo(PosicaoModel pos, bool temVar) {
+    if (temVar) {
+      return 'VAR_${pos.id}';
+    }
+
+    final trechosNormalizados = pos.comprimentos.entries
+        .map((e) => MapEntry(e.key.toLowerCase().trim(), e.value))
+        .toList()
+      ..sort((e1, e2) => e1.key.compareTo(e2.key));
+
+    final trechosStr = trechosNormalizados
+        .map((e) => '${e.key}:${e.value.toStringAsFixed(1)}')
+        .join(';');
+
+    final bitolaIdNorm = pos.bitolaId.trim();
+    final bitolaNomeNorm = pos.bitolaNome.split('-').first.trim().toLowerCase();
+    final formaCodNorm = pos.formaCodigo.trim().toLowerCase();
+    final corteStr = pos.comprimentoDeCorte.toStringAsFixed(1);
+    final descDobraStr = (pos.descontoDobraSnapshot ?? 0.0).toStringAsFixed(1);
+
+    return '${bitolaIdNorm}_${bitolaNomeNorm}_${formaCodNorm}_${trechosStr}_${corteStr}_$descDobraStr';
   }
 
   static double _massaLinear(PosicaoModel pos) {
@@ -1089,6 +1172,264 @@ class PdfEtiquetaPedidoTecnico {
       ),
     );
   }
+
+  // ── Etiqueta Totalizadora: AGRUPAMENTO DE POSIÇÕES IDÊNTICAS ─────────────
+  static pw.Widget _buildEtiquetaTotalizadora({
+    required PedidoTecnicoModel pedido,
+    required DetalhamentoModel detalhamento,
+    required List<_ItemEtiqueta> grupo,
+  }) {
+    final primeiro = grupo.first;
+    final pos = primeiro.pos;
+    final formaDef = primeiro.formaDef;
+    final id = _limpar(pedido.identificador.isNotEmpty ? pedido.identificador : 'PT ${pedido.codigo.toString().padLeft(3, '0')}');
+
+    final bitolaStr = _limpar(pos.bitolaNome.split('-').first.trim());
+    final compUnit = pos.comprimentos.values.fold<double>(0.0, (s, v) => s + v);
+    final compCorteRaw = pos.comprimentoDeCorte > 0 ? pos.comprimentoDeCorte : compUnit.toDouble();
+    final compUnitStr = '$compUnit cm';
+    final compCorteStr = '${compCorteRaw == compCorteRaw.roundToDouble() ? compCorteRaw.toInt() : compCorteRaw.toStringAsFixed(1)} cm';
+
+    final totalPecas = grupo.fold<int>(0, (s, it) => s + it.pos.qtde);
+    final pesoTotalGrupo = grupo.fold<double>(0.0, (s, it) => s + _calcularPesoPosicao(it.pos));
+
+    final muitasSeqs = grupo.length > 25;
+
+    return pw.Padding(
+      padding: const pw.EdgeInsets.all(5),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+        children: [
+          // 1 ── CABEÇALHO IDENTIFICADOR + TOTALIZADORA
+          _boxPreta(
+            radius: 5,
+            vPad: 4,
+            child: pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.center,
+              children: [
+                pw.Expanded(
+                  child: pw.Center(
+                    child: pw.Text(
+                      id,
+                      style: _sTarjaId,
+                      maxLines: 1,
+                    ),
+                  ),
+                ),
+                pw.Container(width: 0.8, height: 22, color: _corBranco),
+                pw.SizedBox(width: 6),
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.center,
+                  mainAxisSize: pw.MainAxisSize.min,
+                  children: [
+                    pw.Text('TOTALIZADORA', style: pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold, color: _corBranco, letterSpacing: 0.8)),
+                    pw.SizedBox(height: 1),
+                    pw.Text('${grupo.length} POSIÇÕES', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: _corBranco)),
+                  ],
+                ),
+                pw.SizedBox(width: 4),
+              ],
+            ),
+          ),
+          pw.SizedBox(height: 2),
+
+          // 2 ── CLIENTE / OBRA / PAVIMENTO
+          pw.Container(
+            width: double.infinity,
+            constraints: const pw.BoxConstraints(minHeight: 25),
+            padding: const pw.EdgeInsets.only(left: 8, right: 8, top: 1.5, bottom: 3),
+            decoration: pw.BoxDecoration(
+              color: _corBranco,
+              borderRadius: pw.BorderRadius.circular(5),
+              border: pw.Border.all(color: _corPreto, width: 0.8),
+            ),
+            child: pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Expanded(
+                  flex: 4,
+                  child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+                    pw.Text('CLIENTE', style: _sBoxLabel),
+                    pw.Text(_limpar(pedido.clienteNome), style: _sBoxValor, maxLines: 2),
+                  ]),
+                ),
+                pw.SizedBox(width: 3),
+                pw.Container(margin: const pw.EdgeInsets.only(top: 1), width: 0.8, height: 21, color: _corPreto),
+                pw.SizedBox(width: 5),
+                pw.Expanded(
+                  flex: 4,
+                  child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+                    pw.Text('OBRA', style: _sBoxLabel),
+                    pw.Text(_limpar(pedido.obraNome), style: _sBoxValor, maxLines: 2),
+                  ]),
+                ),
+                pw.SizedBox(width: 3),
+                pw.Container(margin: const pw.EdgeInsets.only(top: 1), width: 0.8, height: 21, color: _corPreto),
+                pw.SizedBox(width: 5),
+                pw.Expanded(
+                  flex: 3,
+                  child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+                    pw.Text('PAVIMENTO', style: _sBoxLabel),
+                    pw.Text(
+                      detalhamento.pavimento.trim().isNotEmpty ? _limpar(detalhamento.pavimento.trim()) : '-',
+                      style: _sBoxValor,
+                      maxLines: 2,
+                    ),
+                  ]),
+                ),
+              ],
+            ),
+          ),
+          pw.SizedBox(height: 2),
+
+          // 3 ── RESUMO TÉCNICO DO GRUPO (BITOLA / TOTAL PEÇAS / PESO TOTAL / C. CORTE)
+          _boxBranca(
+            radius: 5,
+            vPad: 3,
+            child: pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
+              children: [
+                _col('BITOLA', bitolaStr),
+                pw.Container(width: 0.8, height: 22, color: _corPreto),
+                _col('TOTAL PEÇAS', '$totalPecas pçs', fontSize: 10),
+                pw.Container(width: 0.8, height: 22, color: _corPreto),
+                _col('PESO TOTAL', '${pesoTotalGrupo.toStringAsFixed(2)} kg', fontSize: 9.5),
+                pw.Container(width: 0.8, height: 22, color: _corPreto),
+                _col('C. UNITÁRIO', compUnitStr, fontSize: 8),
+                pw.Container(width: 0.8, height: 22, color: _corPreto),
+                pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.center, children: [
+                  pw.Text('C. DE CORTE', style: _sLabel),
+                  pw.SizedBox(height: 1),
+                  pw.Container(
+                    padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    decoration: pw.BoxDecoration(color: _corPreto, borderRadius: pw.BorderRadius.circular(3)),
+                    child: pw.Text(compCorteStr, style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold, color: _corBranco)),
+                  ),
+                ]),
+              ],
+            ),
+          ),
+          pw.SizedBox(height: 2),
+
+          // 4 ── ENUMERAÇÃO DAS SEQUÊNCIAS ENVOLVIDAS NO GRUPO
+          pw.Container(
+            width: double.infinity,
+            padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 3.5),
+            decoration: pw.BoxDecoration(
+              color: _corBranco,
+              borderRadius: pw.BorderRadius.circular(5),
+              border: pw.Border.all(color: _corPreto, width: 0.8),
+            ),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              mainAxisSize: pw.MainAxisSize.min,
+              children: [
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text(
+                      'SEQUÊNCIAS ENVOLVIDAS NO GRUPO',
+                      style: pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold, color: _corPreto, letterSpacing: 0.6),
+                    ),
+                    pw.Text(
+                      '${grupo.length} SEQs',
+                      style: pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold, color: _corPreto),
+                    ),
+                  ],
+                ),
+                pw.SizedBox(height: 3),
+                pw.Wrap(
+                  spacing: 3,
+                  runSpacing: 2.5,
+                  children: grupo.map((it) {
+                    return pw.Container(
+                      padding: pw.EdgeInsets.symmetric(
+                        horizontal: muitasSeqs ? 3.5 : 4.5,
+                        vertical: 1.5,
+                      ),
+                      decoration: pw.BoxDecoration(
+                        color: _corPreto,
+                        borderRadius: pw.BorderRadius.circular(3),
+                      ),
+                      child: pw.Text(
+                        muitasSeqs ? it.seqLabel : 'SEQ ${it.seqLabel}',
+                        style: pw.TextStyle(
+                          fontSize: muitasSeqs ? 7 : 6.5,
+                          fontWeight: pw.FontWeight.bold,
+                          color: _corBranco,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
+          pw.SizedBox(height: 2),
+
+          // 5 ── DESENHO DA FORMA
+          pw.Expanded(
+            child: pw.Container(
+              decoration: pw.BoxDecoration(
+                color: _corBranco,
+                borderRadius: pw.BorderRadius.circular(5),
+                border: pw.Border.all(color: _corPreto, width: 0.8),
+              ),
+              child: pw.Padding(
+                padding: const pw.EdgeInsets.all(4),
+                child: formaDef == null || formaDef.itens.isEmpty
+                    ? pw.Center(child: pw.Text('SEM DESENHO', style: _sMiniBold))
+                    : _buildDesenhoForma(
+                        formaDef,
+                        pos.comprimentos,
+                        variaveis: const {},
+                        variaveisConfig: const {},
+                      ),
+              ),
+            ),
+          ),
+          pw.SizedBox(height: 2),
+
+          // 6 ── RODAPÉ
+          if (pedido.detalhamentoCodigo > 0)
+            pw.Padding(
+              padding: const pw.EdgeInsets.only(bottom: 1, left: 2),
+              child: pw.Text('Det. ${pedido.detalhamentoCodigo}  |  Totalizador do Grupo', style: _sMini),
+            ),
+          _boxPreta(
+            radius: 5,
+            vPad: 4,
+            child: pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.center,
+              children: [
+                pw.Expanded(
+                  child: pw.Center(
+                    child: pw.Text(
+                      id,
+                      style: _sTarjaId,
+                      maxLines: 1,
+                    ),
+                  ),
+                ),
+                pw.Container(width: 0.8, height: 22, color: _corBranco),
+                pw.SizedBox(width: 8),
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.center,
+                  mainAxisSize: pw.MainAxisSize.min,
+                  children: [
+                    pw.Text('TOTAL DO GRUPO', style: _sTarjaLabel),
+                    pw.SizedBox(height: 1),
+                    pw.Text('$totalPecas PEÇAS', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: _corBranco)),
+                  ],
+                ),
+                pw.SizedBox(width: 4),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _ItemEtiqueta {
@@ -1101,6 +1442,7 @@ class _ItemEtiqueta {
   final bool temVar;
   final double diametroBitola;
   final double comprimentoCorte;
+  final String chaveGrupo;
 
   _ItemEtiqueta({
     required this.elem,
@@ -1112,5 +1454,6 @@ class _ItemEtiqueta {
     required this.temVar,
     required this.diametroBitola,
     required this.comprimentoCorte,
+    required this.chaveGrupo,
   });
 }

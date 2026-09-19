@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer';
 import 'package:flutter/foundation.dart';
 import 'package:acoplan/app/core/client/models/detalhamento_model.dart';
+import 'package:acoplan/app/modules/dashboard/models/demanda_model.dart';
 import 'package:acoplan/app/core/models/app_stream.dart';
 import 'package:acoplan/app/core/services/supabase_service.dart';
 
@@ -24,23 +25,26 @@ class DetalhamentoSupabaseCollection {
       final response = await SupabaseService.client.from(name).select().order('codigo', ascending: false);
       final rows = List<Map<String, dynamic>>.from(response);
 
-      final items = <DetalhamentoModel>[];
-      for (final p in rows) {
+      final items = await Future.wait(rows.map((p) async {
         final detalhamentoId = p['id'] as String;
         final elementosRaw = List<Map<String, dynamic>>.from(
-          await SupabaseService.client.from('elementos').select().eq('detalhamento_id', detalhamentoId).order('created_at', ascending: true),
+          await SupabaseService.client
+              .from('elementos')
+              .select()
+              .eq('detalhamento_id', detalhamentoId)
+              .order('created_at', ascending: true),
         );
         final elementoIds = elementosRaw.map((e) => e['id'] as String).toList();
         List<Map<String, dynamic>> posicoesRaw = [];
         if (elementoIds.isNotEmpty) {
           try {
-          posicoesRaw = List<Map<String, dynamic>>.from(
-            await SupabaseService.client
-                .from('posicoes')
-                .select()
-                .inFilter('elemento_id', elementoIds)
-                .order('created_at', ascending: true),
-          );
+            posicoesRaw = List<Map<String, dynamic>>.from(
+              await SupabaseService.client
+                  .from('posicoes')
+                  .select()
+                  .inFilter('elemento_id', elementoIds)
+                  .order('created_at', ascending: true),
+            );
           } catch (_) {
             posicoesRaw = List<Map<String, dynamic>>.from(
               await SupabaseService.client
@@ -50,8 +54,8 @@ class DetalhamentoSupabaseCollection {
             );
           }
         }
-        items.add(DetalhamentoModel.fromSupabaseMap(p, elementosRaw, posicoesRaw));
-      }
+        return DetalhamentoModel.fromSupabaseMap(p, elementosRaw, posicoesRaw);
+      }));
       final seenIds = <String>{};
       final uniqueItems = items.where((e) => seenIds.add(e.id)).toList();
       dataStream.add(uniqueItems);
@@ -123,8 +127,88 @@ class DetalhamentoSupabaseCollection {
     await fetch();
   }
 
-  Future<void> delete(DetalhamentoModel model) async {
+  Future<void> atualizarEtapaKanban(String detalhamentoId, String novaEtapa) async {
+    final list = List<DetalhamentoModel>.from(data);
+    final idx = list.indexWhere((d) => d.id == detalhamentoId);
+    if (idx != -1) {
+      final etapaEnum = DemandaEtapa.values.firstWhere(
+        (e) => e.name == novaEtapa,
+        orElse: () => list[idx].etapaKanban,
+      );
+      list[idx] = list[idx].copyWith(etapaKanban: etapaEnum);
+      dataStream.add(list);
+    }
+
     try {
+      await SupabaseService.client
+          .from(name)
+          .update({'etapa_kanban': novaEtapa})
+          .eq('id', detalhamentoId);
+    } catch (e) {
+      log('Supabase Error (atualizarEtapaKanban): $e');
+      await fetch();
+    }
+  }
+
+  Future<void> arquivarDetalhamento(String detalhamentoId) async {
+    final list = List<DetalhamentoModel>.from(data);
+    final idx = list.indexWhere((d) => d.id == detalhamentoId);
+    if (idx != -1) {
+      list[idx] = list[idx].copyWith(isArquivado: true);
+      dataStream.add(list);
+    }
+
+    try {
+      await SupabaseService.client
+          .from(name)
+          .update({'is_arquivado': true})
+          .eq('id', detalhamentoId);
+    } catch (e) {
+      log('Supabase Error (arquivarDetalhamento): $e');
+      await fetch();
+    }
+  }
+
+  Future<void> desarquivarDetalhamento(String detalhamentoId) async {
+    final list = List<DetalhamentoModel>.from(data);
+    final idx = list.indexWhere((d) => d.id == detalhamentoId);
+    if (idx != -1) {
+      list[idx] = list[idx].copyWith(
+        isArquivado: false,
+        etapaKanban: DemandaEtapa.finalizadoLiberado,
+      );
+      dataStream.add(list);
+    }
+
+    try {
+      await SupabaseService.client
+          .from(name)
+          .update({
+            'is_arquivado': false,
+            'etapa_kanban': 'finalizadoLiberado',
+          })
+          .eq('id', detalhamentoId);
+    } catch (e) {
+      log('Supabase Error (desarquivarDetalhamento): $e');
+      await fetch();
+    }
+  }
+
+  Future<void> delete(DetalhamentoModel model) async {
+    // 1. Atualização otimista imediata na memória e UI
+    final listaAtualizada = data.where((d) => d.id != model.id).toList();
+    dataStream.add(listaAtualizada);
+
+    try {
+      // 2. Desvincula qualquer demanda que aponte para este detalhamento
+      try {
+        await SupabaseService.client
+            .from('demandas')
+            .update({'detalhamento_id': null})
+            .eq('detalhamento_id', model.id);
+      } catch (_) {}
+
+      // 3. Exclui posições dos elementos
       final elementosRaw = List<Map<String, dynamic>>.from(
         await SupabaseService.client.from('elementos').select('id').eq('detalhamento_id', model.id),
       );
@@ -132,10 +216,16 @@ class DetalhamentoSupabaseCollection {
       if (elemIds.isNotEmpty) {
         await SupabaseService.client.from('posicoes').delete().inFilter('elemento_id', elemIds);
       }
+
+      // 4. Exclui elementos e detalhamento
       await SupabaseService.client.from('elementos').delete().eq('detalhamento_id', model.id);
       await SupabaseService.client.from(name).delete().eq('id', model.id);
+    } catch (e) {
+      log('Supabase Error (Detalhamento.delete): $e');
+      // Em caso de erro na exclusão remota, restaura o estado fazendo fetch
       await fetch();
-    } catch (e) { log('Supabase Error (Detalhamento.delete): $e'); }
+      rethrow;
+    }
   }
 
   // ── Elemento CRUD individual ─────────────────────────────

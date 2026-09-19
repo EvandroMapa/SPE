@@ -3,6 +3,7 @@ import 'package:acoplan/app/core/client/models/bitola_model.dart';
 import 'package:acoplan/app/core/client/models/forma_model.dart';
 import 'package:acoplan/app/core/client/models/trecho_variavel_config.dart';
 import 'package:acoplan/app/core/services/hash_service.dart';
+import 'package:acoplan/app/modules/dashboard/models/demanda_model.dart';
 
 class DetalhamentoModel {
   final String id;
@@ -17,6 +18,10 @@ class DetalhamentoModel {
   final String pavimento;
   final String funcionarioId;
   final String funcionarioNome;
+  final DemandaEtapa etapaKanban;
+  final String prioridade;
+  final String? demandaId;
+  final bool isArquivado;
 
   DetalhamentoModel({
     required this.id,
@@ -31,6 +36,10 @@ class DetalhamentoModel {
     this.pavimento = '',
     this.funcionarioId = '',
     this.funcionarioNome = '',
+    this.etapaKanban = DemandaEtapa.aguardandoFila,
+    this.prioridade = 'normal',
+    this.demandaId,
+    this.isArquivado = false,
   });
 
   factory DetalhamentoModel.empty() => DetalhamentoModel(
@@ -46,6 +55,10 @@ class DetalhamentoModel {
         pavimento: '',
         funcionarioId: '',
         funcionarioNome: '',
+        etapaKanban: DemandaEtapa.aguardandoFila,
+        prioridade: 'normal',
+        demandaId: null,
+        isArquivado: false,
       );
 
   factory DetalhamentoModel.fromSupabaseMap(
@@ -65,6 +78,15 @@ class DetalhamentoModel {
       return ElementoModel.fromSupabaseMap(e, posicoesPorElemento[elemId] ?? []);
     }).toList();
 
+    DemandaEtapa etapaParse = DemandaEtapa.aguardandoFila;
+    final etapaStr = map['etapa_kanban']?.toString() ?? '';
+    for (final e in DemandaEtapa.values) {
+      if (e.name == etapaStr) {
+        etapaParse = e;
+        break;
+      }
+    }
+
     return DetalhamentoModel(
       id: map['id'] ?? '',
       codigo: int.tryParse(map['codigo']?.toString() ?? '0') ?? 0,
@@ -78,12 +100,14 @@ class DetalhamentoModel {
       pavimento: map['pavimento'] ?? '',
       funcionarioId: map['funcionario_id'] ?? '',
       funcionarioNome: map['funcionario_nome'] ?? '',
+      etapaKanban: etapaParse,
+      prioridade: map['prioridade']?.toString() ?? 'normal',
+      demandaId: map['demanda_id']?.toString(),
+      isArquivado: map['is_arquivado'] == true,
     );
   }
 
   /// Mapa para INSERT/UPDATE de dados gerais no Supabase.
-  /// NÃO inclui peso_total — o peso é gerenciado exclusivamente
-  /// por atualizarPesoTotal() para não ser zerado ao salvar outros campos.
   Map<String, dynamic> toSupabaseMap() {
     final map = <String, dynamic>{
       'cliente_id': clienteId,
@@ -94,6 +118,10 @@ class DetalhamentoModel {
       'pavimento': pavimento.isEmpty ? null : pavimento,
       'funcionario_id': funcionarioId.isEmpty ? null : funcionarioId,
       'funcionario_nome': funcionarioNome.isEmpty ? null : funcionarioNome,
+      'etapa_kanban': etapaKanban.name,
+      'prioridade': prioridade,
+      'demanda_id': demandaId,
+      'is_arquivado': isArquivado,
     };
     if (codigo > 0) {
       map['codigo'] = codigo;
@@ -117,6 +145,10 @@ class DetalhamentoModel {
       'pavimento': pavimento,
       'funcionario_id': funcionarioId,
       'funcionario_nome': funcionarioNome,
+      'etapa_kanban': etapaKanban.name,
+      'prioridade': prioridade,
+      'demanda_id': demandaId,
+      'is_arquivado': isArquivado,
       'elementos': elementos.map((e) => e.toMap()).toList(),
     };
   }
@@ -143,6 +175,42 @@ class DetalhamentoModel {
     return 'Detalhamento $codigo';
   }
 
+  bool get isLiberado => etapaKanban == DemandaEtapa.finalizadoLiberado;
+
+  /// Retorna a quantidade total de peças somando todos os elementos e equivalentes
+  int get totalPecas {
+    int total = 0;
+    for (final e in elementos) {
+      total += e.quantidade;
+      for (final eq in e.elementosEquivalentes) {
+        total += eq.quantidade;
+      }
+    }
+    return total;
+  }
+
+  /// Verifica se o detalhamento está sem elementos disponíveis para gerar pedido
+  /// (ou seja, 100% das suas peças já foram solicitadas em pedidos técnicos)
+  bool estaTotalmenteAtendido(Map<String, int> alocados) {
+    if (elementos.isEmpty) return false;
+    for (final elem in elementos) {
+      final todosEntries = <({String nome, int qtdeTotal})>[
+        (nome: elem.nome, qtdeTotal: elem.quantidade),
+        ...elem.elementosEquivalentes.map((e) => (nome: e.nome, qtdeTotal: e.quantidade)),
+      ];
+
+      for (final entry in todosEntries) {
+        final chave = '${elem.id}_${entry.nome}';
+        final qtdAlocada = alocados[chave] ?? 0;
+        final qtdRestante = entry.qtdeTotal - qtdAlocada;
+        if (qtdRestante > 0) {
+          return false; // Ainda tem pelo menos 1 peça disponível
+        }
+      }
+    }
+    return true; // Todos elementos foram 100% alocados
+  }
+
   DetalhamentoModel copyWith({
     String? id,
     int? codigo,
@@ -156,6 +224,10 @@ class DetalhamentoModel {
     String? pavimento,
     String? funcionarioId,
     String? funcionarioNome,
+    DemandaEtapa? etapaKanban,
+    String? prioridade,
+    String? demandaId,
+    bool? isArquivado,
   }) {
     return DetalhamentoModel(
       id: id ?? this.id,
@@ -170,6 +242,10 @@ class DetalhamentoModel {
       pavimento: pavimento ?? this.pavimento,
       funcionarioId: funcionarioId ?? this.funcionarioId,
       funcionarioNome: funcionarioNome ?? this.funcionarioNome,
+      etapaKanban: etapaKanban ?? this.etapaKanban,
+      prioridade: prioridade ?? this.prioridade,
+      demandaId: demandaId ?? this.demandaId,
+      isArquivado: isArquivado ?? this.isArquivado,
     );
   }
 }

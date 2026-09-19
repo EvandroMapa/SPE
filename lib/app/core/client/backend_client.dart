@@ -8,6 +8,8 @@ import 'package:acoplan/app/core/client/supabase/forma_supabase_collection.dart'
 import 'package:acoplan/app/core/client/supabase/detalhamento_supabase_collection.dart';
 import 'package:acoplan/app/core/client/supabase/pedido_tecnico_supabase_collection.dart';
 
+import 'package:acoplan/app/core/client/supabase/demanda_supabase_collection.dart';
+
 class BackendClient {
   static UsuarioSupabaseCollection get usuarios => AppSupabaseClient.usuarios;
   static UsuarioTipoSupabaseCollection get usuarioTipos => AppSupabaseClient.usuarioTipos;
@@ -17,4 +19,5 @@ class BackendClient {
   static FormaSupabaseCollection get formas => AppSupabaseClient.formas;
   static DetalhamentoSupabaseCollection get detalhamentos => AppSupabaseClient.detalhamentos;
   static PedidoTecnicoSupabaseCollection get pedidosTecnicos => AppSupabaseClient.pedidosTecnicos;
+  static DemandaSupabaseCollection get demandas => AppSupabaseClient.demandas;
 }

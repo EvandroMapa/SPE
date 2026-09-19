@@ -5,6 +5,7 @@ import 'package:acoplan/app/core/models/app_stream.dart';
 import 'package:acoplan/app/core/services/notification_service.dart';
 import 'package:acoplan/app/modules/detalhamento/detalhamento_view_model.dart';
 import 'package:flutter/material.dart';
+import 'package:overlay_support/overlay_support.dart';
 
 final detalhamentoCtrl = DetalhamentoController();
 
@@ -252,19 +253,34 @@ class DetalhamentoController {
   // ── Excluir detalhamento inteiro ─────────────────────────────
   Future<void> onDelete(BuildContext context, DetalhamentoModel detalhamento) async {
     try {
+      NotificationService.showPending(
+        'Excluindo...',
+        'Excluindo detalhamento ${detalhamento.codigo}...',
+        position: NotificationPosition.bottom,
+      );
+
       final estaVinculado = await BackendClient.detalhamentos.estaVinculadoAPedido(detalhamento.id);
       if (estaVinculado) {
         NotificationService.showNegative(
           'Ação bloqueada',
           'Este detalhamento não pode ser excluído pois possui elementos vinculados a um ou mais Pedidos Técnicos.',
+          position: NotificationPosition.bottom,
         );
         return;
       }
       
       await BackendClient.detalhamentos.delete(detalhamento);
-      NotificationService.showPositive('Sucesso', 'Detalhamento excluído');
+      NotificationService.showPositive(
+        'Detalhamento Excluído',
+        'Detalhamento ${detalhamento.codigo} foi excluído com sucesso.',
+        position: NotificationPosition.bottom,
+      );
     } catch (e) {
-      NotificationService.showNegative('Erro', e.toString());
+      NotificationService.showNegative(
+        'Erro ao excluir',
+        e.toString(),
+        position: NotificationPosition.bottom,
+      );
     }
   }
 

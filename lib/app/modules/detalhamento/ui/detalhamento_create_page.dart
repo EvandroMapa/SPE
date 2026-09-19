@@ -466,6 +466,33 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> with Fo
   }
 
   Future<void> _confirmDelete() async {
+    final estaVinculado = await BackendClient.detalhamentos.estaVinculadoAPedido(widget.detalhamento!.id);
+    if (estaVinculado) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          icon: Icon(Icons.info_outline, size: 40, color: Colors.orange[700]),
+          title: Text('Exclusão Bloqueada', textAlign: TextAlign.center, style: AppCss.mediumBold),
+          content: Text(
+            'Este detalhamento não pode ser excluído pois possui elementos vinculados a um Pedido Técnico.\n\nRemova os elementos do pedido antes de excluir.',
+            style: AppCss.smallRegular,
+            textAlign: TextAlign.center,
+          ),
+          actionsAlignment: MainAxisAlignment.center,
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryMain),
+              onPressed: () => pop(ctx),
+              child: Text('Entendi', style: AppCss.smallBold.setColor(Colors.white)),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    if (!mounted) return;
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -489,10 +516,27 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> with Fo
     );
 
     if (confirmar == true && mounted) {
-      await BackendClient.detalhamentos.delete(widget.detalhamento!);
-      if (mounted) {
-        pop(context);
-        NotificationService.showPositive('Sucesso', 'Detalhamento excluído');
+      NotificationService.showPending(
+        'Excluindo...',
+        'Excluindo detalhamento ${widget.detalhamento!.codigo}...',
+        position: NotificationPosition.bottom,
+      );
+      try {
+        await BackendClient.detalhamentos.delete(widget.detalhamento!);
+        if (mounted) {
+          pop(context);
+          NotificationService.showPositive(
+            'Detalhamento Excluído',
+            'Detalhamento ${widget.detalhamento!.codigo} foi excluído com sucesso.',
+            position: NotificationPosition.bottom,
+          );
+        }
+      } catch (e) {
+        NotificationService.showNegative(
+          'Erro ao excluir',
+          e.toString(),
+          position: NotificationPosition.bottom,
+        );
       }
     }
   }

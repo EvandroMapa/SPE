@@ -9,7 +9,7 @@ class BaseController {
   BaseController._();
   factory BaseController() => _instance;
 
-  final AppStream<AppModule> moduleStream = AppStream.seed(AppModule.projetos);
+  final AppStream<AppModule> moduleStream = AppStream.seed(AppModule.dashboard);
   final AppStream<List<Widget>> appBarActionsStream = AppStream.seed([]);
 
   void setModule(AppModule module) {

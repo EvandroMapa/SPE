@@ -64,22 +64,15 @@ class _AppHoverSidebarState extends State<AppHoverSidebar> {
               child: StreamBuilder<AppModule>(
                 stream: baseCtrl.moduleStream.listen,
                 builder: (context, snap) {
-                  final current = snap.data ?? AppModule.projetos;
+                  final current = snap.data ?? AppModule.dashboard;
                   return ListView(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     children: [
                       _buildItem(
-                        icon: Icons.architecture_outlined,
-                        label: 'Projetos',
-                        module: AppModule.projetos,
+                        icon: Icons.dashboard_outlined,
+                        label: 'Área de Trabalho',
+                        module: AppModule.dashboard,
                         current: current,
-                      ),
-                      _buildItem(
-                        icon: Icons.description_outlined,
-                        label: 'Pedidos Técnicos',
-                        module: AppModule.pedidosTecnicos,
-                        current: current,
-                        hasExternalButton: true,
                       ),
                       const Divider(height: 1),
 
@@ -98,12 +91,14 @@ class _AppHoverSidebarState extends State<AppHoverSidebar> {
                                 Icons.inventory_2_outlined, 'Bitolas'),
                             _buildSubItem(AppModule.fabricantes, current,
                                 Icons.business_outlined, 'Fabricantes'),
+                            _buildSubItem(AppModule.formas, current,
+                                Icons.architecture, 'Formas'),
                           ],
                         )
                       else
                         _buildCollapsedIcon(
                           icon: Icons.add_circle_outline,
-                          isSelected: current == AppModule.cliente || current == AppModule.bitolas || current == AppModule.fabricantes,
+                          isSelected: current == AppModule.cliente || current == AppModule.bitolas || current == AppModule.fabricantes || current == AppModule.formas,
                         ),
                       
                       const Divider(height: 1),

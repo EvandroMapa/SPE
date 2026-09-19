@@ -1,4 +1,5 @@
 import 'package:acoplan/app/modules/cliente/ui/clientes_page.dart';
+import 'package:acoplan/app/modules/dashboard/ui/dashboard_page.dart';
 import 'package:acoplan/app/modules/fabricante/ui/fabricantes_page.dart';
 import 'package:acoplan/app/modules/pedido_tecnico/ui/pedidos_tecnicos_page.dart';
 import 'package:acoplan/app/modules/bitola/ui/bitolas_page.dart';
@@ -11,6 +12,7 @@ import 'package:acoplan/app/core/utils/app_css.dart';
 import 'package:flutter/material.dart';
 
 enum AppModule {
+  dashboard,
   projetos,
   detalhamentoIA,
   pedidosTecnicos,
@@ -23,6 +25,8 @@ enum AppModule {
 extension AppModuleExt on AppModule {
   Widget get widget {
     switch (this) {
+      case AppModule.dashboard:
+        return const DashboardPage();
       case AppModule.projetos:
         return const DetalhamentosPage();
       case AppModule.detalhamentoIA:
@@ -37,7 +41,6 @@ extension AppModuleExt on AppModule {
         return const FormasPage();
       case AppModule.bitolas:
         return const BitolasPage();
-
     }
   }
 
@@ -57,6 +60,8 @@ extension AppModuleExt on AppModule {
 
   IconData get icon {
     switch (this) {
+      case AppModule.dashboard:
+        return Icons.dashboard_outlined;
       case AppModule.projetos:
         return Icons.architecture_outlined;
       case AppModule.detalhamentoIA:
@@ -71,12 +76,13 @@ extension AppModuleExt on AppModule {
         return Icons.architecture;
       case AppModule.bitolas:
         return Icons.inventory_2_outlined;
-
     }
   }
 
   String get label {
     switch (this) {
+      case AppModule.dashboard:
+        return 'Área de Trabalho';
       case AppModule.projetos:
         return 'Projetos';
       case AppModule.detalhamentoIA:
@@ -91,7 +97,6 @@ extension AppModuleExt on AppModule {
         return 'Formas';
       case AppModule.bitolas:
         return 'Bitolas';
-
     }
   }
 }

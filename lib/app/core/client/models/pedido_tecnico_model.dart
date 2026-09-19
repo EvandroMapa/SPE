@@ -12,6 +12,7 @@ class PedidoTecnicoModel {
   final String obraId;
   final String obraNome;
   final String status; // 'aberto' | 'cancelado'
+  final String tipoServico; // 'CD' | 'CDA'
   final String observacao;
   final DateTime criadoEm;
   final List<PedidoTecnicoElementoModel> elementos;
@@ -22,6 +23,7 @@ class PedidoTecnicoModel {
     required this.id,
     required this.codigo,
     required this.identificador,
+    this.tipoServico = 'CD',
     required this.detalhamentoId,
     required this.detalhamentoCodigo,
     required this.clienteId,
@@ -39,6 +41,7 @@ class PedidoTecnicoModel {
         id: HashService.get,
         codigo: 0,
         identificador: '',
+        tipoServico: 'CD',
         detalhamentoId: '',
         detalhamentoCodigo: 0,
         clienteId: '',
@@ -69,6 +72,9 @@ class PedidoTecnicoModel {
       id: map['id'] ?? '',
       codigo: int.tryParse(map['codigo']?.toString() ?? '0') ?? 0,
       identificador: map['identificador'] ?? '',
+      tipoServico: (map['tipo_servico']?.toString().isNotEmpty == true)
+          ? map['tipo_servico'].toString()
+          : 'CD',
       detalhamentoId: map['detalhamento_id'] ?? '',
       detalhamentoCodigo:
           int.tryParse(map['detalhamento_codigo']?.toString() ?? '0') ?? 0,
@@ -101,6 +107,7 @@ class PedidoTecnicoModel {
       'obra_nome': obraNome,
       'status': status,
       'observacao': observacao,
+      'tipo_servico': tipoServico.isNotEmpty ? tipoServico : 'CD',
     };
     if (resumoAco != null) map['resumo_aco'] = resumoAco;
     if (codigo > 0) map['codigo'] = codigo;
@@ -112,6 +119,7 @@ class PedidoTecnicoModel {
         'id': id,
         'codigo': codigo,
         'identificador': identificador,
+        'tipo_servico': tipoServico,
         'detalhamento_id': detalhamentoId,
         'detalhamento_codigo': detalhamentoCodigo,
         'cliente_id': clienteId,
@@ -131,6 +139,7 @@ class PedidoTecnicoModel {
     String? id,
     int? codigo,
     String? identificador,
+    String? tipoServico,
     String? detalhamentoId,
     int? detalhamentoCodigo,
     String? clienteId,
@@ -147,6 +156,7 @@ class PedidoTecnicoModel {
         id: id ?? this.id,
         codigo: codigo ?? this.codigo,
         identificador: identificador ?? this.identificador,
+        tipoServico: tipoServico ?? this.tipoServico,
         detalhamentoId: detalhamentoId ?? this.detalhamentoId,
         detalhamentoCodigo: detalhamentoCodigo ?? this.detalhamentoCodigo,
         clienteId: clienteId ?? this.clienteId,

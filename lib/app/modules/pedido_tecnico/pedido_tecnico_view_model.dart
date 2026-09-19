@@ -16,6 +16,8 @@ class PedidoTecnicoCreateModel {
   String detalhamentoId = '';
   int detalhamentoCodigo = 0;
 
+  String tipoServico = 'CD'; // 'CD' | 'CDA'
+
   String observacao = '';
 
   /// Elementos selecionados para este pedido
@@ -41,6 +43,7 @@ class PedidoTecnicoCreateModel {
         identificador: identificador?.isNotEmpty == true
             ? identificador!
             : _gerarIdentificador(codigo),
+        tipoServico: tipoServico.isNotEmpty ? tipoServico : 'CD',
         detalhamentoId: detalhamentoId,
         detalhamentoCodigo: detalhamentoCodigo,
         clienteId: clienteId,
@@ -70,6 +73,7 @@ class PedidoTecnicoCreateModel {
     m.id = pedido.id;
     m.codigo = pedido.codigo;
     m.identificador = pedido.identificador;
+    m.tipoServico = pedido.tipoServico.isNotEmpty ? pedido.tipoServico : 'CD';
     m.clienteId = pedido.clienteId;
     m.clienteNome = pedido.clienteNome;
     m.obraId = pedido.obraId;

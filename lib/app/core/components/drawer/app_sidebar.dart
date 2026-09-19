@@ -64,14 +64,14 @@ class AppSideBar extends StatelessWidget {
               child: StreamBuilder<AppModule>(
                 stream: baseCtrl.moduleStream.listen,
                 builder: (context, snapshot) {
-                  final currentModule = snapshot.data ?? AppModule.projetos;
+                  final currentModule = snapshot.data ?? AppModule.dashboard;
                   return Column(
                     children: [
-                      _buildItem(AppModule.projetos, currentModule),
-                      _buildItem(AppModule.pedidosTecnicos, currentModule),
+                      _buildItem(AppModule.dashboard, currentModule),
                       _buildItem(AppModule.cliente, currentModule),
                       _buildItem(AppModule.bitolas, currentModule),
                       _buildItem(AppModule.fabricantes, currentModule),
+                      _buildItem(AppModule.formas, currentModule),
                     ],
                   );
                 },

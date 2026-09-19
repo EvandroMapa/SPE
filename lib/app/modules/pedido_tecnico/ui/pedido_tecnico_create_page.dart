@@ -22,7 +22,19 @@ enum _Sec { dadosGerais, elementos }
 
 class PedidoTecnicoCreatePage extends StatefulWidget {
   final PedidoTecnicoModel? pedido;
-  const PedidoTecnicoCreatePage({this.pedido, super.key});
+  final DetalhamentoModel? detalhamentoInicial;
+  final String? clienteIdInicial;
+  final String? obraIdInicial;
+  final String? detalhamentoIdInicial;
+
+  const PedidoTecnicoCreatePage({
+    this.pedido,
+    this.detalhamentoInicial,
+    this.clienteIdInicial,
+    this.obraIdInicial,
+    this.detalhamentoIdInicial,
+    super.key,
+  });
 
   @override
   State<PedidoTecnicoCreatePage> createState() =>
@@ -37,6 +49,7 @@ class _PedidoTecnicoCreatePageState
   ClienteModel? _clienteSel;
   ObraModel? _obraSel;
   DetalhamentoModel? _detalhamentoSel;
+  String _tipoServicoSel = 'CD';
   final _obsCtrl = TextEditingController();
 
   final Map<String, int> _elementosSelecionados = {};
@@ -61,6 +74,7 @@ class _PedidoTecnicoCreatePageState
     if (widget.pedido != null) {
       _sel = _Sec.elementos;
       final p = widget.pedido!;
+      _tipoServicoSel = p.tipoServico.isNotEmpty ? p.tipoServico : 'CD';
       _obsCtrl.text = p.observacao;
       _clienteSel = BackendClient.clientes.data
           .where((c) => c.id == p.clienteId)
@@ -74,6 +88,39 @@ class _PedidoTecnicoCreatePageState
         _elementosSelecionados['${e.elementoId}_${e.elementoNome}'] = e.quantidadeSolicitada;
       }
       _elementosSelecionadosSalvos = Map.from(_elementosSelecionados);
+    } else {
+      // Se criando com contexto pré-selecionado (ex: pelo Kanban da Demanda ou Card do Projeto)
+      final det = widget.detalhamentoInicial ??
+          (widget.detalhamentoIdInicial != null
+              ? BackendClient.detalhamentos.data
+                  .where((d) => d.id == widget.detalhamentoIdInicial)
+                  .firstOrNull
+              : null);
+
+      final cId = det?.clienteId ?? widget.clienteIdInicial;
+      final oId = det?.obraId ?? widget.obraIdInicial;
+
+      if (cId != null && cId.isNotEmpty) {
+        _clienteSel = BackendClient.clientes.data
+            .where((c) => c.id == cId)
+            .firstOrNull;
+        if (_clienteSel != null && oId != null && oId.isNotEmpty) {
+          _obraSel = _clienteSel?.obras
+              .where((o) => o.id == oId)
+              .firstOrNull;
+        }
+      }
+
+      if (det != null) {
+        _detalhamentoSel = det;
+        _sel = _Sec.elementos; // Abre direto nos elementos
+      } else if (_clienteSel != null && _obraSel != null) {
+        final dets = _detalhamentosDaObra;
+        if (dets.length == 1) {
+          _detalhamentoSel = dets.first;
+          _sel = _Sec.elementos;
+        }
+      }
     }
   }
 
@@ -370,7 +417,9 @@ class _PedidoTecnicoCreatePageState
     final list = BackendClient.detalhamentos.data
         .where((p) =>
             p.clienteId == _clienteSel!.id &&
-            p.obraId == _obraSel!.id)
+            p.obraId == _obraSel!.id &&
+            p.isLiberado &&
+            !p.isArquivado)
         .toList();
     if (_detalhamentoSel != null && !list.any((d) => d.id == _detalhamentoSel!.id)) {
       list.insert(0, _detalhamentoSel!);
@@ -385,7 +434,8 @@ class _PedidoTecnicoCreatePageState
     if (_temAlteracoesPendentesElementos) return true;
     final form = pedidoTecnicoCtrl.form;
     if (form.isEdit) {
-      return _obsCtrl.text.trim() != (_pedidoAtual?.observacao ?? '');
+      return _obsCtrl.text.trim() != (_pedidoAtual?.observacao ?? '') ||
+          _tipoServicoSel != (_pedidoAtual?.tipoServico ?? 'CD');
     } else {
       return _clienteSel != null ||
           _obraSel != null ||
@@ -471,11 +521,29 @@ class _PedidoTecnicoCreatePageState
           builder: (_, form) => Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                form.isEdit
-                    ? form.identificador?.isNotEmpty == true ? form.identificador! : 'PT ${form.codigo}'
-                    : 'Novo Pedido Técnico',
-                style: AppCss.largeBold.setColor(AppColors.white),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    form.isEdit
+                        ? form.identificador?.isNotEmpty == true ? form.identificador! : 'PT ${form.codigo}'
+                        : 'Novo Pedido Técnico',
+                    style: AppCss.largeBold.setColor(AppColors.white),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.22),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.white30),
+                    ),
+                    child: Text(
+                      _tipoServicoSel,
+                      style: AppCss.minimumBold.setColor(Colors.white).setSize(11),
+                    ),
+                  ),
+                ],
               ),
               if (_clienteSel != null)
                 Text(
@@ -889,6 +957,38 @@ class _PedidoTecnicoCreatePageState
                 }),
               ),
               const SizedBox(height: 16),
+              // Tipo de Serviço (CD ou CDA)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Tipo de Serviço', style: AppCss.smallBold),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _tipoServicoCard(
+                          sigla: 'CD',
+                          titulo: 'Corte e Dobra',
+                          descricao: 'Corte e dobra conforme projeto',
+                          selecionado: _tipoServicoSel == 'CD',
+                          onTap: () => setState(() => _tipoServicoSel = 'CD'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _tipoServicoCard(
+                          sigla: 'CDA',
+                          titulo: 'Corte, Dobra e Armação',
+                          descricao: 'Elementos armados para entrega',
+                          selecionado: _tipoServicoSel == 'CDA',
+                          onTap: () => setState(() => _tipoServicoSel = 'CDA'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
               // Observação
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -942,6 +1042,98 @@ class _PedidoTecnicoCreatePageState
           ),
         ),
       ],
+    );
+  }
+
+  Widget _tipoServicoCard({
+    required String sigla,
+    required String titulo,
+    required String descricao,
+    required bool selecionado,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: selecionado
+              ? AppColors.primaryMain.withValues(alpha: 0.08)
+              : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selecionado
+                ? AppColors.primaryMain
+                : const Color(0xFFCBD5E1),
+            width: selecionado ? 1.8 : 1.0,
+          ),
+          boxShadow: selecionado
+              ? [
+                  BoxShadow(
+                    color: AppColors.primaryMain.withValues(alpha: 0.12),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  )
+                ]
+              : null,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: selecionado
+                    ? AppColors.primaryMain
+                    : const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Center(
+                child: Text(
+                  sigla,
+                  style: AppCss.mediumBold
+                      .setColor(selecionado ? Colors.white : Colors.blueGrey[700]!)
+                      .setSize(13),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        titulo,
+                        style: AppCss.smallBold.setColor(
+                          selecionado
+                              ? AppColors.primaryMain
+                              : AppColors.neutralDark,
+                        ),
+                      ),
+                      if (selecionado) ...[
+                        const SizedBox(width: 6),
+                        Icon(Icons.check_circle,
+                            size: 15, color: AppColors.primaryMain),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    descricao,
+                    style: AppCss.minimumRegular
+                        .setColor(Colors.grey[600]!)
+                        .setSize(11),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -2903,6 +3095,7 @@ class _PedidoTecnicoCreatePageState
       form.obraPrefixo = _obraSel?.prefixo ?? '';
       form.detalhamentoId = detalhamento.id;
       form.detalhamentoCodigo = detalhamento.codigo;
+      form.tipoServico = _tipoServicoSel;
       form.observacao = _obsCtrl.text.trim();
       final bitolas = BackendClient.bitolas.data;
       form.elementosSelecionados = detalhamento.elementos

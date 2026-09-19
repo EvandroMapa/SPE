@@ -11,7 +11,7 @@ import 'package:acoplan/app/core/utils/global_resource.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
-/// Etiqueta 9.0 × 14.0 cm — impressora térmica — só preto/branco
+/// Etiqueta 9.0 × 13.5 cm — impressora térmica — só preto/branco
 class PdfEtiquetaPedidoTecnico {
   static const _corPreto = PdfColors.black;
   static const _corBranco = PdfColors.white;
@@ -20,14 +20,14 @@ class PdfEtiquetaPedidoTecnico {
 
   static final formato = PdfPageFormat(
     9.0 * PdfPageFormat.cm,
-    14.0 * PdfPageFormat.cm,
+    13.5 * PdfPageFormat.cm,
     marginAll: 0,
   );
 
   // ── Estilos ──────────────────────────────────────────────────────────────
-  static final _sTarjaId = pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: _corBranco, letterSpacing: 1.2);
+  static final _sTarjaId = pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: _corBranco, letterSpacing: 1.2);
   static final _sTarjaLabel = pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold, color: _corBranco, letterSpacing: 0.7);
-  static final _sTarjaGrande = pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold, color: _corBranco);
+  static final _sTarjaGrande = pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: _corBranco);
   static final _sTarjaOs = pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: _corBranco);
   static final _sLabel = pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold, color: _corPreto, letterSpacing: 0.7);
   static final _sBoxLabel = pw.TextStyle(fontSize: 4.5, fontWeight: pw.FontWeight.bold, color: _corPreto, letterSpacing: 0.5);
@@ -383,35 +383,64 @@ class PdfEtiquetaPedidoTecnico {
           ),
           pw.SizedBox(height: 2),
 
-          // 3 ── ELEMENTO (palavra "ELEMENTO" suprimida, centralizado, fonte ampliada)
-          _boxPreta(radius: 5, vPad: 5,
-            child: pw.Row(
-              crossAxisAlignment: pw.CrossAxisAlignment.center,
-              children: [
-                pw.Expanded(
-                  child: pw.Center(
-                    child: pw.Text(
-                      elem.elementoNome.isEmpty ? '-' : _limpar(elem.elementoNome),
-                      style: _sTarjaGrande,
-                      textAlign: pw.TextAlign.center,
-                      maxLines: 1,
+          // 3 ── ELEMENTO + QTDE + TIPO DE SERVIÇO (CD/CDA)
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
+            children: [
+              pw.Expanded(
+                child: _boxPreta(
+                  radius: 5,
+                  vPad: 5,
+                  child: pw.Row(
+                    crossAxisAlignment: pw.CrossAxisAlignment.center,
+                    children: [
+                      pw.Expanded(
+                        child: pw.Center(
+                          child: pw.Text(
+                            elem.elementoNome.isEmpty ? '-' : _limpar(elem.elementoNome),
+                            style: _sTarjaGrande,
+                            textAlign: pw.TextAlign.center,
+                            maxLines: 1,
+                          ),
+                        ),
+                      ),
+                      pw.Container(width: 0.8, height: 26, color: _corBranco),
+                      pw.SizedBox(width: 8),
+                      pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.center,
+                        mainAxisSize: pw.MainAxisSize.min,
+                        children: [
+                          pw.Text('QTDE', style: _sTarjaLabel),
+                          pw.SizedBox(height: 1),
+                          pw.Text('${elem.quantidadeSolicitada}', style: _sTarjaOs),
+                        ],
+                      ),
+                      pw.SizedBox(width: 4),
+                    ],
+                  ),
+                ),
+              ),
+              pw.SizedBox(width: 3),
+              pw.Container(
+                width: 44,
+                height: 38,
+                decoration: pw.BoxDecoration(
+                  color: _corBranco,
+                  borderRadius: pw.BorderRadius.circular(5),
+                  border: pw.Border.all(color: _corPreto, width: 0.8),
+                ),
+                child: pw.Center(
+                  child: pw.Text(
+                    pedido.tipoServico.isNotEmpty ? pedido.tipoServico : 'CD',
+                    style: pw.TextStyle(
+                      fontSize: 13,
+                      fontWeight: pw.FontWeight.bold,
+                      color: _corPreto,
                     ),
                   ),
                 ),
-                pw.Container(width: 0.8, height: 26, color: _corBranco),
-                pw.SizedBox(width: 8),
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.center,
-                  mainAxisSize: pw.MainAxisSize.min,
-                  children: [
-                    pw.Text('QTDE', style: _sTarjaLabel),
-                    pw.SizedBox(height: 1),
-                    pw.Text('${elem.quantidadeSolicitada}', style: _sTarjaOs),
-                  ],
-                ),
-                pw.SizedBox(width: 4),
-              ],
-            ),
+              ),
+            ],
           ),
           pw.SizedBox(height: 2),
 

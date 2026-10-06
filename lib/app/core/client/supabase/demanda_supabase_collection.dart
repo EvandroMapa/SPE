@@ -103,6 +103,27 @@ class DemandaSupabaseCollection {
         .toList());
   }
 
+  /// Desfecho da demanda em Finalizado (projeto, orçamento ou desistência).
+  /// O banco promove/cancela as planilhas e registra no histórico.
+  Future<void> definirDesfecho(String demandaId, DemandaDesfecho desfecho, String motivo) async {
+    await SupabaseService.client.rpc('definir_desfecho_demanda', params: {
+      'p_demanda_id': demandaId,
+      'p_desfecho': desfecho.name,
+      'p_motivo': motivo.trim().isEmpty ? null : motivo.trim(),
+    });
+    await fetch();
+  }
+
+  /// Histórico da demanda (e das planilhas dela), do mais antigo ao mais novo.
+  Future<List<DemandaEvento>> eventos(String demandaId) async {
+    final rows = await SupabaseService.client
+        .from('demanda_eventos')
+        .select()
+        .eq('demanda_id', demandaId)
+        .order('criado_em', ascending: true);
+    return List<Map<String, dynamic>>.from(rows).map(DemandaEvento.fromMap).toList();
+  }
+
   Future<void> delete(String id) async {
     await SupabaseService.client.from(name).delete().eq('id', id);
     dataStream.add(data.where((d) => d.id != id).toList());

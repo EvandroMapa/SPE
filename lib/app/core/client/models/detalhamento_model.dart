@@ -6,6 +6,31 @@ import 'package:acoplan/app/core/client/models/trecho_variavel_config.dart';
 import 'package:acoplan/app/core/services/hash_service.dart';
 import 'package:acoplan/app/modules/dashboard/models/demanda_model.dart';
 
+/// Situação do detalhamento no ciclo Demanda → Projeto.
+enum DetalhamentoSituacao { planejamento, orcamento, projeto, cancelado }
+
+extension DetalhamentoSituacaoExt on DetalhamentoSituacao {
+  String get label {
+    switch (this) {
+      case DetalhamentoSituacao.planejamento:
+        return 'Planejamento';
+      case DetalhamentoSituacao.orcamento:
+        return 'Orçamento';
+      case DetalhamentoSituacao.projeto:
+        return 'Projeto';
+      case DetalhamentoSituacao.cancelado:
+        return 'Cancelado';
+    }
+  }
+
+  static DetalhamentoSituacao parse(String? v) {
+    for (final s in DetalhamentoSituacao.values) {
+      if (s.name == v) return s;
+    }
+    return DetalhamentoSituacao.projeto; // registros anteriores ao ciclo
+  }
+}
+
 class DetalhamentoModel {
   final String id;
   final int codigo;
@@ -23,6 +48,16 @@ class DetalhamentoModel {
   final String prioridade;
   final String? demandaId;
   final bool isArquivado;
+  /// Gravada só na criação e pelas RPCs do ciclo (nunca pelo formulário).
+  final DetalhamentoSituacao situacao;
+  final DateTime? liberadoEm;
+  final String liberadoPor;
+  final DateTime? canceladoEm;
+  final String canceladoPor;
+  final String motivoCancelamento;
+
+  /// Só projeto liberado pode gerar pedido técnico.
+  bool get podeEmitirPedido => situacao == DetalhamentoSituacao.projeto && !isArquivado;
 
   DetalhamentoModel({
     required this.id,
@@ -41,6 +76,12 @@ class DetalhamentoModel {
     this.prioridade = 'normal',
     this.demandaId,
     this.isArquivado = false,
+    this.situacao = DetalhamentoSituacao.projeto,
+    this.liberadoEm,
+    this.liberadoPor = '',
+    this.canceladoEm,
+    this.canceladoPor = '',
+    this.motivoCancelamento = '',
   });
 
   factory DetalhamentoModel.empty() => DetalhamentoModel(
@@ -105,10 +146,18 @@ class DetalhamentoModel {
       prioridade: map['prioridade']?.toString() ?? 'normal',
       demandaId: map['demanda_id']?.toString(),
       isArquivado: map['is_arquivado'] == true,
+      situacao: DetalhamentoSituacaoExt.parse(map['situacao']?.toString()),
+      liberadoEm: DateTime.tryParse(map['liberado_em']?.toString() ?? ''),
+      liberadoPor: map['liberado_por']?.toString() ?? '',
+      canceladoEm: DateTime.tryParse(map['cancelado_em']?.toString() ?? ''),
+      canceladoPor: map['cancelado_por']?.toString() ?? '',
+      motivoCancelamento: map['motivo_cancelamento']?.toString() ?? '',
     );
   }
 
-  /// Mapa para INSERT/UPDATE de dados gerais no Supabase.
+  /// Mapa para UPDATE dos dados gerais (o que o formulário edita).
+  /// Não inclui vínculo com a demanda, situação nem arquivamento: o formulário
+  /// não conhece esses campos e os apagaria ao salvar.
   Map<String, dynamic> toSupabaseMap() {
     final map = <String, dynamic>{
       'cliente_id': clienteId,
@@ -119,10 +168,6 @@ class DetalhamentoModel {
       'pavimento': pavimento.isEmpty ? null : pavimento,
       'funcionario_id': funcionarioId.isEmpty ? null : funcionarioId,
       'funcionario_nome': funcionarioNome.isEmpty ? null : funcionarioNome,
-      'etapa_kanban': etapaKanban.name,
-      'prioridade': prioridade,
-      'demanda_id': demandaId,
-      'is_arquivado': isArquivado,
     };
     if (codigo > 0) {
       map['codigo'] = codigo;
@@ -132,6 +177,16 @@ class DetalhamentoModel {
     }
     return map;
   }
+
+  /// Mapa para INSERT: dados gerais + vínculo, prioridade e situação inicial.
+  Map<String, dynamic> toSupabaseInsertMap() => {
+        ...toSupabaseMap(),
+        'etapa_kanban': etapaKanban.name,
+        'prioridade': prioridade,
+        'demanda_id': demandaId,
+        'is_arquivado': isArquivado,
+        'situacao': situacao.name,
+      };
 
   Map<String, dynamic> toMap() {
     return {
@@ -150,6 +205,7 @@ class DetalhamentoModel {
       'prioridade': prioridade,
       'demanda_id': demandaId,
       'is_arquivado': isArquivado,
+      'situacao': situacao.name,
       'elementos': elementos.map((e) => e.toMap()).toList(),
     };
   }
@@ -210,6 +266,7 @@ class DetalhamentoModel {
     String? prioridade,
     String? demandaId,
     bool? isArquivado,
+    DetalhamentoSituacao? situacao,
   }) {
     return DetalhamentoModel(
       id: id ?? this.id,
@@ -228,6 +285,12 @@ class DetalhamentoModel {
       prioridade: prioridade ?? this.prioridade,
       demandaId: demandaId ?? this.demandaId,
       isArquivado: isArquivado ?? this.isArquivado,
+      situacao: situacao ?? this.situacao,
+      liberadoEm: liberadoEm,
+      liberadoPor: liberadoPor,
+      canceladoEm: canceladoEm,
+      canceladoPor: canceladoPor,
+      motivoCancelamento: motivoCancelamento,
     );
   }
 }

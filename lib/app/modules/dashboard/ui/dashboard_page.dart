@@ -4,6 +4,7 @@ import 'package:acoplan/app/core/client/models/cliente_model.dart';
 import 'package:acoplan/app/core/client/models/detalhamento_model.dart';
 import 'package:acoplan/app/core/client/models/pedido_tecnico_model.dart';
 import 'package:acoplan/app/core/components/app_scaffold.dart';
+import 'package:acoplan/app/core/components/cadastro/cadastro_form.dart';
 import 'package:acoplan/app/core/components/cadastro/cadastro_lista.dart';
 import 'package:acoplan/app/core/services/notification_service.dart';
 import 'package:acoplan/app/core/utils/app_colors.dart';
@@ -33,6 +34,7 @@ part 'widgets/dashboard_modal_arquivados.dart';
 part 'widgets/dashboard_modal_ordenacao_fila.dart';
 part 'widgets/dashboard_detalhamento_card.dart';
 part 'widgets/dashboard_pedido_card.dart';
+part 'widgets/dashboard_ciclo.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -52,6 +54,9 @@ class _DashboardPageState extends State<DashboardPage> {
   String? _selecionadoDetalhamentoId;
   String _ordenarProjetosPor = 'codigo'; // 'codigo' | 'cliente' | 'obra' | 'peso' | 'elementos'
   bool _ordenarProjetosAsc = false;
+
+  // Situação mostrada na aba Projetos: 'projeto' | 'orcamento' | 'cancelado' | 'arquivados'
+  String _situacaoFiltroProjetos = 'projeto';
 
   // Estados da Aba 3 (Pedidos Técnicos)
   String _statusFiltroPedido = 'todos'; // 'todos' | 'aberto' | 'cancelado'
@@ -372,7 +377,22 @@ class _DashboardPageState extends State<DashboardPage> {
                   final uniqueDetalhamentos =
                       detalhamentos.where((d) => seenIds.add(d.id)).toList();
 
-                  var filteredDetalhamentos = uniqueDetalhamentos.where((p) {
+                  // Planilhas em planejamento ficam no Kanban (dentro da demanda)
+                  final foraDoPlanejamento = uniqueDetalhamentos
+                      .where((d) => d.situacao != DetalhamentoSituacao.planejamento)
+                      .toList();
+                  final contagemSituacao = <String, int>{
+                    'projeto': foraDoPlanejamento.where((d) => !d.isArquivado && d.situacao == DetalhamentoSituacao.projeto).length,
+                    'orcamento': foraDoPlanejamento.where((d) => !d.isArquivado && d.situacao == DetalhamentoSituacao.orcamento).length,
+                    'cancelado': foraDoPlanejamento.where((d) => !d.isArquivado && d.situacao == DetalhamentoSituacao.cancelado).length,
+                    'arquivados': foraDoPlanejamento.where((d) => d.isArquivado).length,
+                  };
+                  var filteredDetalhamentos = foraDoPlanejamento.where((p) {
+                    if (_situacaoFiltroProjetos == 'arquivados') {
+                      if (!p.isArquivado) return false;
+                    } else if (p.isArquivado || p.situacao.name != _situacaoFiltroProjetos) {
+                      return false;
+                    }
                     if (q.isEmpty) return true;
                     return p.codigo.toString().contains(q) ||
                         p.clienteNome.toLowerCase().contains(q) ||
@@ -646,6 +666,18 @@ class _DashboardPageState extends State<DashboardPage> {
                               const SizedBox(width: 4),
                               _ordenarProjetoChip('Elementos', 'elementos',
                                   Icons.layers_outlined),
+                              const SizedBox(width: 12),
+                              Container(height: 18, width: 1, color: const Color(0xFFE2E8F0)),
+                              const SizedBox(width: 12),
+                              for (final (rotulo, valor) in [
+                                ('Projetos', 'projeto'),
+                                ('Orçamentos', 'orcamento'),
+                                ('Cancelados', 'cancelado'),
+                                ('Arquivados', 'arquivados'),
+                              ]) ...[
+                                _filtroSituacaoChip(rotulo, valor, contagemSituacao[valor] ?? 0),
+                                const SizedBox(width: 4),
+                              ],
                             ] else if (_activeTab == 2) ...[
                               ElevatedButton.icon(
                                 onPressed: _abrirNovoPedido,
@@ -982,6 +1014,27 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  Widget _filtroSituacaoChip(String label, String valor, int total) {
+    final on = _situacaoFiltroProjetos == valor;
+    final cor = AppColors.statusProduzindo;
+    return InkWell(
+      onTap: () => setState(() => _situacaoFiltroProjetos = valor),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: on ? cor.withValues(alpha: 0.12) : const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: on ? cor.withValues(alpha: 0.40) : const Color(0xFFE2E8F0)),
+        ),
+        child: Text(
+          '$label ($total)',
+          style: AppCss.minimumBold.setSize(11).setColor(on ? cor : const Color(0xFF64748B)),
+        ),
+      ),
+    );
+  }
+
   Widget _filtroStatusPedidoChip(String label, String valor) {
     final on = _statusFiltroPedido == valor;
     return InkWell(
@@ -1169,7 +1222,11 @@ class _DashboardPageState extends State<DashboardPage> {
                         isFilaManual: isFilaManual,
                         onTap: () => _abrirDialogDetalhesDemanda(item),
                         onEditar: () => _dialogEditarDemanda(item),
-                        onExcluir: () => _tentarExcluirDemanda(context, item),
+                        // Demanda com planilha ou desfecho não é excluída (só arquivada)
+                        onExcluir: item.desfecho != null ||
+                                demandaCtrl.obterDetalhamentosDaDemanda(item).isNotEmpty
+                            ? null
+                            : () => _tentarExcluirDemanda(context, item),
                         onMover: (novaEtapa) =>
                             demandaCtrl.moverEtapa(context, item.id, novaEtapa),
                         onArquivar: () =>
@@ -1236,9 +1293,29 @@ class _DashboardPageState extends State<DashboardPage> {
           }),
           onEditar: () => _abrirProjeto(detalhamento),
           onPdf: () => _gerarPdfProjeto(detalhamento),
-          onExcluir: () => _confirmarExclusaoProjeto(detalhamento),
+          // Projeto que veio de demanda tem histórico: cancela/arquiva, não exclui
+          onExcluir: detalhamento.demandaId == null
+              ? () => _confirmarExclusaoProjeto(detalhamento)
+              : null,
           onAbrirPedido: _abrirPedido,
-          onGerarPedido: () => _abrirNovoPedidoParaDetalhamento(detalhamento),
+          onGerarPedido: detalhamento.podeEmitirPedido
+              ? () => _abrirNovoPedidoParaDetalhamento(detalhamento)
+              : null,
+          onConverter: detalhamento.situacao == DetalhamentoSituacao.orcamento && !detalhamento.isArquivado
+              ? () => _converterOrcamento(context, detalhamento)
+              : null,
+          onCancelar: (detalhamento.situacao == DetalhamentoSituacao.projeto ||
+                      detalhamento.situacao == DetalhamentoSituacao.orcamento) &&
+                  !detalhamento.isArquivado
+              ? () => _cancelarProjeto(context, detalhamento)
+              : null,
+          onArquivar: () => detalhamento.isArquivado
+              ? BackendClient.detalhamentos.desarquivarProjeto(detalhamento.id)
+              : BackendClient.detalhamentos.arquivarDetalhamento(detalhamento.id),
+          origem: demandaCtrl.demandas
+              .where((d) => d.id == detalhamento.demandaId)
+              .map((d) => 'D-${d.codigo}')
+              .firstOrNull,
         );
       },
     );

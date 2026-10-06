@@ -87,34 +87,43 @@ void _dadosDeExemplo() {
 }
 
 void _dadosDashboard() {
-  DemandaModel d(int cod, String cli, String obra, String etapaProj, DemandaEtapa etapa, {String prio = 'normal', String? det}) =>
+  DemandaModel d(int cod, String cli, String obra, String etapaProj, DemandaEtapa etapa,
+          {String prio = 'normal', DemandaDesfecho? desfecho}) =>
       DemandaModel(
         id: 'd$cod', ordem: cod, codigo: cod, clienteId: 'c12', clienteNome: cli, obraId: 'o120', obraNome: obra,
-        etapaProjeto: etapaProj, etapa: etapa, prioridade: prio, detalhamentoId: det,
+        etapaProjeto: etapaProj, etapa: etapa, prioridade: prio, desfecho: desfecho,
         solicitanteComercial: 'Carlos (Comercial)', criadoPorNome: 'Evandro', criadoEm: DateTime(2026, 10, cod),
       );
   BackendClient.demandas.dataStream.add([
     d(1, 'Construtora Horizonte', 'Residencial Aurora', 'Fundações e blocos', DemandaEtapa.aguardandoFila, prio: 'urgente'),
     d(2, 'Natália Xavier', 'Casa Xavier', 'Vigas baldrame', DemandaEtapa.aguardandoFila),
-    d(3, 'Living Materiais', 'Galpão Living', 'Pilares 1º pav.', DemandaEtapa.emProducao, prio: 'alta', det: 'det1'),
+    d(3, 'Living Materiais', 'Galpão Living', 'Pilares 1º pav.', DemandaEtapa.emProducao, prio: 'alta'),
     d(4, 'Construtora Horizonte', 'Residencial Aurora', 'Lajes 2º pav.', DemandaEtapa.aguardandoCorrecao),
-    d(5, 'Natália Xavier', 'Casa Xavier', 'Pilares', DemandaEtapa.finalizadoLiberado, det: 'det2'),
+    d(5, 'Natália Xavier', 'Casa Xavier', 'Pilares', DemandaEtapa.finalizadoLiberado, desfecho: DemandaDesfecho.projeto),
+    d(6, 'Living Materiais', 'Galpão Living', 'Cobertura', DemandaEtapa.finalizadoLiberado),
+    d(7, 'Construtora Horizonte', 'Torre B', 'Sapatas', DemandaEtapa.finalizadoLiberado, desfecho: DemandaDesfecho.orcamento),
   ]);
   final b = BackendClient.bitolas.data;
   PosicaoModel pos(String n, int q, double c) => PosicaoModel(
       id: 'p$n$q', posicao: n, bitolaId: b[1].id, bitolaNome: '10.0 - CA50', formaId: 'f1', formaCodigo: '1', qtde: q, comprimentos: {'T1': c});
+  DetalhamentoModel det(String id, int cod, String dem, String pav, DetalhamentoSituacao sit, {bool arq = false}) => DetalhamentoModel(
+        id: id, codigo: cod, clienteId: 'c11', clienteNome: 'Natália Xavier', obraId: 'o110', obraNome: 'Casa Xavier',
+        desenho: 'E-0$cod', pavimento: pav, demandaId: dem, situacao: sit, isArquivado: arq, funcionarioNome: 'Carla Souza',
+        elementos: [ElementoModel(id: 'e$id', nome: 'P1', quantidade: 4, pesoTotal: 0, posicoes: [pos('1', 4, 300), pos('2', 20, 110)])],
+      );
   BackendClient.detalhamentos.dataStream.add([
-    DetalhamentoModel(id: 'det2', codigo: 42, clienteId: 'c11', clienteNome: 'Natália Xavier', obraId: 'o110', obraNome: 'Casa Xavier',
-        desenho: 'E-03', pavimento: 'Pilares', demandaId: 'd5', funcionarioNome: 'Carla Souza', pesoTotal: 182.4,
-        elementos: [ElementoModel(id: 'e1', nome: 'P1', quantidade: 4, pesoTotal: 0, posicoes: [pos('1', 4, 300), pos('2', 20, 110)])]),
-    DetalhamentoModel(id: 'det1', codigo: 41, clienteId: 'c10', clienteNome: 'Living Materiais', obraId: 'o100', obraNome: 'Galpão Living',
-        desenho: 'E-01', pavimento: 'Pilares 1º pav.', demandaId: 'd3', funcionarioNome: 'Evandro', pesoTotal: 1250.8, elementos: []),
+    det('det1', 41, 'd3', 'Pilares 1º pav.', DetalhamentoSituacao.planejamento),
+    det('det2', 42, 'd5', 'Pilares', DetalhamentoSituacao.projeto),
+    det('det3', 43, 'd6', 'Cobertura - Tesouras', DetalhamentoSituacao.planejamento),
+    det('det4', 44, 'd6', 'Cobertura - Terças', DetalhamentoSituacao.planejamento),
+    det('det5', 45, 'd7', 'Sapatas', DetalhamentoSituacao.orcamento),
+    det('det6', 46, 'd5', 'Vigas', DetalhamentoSituacao.cancelado),
   ]);
   BackendClient.pedidosTecnicos.dataStream.add([
     PedidoTecnicoModel(id: 'pt1', codigo: 7, identificador: 'Xavier-Casa.001', detalhamentoId: 'det2', detalhamentoCodigo: 42,
         clienteId: 'c11', clienteNome: 'Natália Xavier', obraId: 'o110', obraNome: 'Casa Xavier', status: 'aberto', observacao: '',
         criadoEm: DateTime(2026, 10, 5), resumoAco: {'peso_total': 182.4},
-        elementos: [PedidoTecnicoElementoModel(id: 'x', pedidoId: 'pt1', elementoId: 'e1', elementoNome: 'P1', elementoQuantidade: 4, pesoTotal: 182.4)]),
+        elementos: [PedidoTecnicoElementoModel(id: 'x', pedidoId: 'pt1', elementoId: 'edet2', elementoNome: 'P1', elementoQuantidade: 4, pesoTotal: 182.4)]),
   ]);
 }
 

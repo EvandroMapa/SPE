@@ -38,6 +38,29 @@ extension DemandaEtapaExt on DemandaEtapa {
   }
 }
 
+/// Decisão tomada quando a demanda chega em Finalizado.
+enum DemandaDesfecho { projeto, orcamento, desistencia }
+
+extension DemandaDesfechoExt on DemandaDesfecho {
+  String get label {
+    switch (this) {
+      case DemandaDesfecho.projeto:
+        return 'Virou projeto';
+      case DemandaDesfecho.orcamento:
+        return 'Orçamento';
+      case DemandaDesfecho.desistencia:
+        return 'Cliente desistiu';
+    }
+  }
+
+  static DemandaDesfecho? parse(String? v) {
+    for (final d in DemandaDesfecho.values) {
+      if (d.name == v) return d;
+    }
+    return null;
+  }
+}
+
 class DemandaModel {
   final String id;
   int ordem; // Posição para ordenação manual na fila
@@ -59,6 +82,14 @@ class DemandaModel {
   final String criadoPorNome; // Assinatura do usuário criador
   final bool isArquivado;
   final DateTime criadoEm;
+  /// Gravados só pelo banco (RPC definir_desfecho_demanda).
+  final DemandaDesfecho? desfecho;
+  final DateTime? desfechoEm;
+  final String desfechoPor;
+  final String motivoDesfecho;
+
+  /// Virou projeto: não muda mais de coluna (só arquivar).
+  bool get travada => desfecho == DemandaDesfecho.projeto;
 
   DemandaModel({
     required this.id,
@@ -81,6 +112,10 @@ class DemandaModel {
     this.criadoPorNome = '',
     this.isArquivado = false,
     required this.criadoEm,
+    this.desfecho,
+    this.desfechoEm,
+    this.desfechoPor = '',
+    this.motivoDesfecho = '',
   });
 
   bool get temDetalhamento => detalhamentoId != null && detalhamentoId!.isNotEmpty;
@@ -128,6 +163,10 @@ class DemandaModel {
       criadoPorNome: criadoPorNome ?? this.criadoPorNome,
       isArquivado: isArquivado ?? this.isArquivado,
       criadoEm: criadoEm ?? this.criadoEm,
+      desfecho: desfecho,
+      desfechoEm: desfechoEm,
+      desfechoPor: desfechoPor,
+      motivoDesfecho: motivoDesfecho,
     );
   }
 
@@ -164,6 +203,10 @@ class DemandaModel {
       criadoEm: map['created_at'] != null
           ? DateTime.tryParse(map['created_at'].toString()) ?? DateTime.now()
           : DateTime.now(),
+      desfecho: DemandaDesfechoExt.parse(map['desfecho']?.toString()),
+      desfechoEm: DateTime.tryParse(map['desfecho_em']?.toString() ?? ''),
+      desfechoPor: map['desfecho_por']?.toString() ?? '',
+      motivoDesfecho: map['motivo_desfecho']?.toString() ?? '',
     );
   }
 
@@ -195,5 +238,69 @@ class DemandaModel {
       map['id'] = id;
     }
     return map;
+  }
+}
+
+/// Registro do histórico (tabela demanda_eventos).
+class DemandaEvento {
+  final String tipo; // criada, etapa, desfecho, arquivada, desarquivada, liberada, convertida, cancelada, planilha_criada
+  final String? de;
+  final String? para;
+  final String motivo;
+  final String usuarioNome;
+  final DateTime criadoEm;
+  final String? detalhamentoId;
+
+  DemandaEvento({
+    required this.tipo,
+    this.de,
+    this.para,
+    this.motivo = '',
+    this.usuarioNome = '',
+    required this.criadoEm,
+    this.detalhamentoId,
+  });
+
+  factory DemandaEvento.fromMap(Map<String, dynamic> m) => DemandaEvento(
+        tipo: m['tipo']?.toString() ?? '',
+        de: m['de']?.toString(),
+        para: m['para']?.toString(),
+        motivo: m['motivo']?.toString() ?? '',
+        usuarioNome: m['usuario_nome']?.toString() ?? '',
+        criadoEm: (DateTime.tryParse(m['criado_em']?.toString() ?? '') ?? DateTime.now()).toLocal(),
+        detalhamentoId: m['detalhamento_id']?.toString(),
+      );
+
+  static String _etapa(String? nome) {
+    for (final e in DemandaEtapa.values) {
+      if (e.name == nome) return e.label;
+    }
+    return nome ?? '';
+  }
+
+  /// Texto legível do evento.
+  String get descricao {
+    switch (tipo) {
+      case 'criada':
+        return 'Demanda criada';
+      case 'etapa':
+        return '${_etapa(de)} → ${_etapa(para)}';
+      case 'desfecho':
+        return 'Desfecho: ${DemandaDesfechoExt.parse(para)?.label ?? para}';
+      case 'arquivada':
+        return 'Arquivada';
+      case 'desarquivada':
+        return 'Desarquivada';
+      case 'planilha_criada':
+        return 'Planilha criada';
+      case 'liberada':
+        return 'Planilha liberada como projeto';
+      case 'convertida':
+        return 'Orçamento convertido em projeto';
+      case 'cancelada':
+        return 'Projeto cancelado';
+      default:
+        return tipo;
+    }
   }
 }

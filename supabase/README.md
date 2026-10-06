@@ -9,6 +9,7 @@ mais de uma vez sem efeito colateral.
 | 1 | `20261006_01_integridade.sql` | Antes de publicar o app novo | Não |
 | 2 | `20261006_02_auth.sql` | Antes de publicar o app novo | Não |
 | 3 | `20261006_03_rls.sql` | Depois que todos entrarem no app novo **e** o plugin novo estiver instalado | **Sim** (app e plugin antigos param) |
+| 4 | `20261007_04_ciclo_demanda.sql` | Antes de publicar a versão com o ciclo Demanda → Projeto | Não |
 
 ## Passo a passo
 
@@ -49,6 +50,15 @@ mais de uma vez sem efeito colateral.
 - Remove os privilégios do papel `anon`.
 - Bucket `backups` privado e restrito a autenticados.
 - Apaga a coluna `usuarios.senha`.
+
+**04 – ciclo demanda**
+- `detalhamentos.situacao`: planejamento | orcamento | projeto | cancelado (existentes = projeto).
+- `demandas.desfecho`: projeto | orcamento | desistencia.
+- Tabela `demanda_eventos`: histórico de movimentos (quem, quando, motivo).
+- Regras: demanda que virou projeto não volta de coluna; projeto não volta a
+  planejamento; cancelado não reativa; pedido técnico só de projeto liberado.
+- RPCs `definir_desfecho_demanda`, `converter_orcamento_em_projeto` e
+  `cancelar_projeto` (cancela também os pedidos técnicos abertos).
 
 ## Depois do 03
 

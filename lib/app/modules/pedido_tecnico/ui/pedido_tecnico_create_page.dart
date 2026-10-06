@@ -426,7 +426,9 @@ class _PedidoTecnicoCreatePageState
     final list = BackendClient.detalhamentos.data
         .where((p) =>
             p.clienteId == _clienteSel!.id &&
-            p.obraId == _obraSel!.id)
+            p.obraId == _obraSel!.id &&
+            // Só projeto liberado gera pedido (planejamento/orçamento/cancelado não)
+            p.podeEmitirPedido)
         .toList();
     if (_detalhamentoSel != null && !list.any((d) => d.id == _detalhamentoSel!.id)) {
       list.insert(0, _detalhamentoSel!);

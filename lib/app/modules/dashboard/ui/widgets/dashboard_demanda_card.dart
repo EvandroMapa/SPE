@@ -45,10 +45,7 @@ class _DemandaCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: const Color(0xFFE2E8F0),
-            width: 1.0,
-          ),
+          border: Border.all(color: const Color(0xFFE2E8F0), width: 1.0),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.02),
@@ -64,116 +61,155 @@ class _DemandaCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    if (isFilaManual) ...[
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 4, vertical: 1),
-                        margin: const EdgeInsets.only(right: 5),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEFF6FF),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: const Color(0xFFBFDBFE)),
+                Flexible(
+                  child: Row(
+                    children: [
+                      if (isFilaManual) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 1,
+                          ),
+                          margin: const EdgeInsets.only(right: 5),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEFF6FF),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: const Color(0xFFBFDBFE)),
+                          ),
+                          child: Text(
+                            '#${demanda.ordem}',
+                            style: AppCss.minimumBold
+                                .setSize(9.5)
+                                .setColor(const Color(0xFF1D4ED8)),
+                          ),
                         ),
+                      ],
+                      Flexible(
                         child: Text(
-                          '#${demanda.ordem}',
+                          'D-${demanda.codigo}',
+                          maxLines: 1,
+                          overflow: TextOverflow.clip,
                           style: AppCss.minimumBold
-                              .setSize(9.5)
-                              .setColor(const Color(0xFF1D4ED8)),
+                              .setSize(10)
+                              .setColor(const Color(0xFF94A3B8)),
                         ),
                       ),
                     ],
-                    Text(
-                      'D-${demanda.codigo}',
-                      style: AppCss.minimumBold
-                          .setSize(10)
-                          .setColor(const Color(0xFF94A3B8)),
-                    ),
-                  ],
+                  ),
                 ),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 5, vertical: 1),
-                      decoration: BoxDecoration(
-                        color: prioridadeColor.withValues(alpha: 0.10),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        demanda.prioridade.toUpperCase(),
-                        style: AppCss.minimumBold
-                            .setSize(8.5)
-                            .setColor(prioridadeColor),
-                      ),
+                // Encolhe em colunas estreitas em vez de estourar
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 5,
+                            vertical: 1,
+                          ),
+                          decoration: BoxDecoration(
+                            color: prioridadeColor.withValues(alpha: 0.10),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            demanda.prioridade.toUpperCase(),
+                            style: AppCss.minimumBold
+                                .setSize(8.5)
+                                .setColor(prioridadeColor),
+                          ),
+                        ),
+                        if (onEditar != null) ...[
+                          const SizedBox(width: 4),
+                          Tooltip(
+                            message: 'Editar demanda',
+                            waitDuration: const Duration(milliseconds: 300),
+                            child: InkWell(
+                              onTap: onEditar,
+                              borderRadius: BorderRadius.circular(5),
+                              hoverColor: const Color(
+                                0xFF2563EB,
+                              ).withValues(alpha: 0.12),
+                              child: Container(
+                                width: 20,
+                                height: 20,
+                                decoration: BoxDecoration(
+                                  color: const Color(
+                                    0xFF2563EB,
+                                  ).withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(5),
+                                  border: Border.all(
+                                    color: const Color(
+                                      0xFF2563EB,
+                                    ).withValues(alpha: 0.20),
+                                    width: 0.8,
+                                  ),
+                                ),
+                                child: const Icon(
+                                  Icons.edit_outlined,
+                                  size: 11.5,
+                                  color: Color(0xFF2563EB),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                        if (onExcluir != null) ...[
+                          const SizedBox(width: 3),
+                          Tooltip(
+                            message: 'Excluir demanda',
+                            waitDuration: const Duration(milliseconds: 300),
+                            child: InkWell(
+                              onTap: onExcluir,
+                              borderRadius: BorderRadius.circular(5),
+                              hoverColor: AppColors.error.withValues(
+                                alpha: 0.12,
+                              ),
+                              child: Container(
+                                width: 20,
+                                height: 20,
+                                decoration: BoxDecoration(
+                                  color: AppColors.error.withValues(
+                                    alpha: 0.08,
+                                  ),
+                                  borderRadius: BorderRadius.circular(5),
+                                  border: Border.all(
+                                    color: AppColors.error.withValues(
+                                      alpha: 0.20,
+                                    ),
+                                    width: 0.8,
+                                  ),
+                                ),
+                                child: Icon(
+                                  Icons.delete_outline_rounded,
+                                  size: 11.5,
+                                  color: AppColors.error,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
-                    if (onEditar != null) ...[
-                      const SizedBox(width: 4),
-                      Tooltip(
-                        message: 'Editar demanda',
-                        waitDuration: const Duration(milliseconds: 300),
-                        child: InkWell(
-                          onTap: onEditar,
-                          borderRadius: BorderRadius.circular(5),
-                          hoverColor:
-                              const Color(0xFF2563EB).withValues(alpha: 0.12),
-                          child: Container(
-                            width: 20,
-                            height: 20,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF2563EB)
-                                  .withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(5),
-                              border: Border.all(
-                                color: const Color(0xFF2563EB)
-                                    .withValues(alpha: 0.20),
-                                width: 0.8,
-                              ),
-                            ),
-                            child: const Icon(
-                              Icons.edit_outlined,
-                              size: 11.5,
-                              color: Color(0xFF2563EB),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                    if (onExcluir != null) ...[
-                      const SizedBox(width: 3),
-                      Tooltip(
-                        message: 'Excluir demanda',
-                        waitDuration: const Duration(milliseconds: 300),
-                        child: InkWell(
-                          onTap: onExcluir,
-                          borderRadius: BorderRadius.circular(5),
-                          hoverColor: AppColors.error.withValues(alpha: 0.12),
-                          child: Container(
-                            width: 20,
-                            height: 20,
-                            decoration: BoxDecoration(
-                              color: AppColors.error.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(5),
-                              border: Border.all(
-                                color: AppColors.error.withValues(alpha: 0.20),
-                                width: 0.8,
-                              ),
-                            ),
-                            child: Icon(
-                              Icons.delete_outline_rounded,
-                              size: 11.5,
-                              color: AppColors.error,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 5),
+
+            // Desfecho (Projeto / Orçamento)
+            if (demanda.desfecho != null) ...[
+              _SeloCiclo(
+                demanda.desfecho == DemandaDesfecho.projeto
+                    ? 'Projeto'
+                    : demanda.desfecho!.label,
+                _corDesfecho(demanda.desfecho!),
+                icon: demanda.travada ? Icons.lock_outline : null,
+              ),
+              const SizedBox(height: 4),
+            ],
 
             // Obra Principal
             Text(
@@ -196,8 +232,11 @@ class _DemandaCard extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.layers_outlined,
-                      size: 11, color: Color(0xFF64748B)),
+                  const Icon(
+                    Icons.layers_outlined,
+                    size: 11,
+                    color: Color(0xFF64748B),
+                  ),
                   const SizedBox(width: 3),
                   Expanded(
                     child: Text(
@@ -228,8 +267,11 @@ class _DemandaCard extends StatelessWidget {
             // Assinatura do Criador
             Row(
               children: [
-                const Icon(Icons.person_outline_rounded,
-                    size: 11, color: Color(0xFF64748B)),
+                const Icon(
+                  Icons.person_outline_rounded,
+                  size: 11,
+                  color: Color(0xFF64748B),
+                ),
                 const SizedBox(width: 3),
                 Expanded(
                   child: Text(
@@ -246,27 +288,33 @@ class _DemandaCard extends StatelessWidget {
                     message: 'Caminho de rede informado',
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 4, vertical: 1),
+                        horizontal: 4,
+                        vertical: 1,
+                      ),
                       decoration: BoxDecoration(
-                        color:
-                            const Color(0xFF2563EB).withValues(alpha: 0.08),
+                        color: const Color(0xFF2563EB).withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: const Icon(Icons.folder_shared_outlined,
-                          size: 10, color: Color(0xFF2563EB)),
+                      child: const Icon(
+                        Icons.folder_shared_outlined,
+                        size: 10,
+                        color: Color(0xFF2563EB),
+                      ),
                     ),
                   ),
                 ],
               ],
             ),
 
+            // Planilhas (detalhamentos) da demanda
+            _linhaPlanilhas(context),
+
             // Motivo de correção se houver
             if (demanda.motivoCorrecao != null &&
                 demanda.motivoCorrecao!.isNotEmpty) ...[
               const SizedBox(height: 4),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFFBEB),
                   borderRadius: BorderRadius.circular(4),
@@ -310,9 +358,12 @@ class _DemandaCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
               elevation: 0,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(6)),
-              textStyle:
-                  const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              textStyle: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         );
@@ -333,13 +384,16 @@ class _DemandaCard extends StatelessWidget {
                     );
                   },
                   style: OutlinedButton.styleFrom(
-                    padding:
-                        const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 6,
+                      horizontal: 2,
+                    ),
                     side: const BorderSide(color: Color(0xFFCBD5E1)),
                     backgroundColor: const Color(0xFFF8FAFC),
                     foregroundColor: const Color(0xFF475569),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(6)),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
                   ),
                   child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -348,10 +402,14 @@ class _DemandaCard extends StatelessWidget {
                       Icon(Icons.arrow_back_rounded, size: 12),
                       SizedBox(width: 3),
                       Flexible(
-                        child: Text('Aguard. Det.',
-                            style: TextStyle(
-                                fontSize: 9.5, fontWeight: FontWeight.bold),
-                            overflow: TextOverflow.ellipsis),
+                        child: Text(
+                          'Aguard. Det.',
+                          style: TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ],
                   ),
@@ -365,21 +423,28 @@ class _DemandaCard extends StatelessWidget {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFD97706),
                   foregroundColor: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 6,
+                    horizontal: 2,
+                  ),
                   elevation: 0,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(6)),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
                 ),
                 child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Flexible(
-                      child: Text('P/ Correção',
-                          style: TextStyle(
-                              fontSize: 10, fontWeight: FontWeight.bold),
-                          overflow: TextOverflow.ellipsis),
+                      child: Text(
+                        'P/ Correção',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                     SizedBox(width: 3),
                     Icon(Icons.arrow_forward_rounded, size: 12),
@@ -404,13 +469,16 @@ class _DemandaCard extends StatelessWidget {
                   );
                 },
                 style: OutlinedButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 6,
+                    horizontal: 2,
+                  ),
                   side: const BorderSide(color: Color(0xFFCBD5E1)),
                   backgroundColor: const Color(0xFFF8FAFC),
                   foregroundColor: const Color(0xFF475569),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(6)),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
                 ),
                 child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -419,10 +487,14 @@ class _DemandaCard extends StatelessWidget {
                     Icon(Icons.arrow_back_rounded, size: 12),
                     SizedBox(width: 3),
                     Flexible(
-                      child: Text('Produção',
-                          style: TextStyle(
-                              fontSize: 10, fontWeight: FontWeight.bold),
-                          overflow: TextOverflow.ellipsis),
+                      child: Text(
+                        'Produção',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                 ),
@@ -442,21 +514,28 @@ class _DemandaCard extends StatelessWidget {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFEA580C),
                   foregroundColor: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 6,
+                    horizontal: 2,
+                  ),
                   elevation: 0,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(6)),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
                 ),
                 child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Flexible(
-                      child: Text('Corrigindo',
-                          style: TextStyle(
-                              fontSize: 10, fontWeight: FontWeight.bold),
-                          overflow: TextOverflow.ellipsis),
+                      child: Text(
+                        'Corrigindo',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                     SizedBox(width: 3),
                     Icon(Icons.arrow_forward_rounded, size: 12),
@@ -481,13 +560,16 @@ class _DemandaCard extends StatelessWidget {
                   );
                 },
                 style: OutlinedButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 6,
+                    horizontal: 2,
+                  ),
                   side: const BorderSide(color: Color(0xFFCBD5E1)),
                   backgroundColor: const Color(0xFFF8FAFC),
                   foregroundColor: const Color(0xFF475569),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(6)),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
                 ),
                 child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -496,10 +578,14 @@ class _DemandaCard extends StatelessWidget {
                     Icon(Icons.arrow_back_rounded, size: 12),
                     SizedBox(width: 3),
                     Flexible(
-                      child: Text('Aguardando',
-                          style: TextStyle(
-                              fontSize: 10, fontWeight: FontWeight.bold),
-                          overflow: TextOverflow.ellipsis),
+                      child: Text(
+                        'Aguardando',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                 ),
@@ -519,21 +605,28 @@ class _DemandaCard extends StatelessWidget {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF059669),
                   foregroundColor: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 6,
+                    horizontal: 2,
+                  ),
                   elevation: 0,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(6)),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
                 ),
                 child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Flexible(
-                      child: Text('Finalizar',
-                          style: TextStyle(
-                              fontSize: 10, fontWeight: FontWeight.bold),
-                          overflow: TextOverflow.ellipsis),
+                      child: Text(
+                        'Finalizar',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                     SizedBox(width: 3),
                     Icon(Icons.arrow_forward_rounded, size: 12),
@@ -545,66 +638,202 @@ class _DemandaCard extends StatelessWidget {
         );
 
       case DemandaEtapa.finalizadoLiberado:
-        return Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: () {
-                  onMover(DemandaEtapa.corrigindo);
-                  NotificationService.showNeutral(
-                    'Demanda Retornada',
-                    '${demanda.obraNome} retornou para Corrigindo.',
-                    position: NotificationPosition.bottom,
-                  );
-                },
-                style: OutlinedButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
-                  side: const BorderSide(color: Color(0xFFCBD5E1)),
-                  backgroundColor: const Color(0xFFF8FAFC),
-                  foregroundColor: const Color(0xFF475569),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(6)),
-                ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.arrow_back_rounded, size: 12),
-                    SizedBox(width: 3),
-                    Flexible(
-                      child: Text('Corrigindo',
-                          style: TextStyle(
-                              fontSize: 10, fontWeight: FontWeight.bold),
-                          overflow: TextOverflow.ellipsis),
-                    ),
-                  ],
+        // Virou projeto: travada, só arquivar
+        if (demanda.travada) {
+          return Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 7),
+                  decoration: BoxDecoration(
+                    color: AppColors.statusPronto.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.lock_outline,
+                        size: 12,
+                        color: AppColors.statusPronto,
+                      ),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          'Virou projeto',
+                          overflow: TextOverflow.ellipsis,
+                          style: AppCss.minimumBold
+                              .setSize(10)
+                              .setColor(AppColors.statusPronto),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
+              const SizedBox(width: 4),
+              Expanded(child: _botaoArquivar()),
+            ],
+          );
+        }
+        return Row(
+          children: [
+            if (demanda.desfecho == null)
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () {
+                    onMover(DemandaEtapa.corrigindo);
+                    NotificationService.showNeutral(
+                      'Demanda Retornada',
+                      '${demanda.obraNome} retornou para Corrigindo.',
+                      position: NotificationPosition.bottom,
+                    );
+                  },
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 6,
+                      horizontal: 2,
+                    ),
+                    side: const BorderSide(color: Color(0xFFCBD5E1)),
+                    backgroundColor: const Color(0xFFF8FAFC),
+                    foregroundColor: const Color(0xFF475569),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.arrow_back_rounded, size: 12),
+                      SizedBox(width: 3),
+                      Flexible(
+                        child: Text(
+                          'Corrigindo',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              // Orçamento: pode ser arquivado enquanto aguarda o cliente
+              Expanded(child: _botaoArquivar()),
             const SizedBox(width: 4),
             Expanded(
               child: ElevatedButton.icon(
-                onPressed: onArquivar,
-                icon: const Icon(Icons.inventory_2_outlined,
-                    size: 13, color: Colors.white),
-                label: const Text('Arquivar'),
+                onPressed: () => _abrirDesfecho(context, demanda),
+                icon: const Icon(
+                  Icons.flag_outlined,
+                  size: 13,
+                  color: Colors.white,
+                ),
+                label: Text(
+                  demanda.desfecho == DemandaDesfecho.orcamento
+                      ? 'Aprovar / encerrar'
+                      : 'Desfecho',
+                ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFD97706),
+                  backgroundColor: AppColors.statusPronto,
                   foregroundColor: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 6,
+                    horizontal: 4,
+                  ),
                   elevation: 0,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(6)),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
                   textStyle: const TextStyle(
-                      fontSize: 10, fontWeight: FontWeight.bold),
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ),
           ],
         );
     }
+  }
+
+  Widget _botaoArquivar() {
+    return ElevatedButton.icon(
+      onPressed: onArquivar,
+      icon: const Icon(
+        Icons.inventory_2_outlined,
+        size: 13,
+        color: Colors.white,
+      ),
+      label: const Text('Arquivar'),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFFD97706),
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        textStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
+  /// Planilhas da demanda: abre a lista (ou cria a primeira)
+  Widget _linhaPlanilhas(BuildContext context) {
+    final planilhas = demandaCtrl.obterDetalhamentosDaDemanda(demanda);
+    final podeCriar = demandaCtrl.podeCriarPlanilha(demanda);
+    if (planilhas.isEmpty && !podeCriar) return const SizedBox.shrink();
+    final vazia = planilhas.isEmpty;
+    final cor = vazia ? AppColors.statusProduzindo : AppColors.neutralDark;
+    final kg = planilhas.fold<double>(
+      0,
+      (s, p) => s + p.pesoCalculado(BackendClient.bitolas.data),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(top: 5),
+      child: InkWell(
+        onTap: () => _abrirPlanilhasDemanda(context, demanda),
+        borderRadius: BorderRadius.circular(4),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+          decoration: BoxDecoration(
+            color: vazia
+                ? AppColors.statusProduzindo.withValues(alpha: 0.06)
+                : const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(
+              color: vazia
+                  ? AppColors.statusProduzindo.withValues(alpha: 0.3)
+                  : const Color(0xFFE2E8F0),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                vazia ? Icons.note_add_outlined : Icons.description_outlined,
+                size: 11,
+                color: cor,
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  vazia
+                      ? 'Criar planilha'
+                      : '${planilhas.length} planilha${planilhas.length == 1 ? '' : 's'}${kg > 0 ? ' • ${_formatarPeso(kg)}' : ''}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppCss.minimumBold.setSize(10).setColor(cor),
+                ),
+              ),
+              Icon(Icons.chevron_right, size: 12, color: cor),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _dialogMoverCorrecao(BuildContext context) {
@@ -617,8 +846,10 @@ class _DemandaCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Informe o motivo ou ajuste necessário:',
-                style: AppCss.minimumRegular),
+            Text(
+              'Informe o motivo ou ajuste necessário:',
+              style: AppCss.minimumRegular,
+            ),
             const SizedBox(height: 8),
             TextField(
               controller: motivoCtrl,
@@ -638,7 +869,8 @@ class _DemandaCard extends StatelessWidget {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFD97706)),
+              backgroundColor: const Color(0xFFD97706),
+            ),
             onPressed: () {
               Navigator.pop(ctx);
               demandaCtrl.moverEtapa(
@@ -648,8 +880,10 @@ class _DemandaCard extends StatelessWidget {
                 motivoCorrecao: motivoCtrl.text.trim(),
               );
             },
-            child: const Text('Confirmar Envio',
-                style: TextStyle(color: Colors.white)),
+            child: const Text(
+              'Confirmar Envio',
+              style: TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),

@@ -200,10 +200,27 @@ class DetalhamentoSupabaseCollection {
   /// O código sequencial é gerado pelo banco.
   Future<String> criarDetalhamento(DetalhamentoModel model) async {
     final inserted = await SupabaseService.client
-        .from(name).insert(model.copyWith(codigo: 0).toSupabaseMap()).select('id').single();
+        .from(name).insert(model.copyWith(codigo: 0).toSupabaseInsertMap()).select('id').single();
     final newId = inserted['id'] as String;
     await recarregar(newId);
     return newId;
+  }
+
+  // ── Ciclo Demanda → Projeto (regras no banco) ─────────────
+  /// Orçamento aprovado pelo cliente vira projeto.
+  Future<void> converterOrcamentoEmProjeto(String detalhamentoId) async {
+    await SupabaseService.client.rpc('converter_orcamento_em_projeto',
+        params: {'p_detalhamento_id': detalhamentoId});
+    await recarregar(detalhamentoId);
+  }
+
+  /// Cliente desistiu: cancela o projeto e os pedidos técnicos abertos dele.
+  /// Retorna quantos pedidos foram cancelados.
+  Future<int> cancelarProjeto(String detalhamentoId, String motivo) async {
+    final n = await SupabaseService.client.rpc('cancelar_projeto',
+        params: {'p_detalhamento_id': detalhamentoId, 'p_motivo': motivo});
+    await recarregar(detalhamentoId);
+    return (n as num?)?.toInt() ?? 0;
   }
 
   Future<bool> estaVinculadoAPedido(String detalhamentoId) async {
@@ -263,6 +280,22 @@ class DetalhamentoSupabaseCollection {
           .eq('id', detalhamentoId);
     } catch (e) {
       log('Supabase Error (arquivarDetalhamento): $e');
+      await recarregar(detalhamentoId);
+    }
+  }
+
+  /// Desarquiva o projeto mantendo a situação (não mexe na etapa).
+  Future<void> desarquivarProjeto(String detalhamentoId) async {
+    final list = List<DetalhamentoModel>.from(data);
+    final idx = list.indexWhere((d) => d.id == detalhamentoId);
+    if (idx != -1) {
+      list[idx] = list[idx].copyWith(isArquivado: false);
+      dataStream.add(list);
+    }
+    try {
+      await SupabaseService.client.from(name).update({'is_arquivado': false}).eq('id', detalhamentoId);
+    } catch (e) {
+      log('Supabase Error (desarquivarProjeto): $e');
       await recarregar(detalhamentoId);
     }
   }

@@ -12,9 +12,15 @@ class _DashboardDetalhamentoCard extends StatelessWidget {
   final VoidCallback onToggleExpand;
   final VoidCallback onEditar;
   final VoidCallback onPdf;
-  final VoidCallback onExcluir;
+  final VoidCallback? onExcluir;
   final void Function(PedidoTecnicoModel) onAbrirPedido;
   final VoidCallback? onGerarPedido;
+  final VoidCallback? onConverter;
+  final VoidCallback? onCancelar;
+  final VoidCallback onArquivar;
+
+  /// Demanda de origem (ex: "D-12"), se veio do Kanban
+  final String? origem;
 
   const _DashboardDetalhamentoCard({
     required this.detalhamento,
@@ -25,9 +31,13 @@ class _DashboardDetalhamentoCard extends StatelessWidget {
     required this.onToggleExpand,
     required this.onEditar,
     required this.onPdf,
-    required this.onExcluir,
+    this.onExcluir,
     required this.onAbrirPedido,
     this.onGerarPedido,
+    this.onConverter,
+    this.onCancelar,
+    required this.onArquivar,
+    this.origem,
   });
 
   @override
@@ -114,11 +124,29 @@ class _DashboardDetalhamentoCard extends StatelessWidget {
                             ? detalhamento.clienteNome
                             : 'Cliente não informado');
 
-                  return Text(
-                    nomeExibicao,
-                    style: AppCss.smallBold.setSize(14),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  // Quebra a linha em tela estreita (selos não estouram)
+                  return Wrap(
+                    spacing: 6,
+                    runSpacing: 2,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        nomeExibicao,
+                        style: AppCss.smallBold.setSize(14),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      _SeloCiclo(
+                        detalhamento.situacao.label,
+                        _corSituacao(detalhamento.situacao),
+                      ),
+                      if (origem != null) ...[
+                        Tooltip(
+                          message: 'Veio da demanda $origem',
+                          child: _SeloCiclo(origem!, AppColors.neutralMedium),
+                        ),
+                      ],
+                    ],
                   );
                 },
               ),
@@ -366,12 +394,33 @@ class _DashboardDetalhamentoCard extends StatelessWidget {
                         onEditar,
                       ),
                     ],
+                    if (onConverter != null)
+                      CadastroAcao(
+                        Icons.task_alt,
+                        'Converter em projeto',
+                        onConverter!,
+                      ),
                     CadastroAcao(
-                      Icons.delete_outline,
-                      'Excluir projeto',
-                      onExcluir,
-                      destrutiva: true,
+                      detalhamento.isArquivado
+                          ? Icons.unarchive_outlined
+                          : Icons.inventory_2_outlined,
+                      detalhamento.isArquivado ? 'Desarquivar' : 'Arquivar',
+                      onArquivar,
                     ),
+                    if (onCancelar != null)
+                      CadastroAcao(
+                        Icons.block,
+                        'Cancelar (cliente desistiu)',
+                        onCancelar!,
+                        destrutiva: true,
+                      ),
+                    if (onExcluir != null)
+                      CadastroAcao(
+                        Icons.delete_outline,
+                        'Excluir projeto',
+                        onExcluir!,
+                        destrutiva: true,
+                      ),
                   ]),
                 ],
               ),

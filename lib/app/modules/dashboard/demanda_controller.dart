@@ -5,6 +5,7 @@ import 'package:acoplan/app/core/client/models/detalhamento_model.dart';
 import 'package:acoplan/app/core/models/app_stream.dart';
 import 'package:acoplan/app/core/services/hash_service.dart';
 import 'package:acoplan/app/core/services/notification_service.dart';
+import 'package:acoplan/app/core/services/supabase_service.dart';
 import 'package:acoplan/app/core/utils/global_resource.dart';
 import 'package:acoplan/app/modules/dashboard/models/demanda_model.dart';
 import 'package:flutter/material.dart';
@@ -110,89 +111,113 @@ class DemandaController {
     return criada;
   }
 
-  /// Retorna todos os detalhamentos vinculados a esta demanda (relação 1 -> N)
+  /// Planilhas (detalhamentos) da demanda — uma demanda pode ter várias.
   List<DetalhamentoModel> obterDetalhamentosDaDemanda(DemandaModel demanda) {
     return BackendClient.detalhamentos.data
         .where((d) =>
             d.demandaId == demanda.id ||
             (demanda.detalhamentoId != null && d.id == demanda.detalhamentoId))
-        .toList();
+        .toList()
+      ..sort((a, b) => a.codigo.compareTo(b.codigo));
   }
 
-  /// Gera um Detalhamento Técnico no Supabase para a demanda especificada (suporta ramificações 1 -> N)
-  Future<DetalhamentoModel?> gerarDetalhamentoParaDemanda(
-    BuildContext context,
+  /// Pode criar planilha nova? Não depois que virou projeto ou foi encerrada.
+  bool podeCriarPlanilha(DemandaModel demanda) =>
+      demanda.desfecho != DemandaDesfecho.projeto && demanda.desfecho != DemandaDesfecho.desistencia;
+
+  /// Cria uma planilha (detalhamento em planejamento) dentro da demanda.
+  /// Se a demanda estava na fila, ela passa para Em detalhamento.
+  Future<DetalhamentoModel?> criarPlanilha(
     DemandaModel demanda, {
     String? complementoPavimento,
     String? desenho,
   }) async {
-    final usuarioLogado = appCtrl.usuario;
-
-    final pavimentoFinal = (complementoPavimento != null &&
-            complementoPavimento.trim().isNotEmpty)
-        ? '${demanda.etapaProjeto} - ${complementoPavimento.trim()}'
-        : demanda.etapaProjeto;
-
-    // 1. Cria o detalhamento no Supabase
-    final novoDetalhamentoModel = DetalhamentoModel(
-      id: HashService.get,
-      codigo: 0, // calculado pelo Supabase
-      clienteId: demanda.clienteId,
-      clienteNome: demanda.clienteNome,
-      obraId: demanda.obraId,
-      obraNome: demanda.obraNome,
-      desenho: desenho?.trim() ?? '',
-      pavimento: pavimentoFinal,
-      funcionarioId: usuarioLogado?.id ?? '',
-      funcionarioNome: usuarioLogado?.nome ?? '',
-      etapaKanban: DemandaEtapa.emProducao,
-      prioridade: demanda.prioridade,
-      demandaId: demanda.id,
-      isArquivado: false,
-      elementos: const [],
-    );
-
-    String novoId = '';
-    try {
-      novoId = await BackendClient.detalhamentos
-          .criarDetalhamento(novoDetalhamentoModel);
-    } catch (e) {
+    if (!podeCriarPlanilha(demanda)) {
       NotificationService.showNegative(
-        'Erro ao gerar detalhamento',
-        e.toString(),
+        'Não é possível criar planilha',
+        demanda.travada ? 'Esta demanda já virou projeto.' : 'Esta demanda foi encerrada.',
         position: NotificationPosition.bottom,
       );
       return null;
     }
+    final usuarioLogado = appCtrl.usuario;
+    final pavimentoFinal = (complementoPavimento != null && complementoPavimento.trim().isNotEmpty)
+        ? '${demanda.etapaProjeto} - ${complementoPavimento.trim()}'
+        : demanda.etapaProjeto;
 
-    // 2. Atualiza a demanda vinculando o detalhamento e avançando para Em Produção se estava na Fila
-    final novaEtapa = demanda.etapa == DemandaEtapa.aguardandoFila
-        ? DemandaEtapa.emProducao
-        : demanda.etapa;
-
-    final demandaAtualizada = demanda.copyWith(
-      detalhamentoId: demanda.detalhamentoId ?? novoId,
-      etapa: novaEtapa,
-    );
-
-    await _persistir(() => BackendClient.demandas.atualizar(demandaAtualizada));
-
-    final list = List<DemandaModel>.from(demandas);
-    final idx = list.indexWhere((d) => d.id == demanda.id);
-    if (idx != -1) {
-      list[idx] = demandaAtualizada;
-      demandasStream.add(list);
+    String novoId;
+    try {
+      novoId = await BackendClient.detalhamentos.criarDetalhamento(DetalhamentoModel(
+        id: HashService.get,
+        codigo: 0, // gerado pelo banco
+        clienteId: demanda.clienteId,
+        clienteNome: demanda.clienteNome,
+        obraId: demanda.obraId,
+        obraNome: demanda.obraNome,
+        desenho: desenho?.trim() ?? '',
+        pavimento: pavimentoFinal,
+        funcionarioId: usuarioLogado?.id ?? '',
+        funcionarioNome: usuarioLogado?.nome ?? '',
+        etapaKanban: DemandaEtapa.emProducao,
+        prioridade: demanda.prioridade,
+        demandaId: demanda.id,
+        situacao: DetalhamentoSituacao.planejamento,
+        elementos: const [],
+      ));
+    } catch (e) {
+      NotificationService.showNegative('Erro ao criar planilha', mensagemErro(e),
+          position: NotificationPosition.bottom);
+      return null;
     }
 
-    NotificationService.showPositive(
-      'Detalhamento Criado',
-      'Nova ramificação vinculada à demanda. Etapa: ${novaEtapa.label}.',
-      position: NotificationPosition.bottom,
-    );
+    // Histórico (falha aqui não impede o trabalho)
+    try {
+      await SupabaseService.client.rpc('spe_registrar_evento', params: {
+        'p_demanda_id': demanda.id,
+        'p_detalhamento_id': novoId,
+        'p_tipo': 'planilha_criada',
+        'p_motivo': pavimentoFinal,
+      });
+    } catch (_) {}
 
-    return BackendClient.detalhamentos.data
-        .where((d) => d.id == novoId)
-        .firstOrNull;
+    var atualizada = demanda;
+    if (demanda.detalhamentoId == null || demanda.detalhamentoId!.isEmpty) {
+      atualizada = atualizada.copyWith(detalhamentoId: novoId);
+    }
+    if (demanda.etapa == DemandaEtapa.aguardandoFila) {
+      atualizada = atualizada.copyWith(etapa: DemandaEtapa.emProducao);
+    }
+    if (!identical(atualizada, demanda)) {
+      await _persistir(() => BackendClient.demandas.atualizar(atualizada));
+    }
+
+    return BackendClient.detalhamentos.data.where((d) => d.id == novoId).firstOrNull;
+  }
+
+  /// Decide o destino da demanda em Finalizado.
+  Future<bool> definirDesfecho(DemandaModel demanda, DemandaDesfecho desfecho, String motivo) async {
+    try {
+      await BackendClient.demandas.definirDesfecho(demanda.id, desfecho, motivo);
+      await BackendClient.detalhamentos.fetch();
+      NotificationService.showPositive(
+        switch (desfecho) {
+          DemandaDesfecho.projeto => 'Liberado como projeto',
+          DemandaDesfecho.orcamento => 'Marcado como orçamento',
+          DemandaDesfecho.desistencia => 'Demanda encerrada',
+        },
+        switch (desfecho) {
+          DemandaDesfecho.projeto => '${demanda.obraNome}: as planilhas estão na aba Projetos.',
+          DemandaDesfecho.orcamento => '${demanda.obraNome}: pode virar projeto quando o cliente aprovar.',
+          DemandaDesfecho.desistencia => '${demanda.obraNome} foi arquivada como desistência.',
+        },
+        position: NotificationPosition.bottom,
+      );
+      return true;
+    } catch (e) {
+      NotificationService.showNegative('Não foi possível definir o desfecho', mensagemErro(e),
+          position: NotificationPosition.bottom);
+      return false;
+    }
   }
 
   /// Sobe um item na fila manual
@@ -266,6 +291,15 @@ class DemandaController {
     if (index == -1) return false;
 
     final d = list[index];
+    // Virou projeto: não volta de coluna (o banco também bloqueia)
+    if (d.travada && novaEtapa != d.etapa) {
+      NotificationService.showNeutral(
+        'Demanda travada',
+        'Esta demanda já virou projeto e não pode mudar de coluna. Você pode arquivá-la.',
+        position: NotificationPosition.bottom,
+      );
+      return false;
+    }
     final atualizada = d.copyWith(
       etapa: novaEtapa,
       motivoCorrecao: motivoCorrecao ?? d.motivoCorrecao,

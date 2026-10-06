@@ -27,10 +27,19 @@ O arquivo `SpePlugin.dll` será gerado em `bin\Release\`.
 3. Selecione o arquivo `SpePlugin.dll`
 4. Pronto! Os comandos SPE estão disponíveis.
 
+## Login
+
+O banco só aceita usuários autenticados. Na primeira vez que um comando SPE acessar o
+Supabase, o plugin abre uma janela de login: use o **mesmo e-mail e senha do app SPE**.
+A senha não é gravada; só um token de sessão fica em `%APPDATA%\SpePlugin\config.json`
+e é renovado automaticamente.
+
 ## Comandos
 
 | Comando | Descrição |
 |---------|-----------|
+| `SPE_LOGIN` | Entra (ou troca de usuário) |
+| `SPE_SAIR` | Sai e apaga o login salvo neste computador |
 | `SPE_NOVO` | Cria novo detalhamento (carrega clientes/obras do Supabase) |
 | `SPE_ELEM` | Adiciona elemento (V101, P1, L1...) |
 | `SPE_POS` | Adiciona posição de armadura (por seleção de texto ou manual) |

@@ -931,11 +931,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "d:\\DESENVOLVIMENTO\\SPE\\autocad-plugin\\SpePlugin\\SpePlugin.csproj",
+      "projectUniqueName": "D:\\DESENVOLVIMENTO\\SPE\\autocad-plugin\\SpePlugin\\SpePlugin.csproj",
       "projectName": "SpePlugin",
-      "projectPath": "d:\\DESENVOLVIMENTO\\SPE\\autocad-plugin\\SpePlugin\\SpePlugin.csproj",
+      "projectPath": "D:\\DESENVOLVIMENTO\\SPE\\autocad-plugin\\SpePlugin\\SpePlugin.csproj",
       "packagesPath": "C:\\Users\\evandromapa\\.nuget\\packages\\",
-      "outputPath": "d:\\DESENVOLVIMENTO\\SPE\\autocad-plugin\\SpePlugin\\obj\\",
+      "outputPath": "D:\\DESENVOLVIMENTO\\SPE\\autocad-plugin\\SpePlugin\\obj\\",
       "projectStyle": "PackageReference",
       "crossTargeting": true,
       "configFilePaths": [
@@ -986,9 +986,12 @@
         "frameworkReferences": {
           "Microsoft.NETCore.App": {
             "privateAssets": "all"
+          },
+          "Microsoft.WindowsDesktop.App.WindowsForms": {
+            "privateAssets": "none"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\dotnet\\sdk\\8.0.421/PortableRuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.421/PortableRuntimeIdentifierGraph.json"
       },
       "net48": {
         "targetAlias": "net48",
@@ -1004,7 +1007,7 @@
             "version": "[8.0.5, )"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\dotnet\\sdk\\8.0.421\\RuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.421\\RuntimeIdentifierGraph.json"
       }
     }
   }

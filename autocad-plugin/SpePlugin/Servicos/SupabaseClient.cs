@@ -8,6 +8,8 @@ namespace SpePlugin.Servicos
     /// <summary>
     /// Cliente HTTP SÍNCRONO para a REST API do Supabase.
     /// Usa chamadas síncronas para evitar deadlock na thread STA do AutoCAD.
+    /// Todas as requisições usam o token do usuário logado (AuthService):
+    /// o banco só aceita usuários autenticados.
     /// </summary>
     public class SupabaseClient
     {
@@ -17,9 +19,9 @@ namespace SpePlugin.Servicos
         {
             _http = new HttpClient();
             _http.DefaultRequestHeaders.Add("apikey", ConfigService.SupabaseKey);
-            _http.DefaultRequestHeaders.Authorization =
-                new AuthenticationHeaderValue("Bearer", ConfigService.SupabaseKey);
             _http.DefaultRequestHeaders.Add("Prefer", "return=representation");
+            // Garante o login já na criação do cliente (abre a janela se preciso)
+            AuthService.ObterToken();
             _http.Timeout = TimeSpan.FromSeconds(15);
         }
 
@@ -136,58 +138,78 @@ namespace SpePlugin.Servicos
         }
 
         /// <summary>
-        /// Faz um UPDATE no detalhamento para disparar o Realtime stream do Flutter.
-        /// Usa valor variável para garantir que o Supabase detecte mudança.
+        /// Não faz mais nada: o app escuta o Realtime de elementos e posições
+        /// diretamente. Antes gravava um valor negativo em peso_total só para
+        /// disparar o Realtime, deixando o peso do detalhamento errado no banco.
+        /// Mantido para não alterar os comandos que o chamam.
         /// </summary>
         public void TocarDetalhamento(string detalhamentoId)
         {
-            var dados = new Dictionary<string, object?>
-            {
-                ["peso_total"] = -(DateTime.UtcNow.Ticks % 100000),
-            };
-            Patch($"detalhamentos?id=eq.{detalhamentoId}", dados);
         }
 
         // ══════════════════════════════════════════════════════
         // HTTP Helpers — 100% SÍNCRONO (evita deadlock no AutoCAD)
         // ══════════════════════════════════════════════════════
 
+        /// <summary>
+        /// Envia a requisição com o token do usuário. Se o token expirou (401),
+        /// renova e tenta uma vez mais. Erros do banco (ex: elemento em pedido
+        /// técnico aberto) viram exceção com a mensagem do servidor.
+        /// </summary>
+        private string Enviar(HttpMethod metodo, string endpoint, string? corpoJson = null)
+        {
+            for (int tentativa = 0; ; tentativa++)
+            {
+                var request = new HttpRequestMessage(metodo, $"{BaseUrl}/{endpoint}");
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AuthService.ObterToken());
+                if (corpoJson != null)
+                    request.Content = new StringContent(corpoJson, Encoding.UTF8, "application/json");
+
+                var response = _http.SendAsync(request).GetAwaiter().GetResult();
+                var resposta = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+
+                if ((int)response.StatusCode == 401 && tentativa == 0)
+                {
+                    AuthService.Invalidar();
+                    continue;
+                }
+                if (!response.IsSuccessStatusCode)
+                    throw new HttpRequestException(MensagemErro(resposta, response.ReasonPhrase));
+                return resposta;
+            }
+        }
+
+        private static string MensagemErro(string resposta, string? padrao)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(resposta);
+                if (doc.RootElement.TryGetProperty("message", out var m))
+                    return m.GetString() ?? padrao ?? "Erro";
+            }
+            catch { }
+            return padrao ?? "Erro";
+        }
+
         private List<Dictionary<string, object?>> Get(string endpoint)
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl}/{endpoint}");
-            var response = _http.SendAsync(request).GetAwaiter().GetResult();
-            response.EnsureSuccessStatusCode();
-            var json = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-            return DeserializeList(json);
+            return DeserializeList(Enviar(HttpMethod.Get, endpoint));
         }
 
         private Dictionary<string, object?>? Post(string endpoint, Dictionary<string, object?> dados)
         {
-            var json = JsonSerializer.Serialize(dados);
-            var request = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/{endpoint}");
-            request.Content = new StringContent(json, Encoding.UTF8, "application/json");
-            var response = _http.SendAsync(request).GetAwaiter().GetResult();
-            response.EnsureSuccessStatusCode();
-            var responseJson = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-
-            var lista = DeserializeList(responseJson);
+            var lista = DeserializeList(Enviar(HttpMethod.Post, endpoint, JsonSerializer.Serialize(dados)));
             return lista.Count > 0 ? lista[0] : null;
         }
 
         private void Patch(string endpoint, Dictionary<string, object?> dados)
         {
-            var json = JsonSerializer.Serialize(dados);
-            var request = new HttpRequestMessage(new HttpMethod("PATCH"), $"{BaseUrl}/{endpoint}");
-            request.Content = new StringContent(json, Encoding.UTF8, "application/json");
-            var response = _http.SendAsync(request).GetAwaiter().GetResult();
-            response.EnsureSuccessStatusCode();
+            Enviar(new HttpMethod("PATCH"), endpoint, JsonSerializer.Serialize(dados));
         }
 
         private void Delete(string endpoint)
         {
-            var request = new HttpRequestMessage(HttpMethod.Delete, $"{BaseUrl}/{endpoint}");
-            var response = _http.SendAsync(request).GetAwaiter().GetResult();
-            response.EnsureSuccessStatusCode();
+            Enviar(HttpMethod.Delete, endpoint);
         }
 
         private static List<Dictionary<string, object?>> DeserializeList(string json)

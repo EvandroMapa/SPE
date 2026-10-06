@@ -75,6 +75,24 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
+  assets:
+    - assets/images/
+
+  # Mesma fonte do PCP (o tema já usava 'WorkSans', mas a fonte não era embutida)
+  fonts:
+    - family: WorkSans
+      fonts:
+        - asset: assets/fonts/work_sans/WorkSans-Light.ttf
+          weight: 300
+        - asset: assets/fonts/work_sans/WorkSans-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/work_sans/WorkSans-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/work_sans/WorkSans-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/work_sans/WorkSans-Bold.ttf
+          weight: 700
+
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

@@ -16,7 +16,7 @@ class _DashboardPedidoCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final statusAberto = pedido.isAberto;
     final statusColor =
-        statusAberto ? const Color(0xFF10B981) : Colors.grey[400]!;
+        statusAberto ? AppColors.statusPronto : AppColors.statusAguardando;
     final statusLabel = statusAberto ? 'ABERTO' : 'CANCELADO';
     final fmt = DateFormat('dd/MM/yyyy');
 
@@ -95,11 +95,15 @@ class _DashboardPedidoCard extends StatelessWidget {
                       children: [
                         Row(
                           children: [
-                            Text(
-                              pedido.identificador.isNotEmpty
-                                  ? pedido.identificador
-                                  : 'PT ${pedido.codigo}',
-                              style: AppCss.smallBold.setSize(14),
+                            Flexible(
+                              child: Text(
+                                pedido.identificador.isNotEmpty
+                                    ? pedido.identificador
+                                    : 'PT ${pedido.codigo}',
+                                style: AppCss.smallBold.setSize(14),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                             const SizedBox(width: 8),
                             Container(
@@ -188,7 +192,7 @@ class _DashboardPedidoCard extends StatelessWidget {
                         Icons.scale_outlined,
                         pedido.pesoTotal > 0
                             ? (pedido.pesoTotal >= 1000
-                                ? '${(pedido.pesoTotal / 1000).toStringAsFixed(2)} t'
+                                ? '${NumberFormat('#,##0.00', 'pt_BR').format(pedido.pesoTotal / 1000)} t'
                                 : '${NumberFormat('#,##0.00', 'pt_BR').format(pedido.pesoTotal)} kg')
                             : 'Sem peso',
                         const Color(0xFF10B981),

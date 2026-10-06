@@ -14,10 +14,12 @@ class TextController<T> {
     }
   }
 
-  TextController.number({double? value, this.object}) {
+  /// Campo numérico com máscara. [precision] = casas decimais exibidas e
+  /// gravadas (ex: massa linear de bitola precisa de 3: 0,617 kg/m).
+  TextController.number({double? value, this.object, int precision = 2}) {
     controller = MoneyMaskedTextController(
       initialValue: value ?? 0,
-      precision: 2,
+      precision: precision,
     );
   }
 

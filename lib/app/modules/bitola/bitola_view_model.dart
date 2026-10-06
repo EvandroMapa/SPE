@@ -11,7 +11,8 @@ class BitolaCreateModel {
   final String id;
   TextController nome = TextController();
   TextController descricao = TextController();
-  TextController massaFinal = TextController.number();
+  // 3 casas: a massa linear (kg/m) é usada no cálculo de peso
+  TextController massaFinal = TextController.number(precision: 3);
   TextController codigoFinanceiro = TextController();
   TextController diametro = TextController(); // mm
   int sortIndex = 999;
@@ -26,7 +27,7 @@ class BitolaCreateModel {
         isEdit = true {
     nome.text = bitola.nome;
     descricao.text = bitola.descricao;
-    massaFinal = TextController.number(value: bitola.massaFinal);
+    massaFinal = TextController.number(value: bitola.massaFinal, precision: 3);
     codigoFinanceiro.text = bitola.codigoFinanceiro;
     diametro.text = bitola.diametro > 0 ? bitola.diametro.toString() : '';
     sortIndex = bitola.sortIndex;

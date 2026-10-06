@@ -17,7 +17,7 @@ class BasePage extends StatelessWidget {
         return Scaffold(
           backgroundColor: AppColors.neutralLightest,
           appBar: AppBar(
-            backgroundColor: const Color(0xFF1A2233),
+            backgroundColor: AppColors.primaryMain,
             iconTheme: const IconThemeData(color: Colors.white),
             title: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

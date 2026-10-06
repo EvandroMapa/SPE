@@ -42,7 +42,7 @@ class _StageTabCardState extends State<_StageTabCard> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           height: 38,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
             color: isSelected ? const Color(0xFF0F172A) : Colors.white,
             borderRadius: BorderRadius.circular(8),
@@ -50,8 +50,8 @@ class _StageTabCardState extends State<_StageTabCard> {
               color: isSelected
                   ? const Color(0xFF0F172A)
                   : (_isHovered
-                      ? widget.badgeColor.withValues(alpha: 0.5)
-                      : const Color(0xFFCBD5E1)),
+                        ? widget.badgeColor.withValues(alpha: 0.5)
+                        : const Color(0xFFCBD5E1)),
               width: 1.0,
             ),
             boxShadow: [
@@ -63,43 +63,63 @@ class _StageTabCardState extends State<_StageTabCard> {
                 ),
             ],
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                widget.icon,
-                size: 16,
-                color: isSelected ? Colors.white : widget.badgeColor,
-              ),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  widget.title,
-                  style: AppCss.smallBold.setSize(13).setColor(
-                        isSelected ? Colors.white : const Color(0xFF0F172A),
+          // Sem espaço para o nome (tela estreita): só ícone e contador,
+          // com o nome na dica
+          child: LayoutBuilder(
+            builder: (context, cons) {
+              final compacto = cons.maxWidth < 120;
+              final conteudo = Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    widget.icon,
+                    size: 16,
+                    color: isSelected ? Colors.white : widget.badgeColor,
+                  ),
+                  if (!compacto) ...[
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        widget.title,
+                        style: AppCss.smallBold
+                            .setSize(13)
+                            .setColor(
+                              isSelected
+                                  ? Colors.white
+                                  : const Color(0xFF0F172A),
+                            ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? widget.badgeColor
-                      : const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  widget.count.toString(),
-                  style: AppCss.minimumBold.setSize(11).setColor(
-                        isSelected ? Colors.white : const Color(0xFF475569),
-                      ),
-                ),
-              ),
-            ],
+                    ),
+                  ],
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? widget.badgeColor
+                          : const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      widget.count.toString(),
+                      style: AppCss.minimumBold
+                          .setSize(11)
+                          .setColor(
+                            isSelected ? Colors.white : const Color(0xFF475569),
+                          ),
+                    ),
+                  ),
+                ],
+              );
+              return compacto
+                  ? Tooltip(message: widget.title, child: conteudo)
+                  : conteudo;
+            },
           ),
         ),
       ),

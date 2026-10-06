@@ -10,6 +10,7 @@ import 'package:acoplan/app/modules/forma/ui/formas_page.dart';
 import 'package:acoplan/app/core/utils/app_colors.dart';
 import 'package:acoplan/app/core/utils/app_css.dart';
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 enum AppModule {
   dashboard,
@@ -61,21 +62,21 @@ extension AppModuleExt on AppModule {
   IconData get icon {
     switch (this) {
       case AppModule.dashboard:
-        return Icons.dashboard_outlined;
+        return Symbols.space_dashboard;
       case AppModule.projetos:
-        return Icons.architecture_outlined;
+        return Symbols.architecture;
       case AppModule.detalhamentoIA:
-        return Icons.auto_awesome_outlined;
+        return Symbols.auto_awesome;
       case AppModule.pedidosTecnicos:
-        return Icons.description_outlined;
+        return Symbols.receipt_long;
       case AppModule.cliente:
-        return Icons.group_outlined;
+        return Symbols.groups;
       case AppModule.fabricantes:
-        return Icons.business_outlined;
+        return Symbols.factory;
       case AppModule.formas:
-        return Icons.architecture;
+        return Symbols.polyline;
       case AppModule.bitolas:
-        return Icons.inventory_2_outlined;
+        return Symbols.stacks;
     }
   }
 

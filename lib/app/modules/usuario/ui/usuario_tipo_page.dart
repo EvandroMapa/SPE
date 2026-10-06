@@ -1,12 +1,18 @@
+import 'package:acoplan/app/core/client/backend_client.dart';
+import 'package:acoplan/app/core/client/models/usuario_tipo_model.dart';
 import 'package:acoplan/app/core/components/app_scaffold.dart';
+import 'package:acoplan/app/core/components/cadastro/cadastro_form.dart';
+import 'package:acoplan/app/core/components/cadastro/cadastro_lista.dart';
 import 'package:acoplan/app/core/components/empty_data.dart';
 import 'package:acoplan/app/core/components/stream_out.dart';
-import 'package:acoplan/app/core/client/models/usuario_tipo_model.dart';
+import 'package:acoplan/app/core/dialogs/confirm_dialog.dart';
 import 'package:acoplan/app/core/utils/app_colors.dart';
 import 'package:acoplan/app/core/utils/app_css.dart';
 import 'package:acoplan/app/core/utils/global_resource.dart';
 import 'package:acoplan/app/modules/usuario/usuario_tipo_controller.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 class UsuarioTipoPage extends StatefulWidget {
   const UsuarioTipoPage({super.key});
@@ -17,110 +23,78 @@ class UsuarioTipoPage extends StatefulWidget {
 
 class _UsuarioTipoPageState extends State<UsuarioTipoPage> {
   @override
+  void initState() {
+    setWebTitle('Perfis de acesso');
+    super.initState();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return AppScaffold(
+      backgroundColor: AppColors.neutralLightest,
       appBar: AppBar(
-        iconTheme: const IconThemeData(color: Colors.white, size: 20),
-        backgroundColor: AppColors.primaryMain,
-        title: Text('Perfis de Acesso', style: AppCss.mediumBold.setColor(Colors.white)),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add, color: Colors.white),
-            onPressed: () => _openCreateTipo(null),
-          ),
-        ],
+        iconTheme: const IconThemeData(color: Colors.white),
+        title: Text('Perfis de acesso', style: AppCss.largeBold.setSize(18).setColor(Colors.white)),
+        actions: [CadastroBotaoNovo('Novo perfil', onTap: () => _abrir(null))],
       ),
       body: StreamOut<List<UsuarioTipoModel>>(
         stream: usuarioTipoCtrl.tiposStream.listen,
         builder: (context, tipos) {
-          if (tipos.isEmpty) {
-            return const EmptyData(message: 'Nenhum perfil encontrado');
-          }
-
-          return ListView.separated(
-            itemCount: tipos.length,
-            separatorBuilder: (_, _) => const Divider(height: 1),
-            itemBuilder: (context, index) {
-              final tipo = tipos[index];
-              return ListTile(
-                title: Text(tipo.nome, style: AppCss.smallBold),
-                subtitle: Text(
-                  'Criado em: ${tipo.createdAt.day}/${tipo.createdAt.month}/${tipo.createdAt.year}',
-                  style: AppCss.minimumRegular,
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit_outlined),
-                      onPressed: () => _openCreateTipo(tipo),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline_rounded, color: Colors.red),
-                      onPressed: () => _confirmDelete(tipo),
-                    ),
-                  ],
-                ),
-              );
-            },
+          if (tipos.isEmpty) return const EmptyData(message: 'Nenhum perfil cadastrado');
+          final ordenados = [...tipos]..sort((a, b) => a.nome.toLowerCase().compareTo(b.nome.toLowerCase()));
+          return Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: CadastroLista(
+              onRefresh: () => BackendClient.usuarioTipos.fetch(),
+              itens: ordenados.map(_linha).toList(),
+            ),
           );
         },
       ),
     );
   }
 
-  void _openCreateTipo(UsuarioTipoModel? tipo) {
+  Widget _linha(UsuarioTipoModel tipo) {
+    final usuarios = BackendClient.usuarios.data.where((u) => u.usuarioTipoId == tipo.id).length;
+    return CadastroLinha(
+      onTap: () => _abrir(tipo),
+      leading: const CadastroIcone(Symbols.badge),
+      titulo: tipo.nome,
+      pares: [
+        ('Usuários', usuarios == 0 ? 'nenhum' : '$usuarios'),
+        ('Criado em', DateFormat('dd/MM/yyyy').format(tipo.createdAt)),
+      ],
+      trailing: CadastroMenu([
+        CadastroAcao(Icons.edit_outlined, 'Editar perfil', () => _abrir(tipo)),
+        CadastroAcao(Icons.delete_outline, 'Excluir perfil', () => _excluir(tipo), destrutiva: true),
+      ]),
+    );
+  }
+
+  void _abrir(UsuarioTipoModel? tipo) {
     usuarioTipoCtrl.init(tipo);
     showDialog(
       context: context,
-      builder: (context) => _UsuarioTipoFormDialog(),
-    );
-  }
-
-  void _confirmDelete(UsuarioTipoModel tipo) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Excluir Perfil'),
-        content: Text('Deseja realmente excluir o perfil ${tipo.nome}?'),
-        actions: [
-          TextButton(onPressed: () => pop(context), child: const Text('Cancelar')),
-          TextButton(
-            onPressed: () {
-              pop(context);
-              usuarioTipoCtrl.onDelete(context, tipo);
-            },
-            child: const Text('Excluir', style: TextStyle(color: Colors.red)),
+      builder: (dialogContext) => StreamOut<UsuarioTipoCreateModel>(
+        stream: usuarioTipoCtrl.formStream.listen,
+        builder: (_, form) => CadastroDialog(
+          icon: Symbols.badge,
+          titulo: form.isEdit ? 'Editar perfil' : 'Novo perfil',
+          largura: 480,
+          onSalvar: () => usuarioTipoCtrl.onConfirm(dialogContext),
+          child: TextField(
+            controller: form.nome,
+            autofocus: true,
+            decoration: const InputDecoration(labelText: 'Nome do perfil', hintText: 'Ex.: Detalhista'),
           ),
-        ],
+        ),
       ),
     );
   }
-}
 
-class _UsuarioTipoFormDialog extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return StreamOut<UsuarioTipoCreateModel>(
-      stream: usuarioTipoCtrl.formStream.listen,
-      builder: (context, form) {
-        return AlertDialog(
-          title: Text(form.isEdit ? 'Editar Perfil' : 'Novo Perfil'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: form.nome,
-                decoration: const InputDecoration(labelText: 'Nome do Perfil'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => pop(context), child: const Text('Cancelar')),
-            TextButton(onPressed: () => usuarioTipoCtrl.onConfirm(context), child: const Text('Salvar')),
-          ],
-        );
-      },
-    );
+  Future<void> _excluir(UsuarioTipoModel tipo) async {
+    if (await showConfirmDialog('Excluir perfil', 'Deseja realmente excluir o perfil ${tipo.nome}?') && mounted) {
+      usuarioTipoCtrl.onDelete(context, tipo);
+    }
   }
 }

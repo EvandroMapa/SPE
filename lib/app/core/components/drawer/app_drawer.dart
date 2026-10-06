@@ -6,7 +6,10 @@ import 'package:acoplan/app/core/utils/app_env.dart';
 import 'package:acoplan/app/modules/base/base_controller.dart';
 import 'package:acoplan/app/modules/config/config_page.dart';
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
+/// Menu lateral no mesmo padrão do PCP: cabeçalho com o logo, item ativo no
+/// vermelho da marca, grupos recolhíveis e versão no rodapé.
 class AppDrawerMenu extends StatefulWidget {
   const AppDrawerMenu({super.key});
 
@@ -15,263 +18,240 @@ class AppDrawerMenu extends StatefulWidget {
 }
 
 class _AppDrawerMenuState extends State<AppDrawerMenu> {
-  bool _cadastrosExpanded = false;
+  static const _cadastros = [
+    AppModule.cliente,
+    AppModule.bitolas,
+    AppModule.formas,
+  ];
 
-  void _navigate(AppModule module) {
+  late bool _cadastrosAberto = _cadastros.contains(baseCtrl.moduleStream.value);
+
+  void _navegar(AppModule module) {
     baseCtrl.setModule(module);
     Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
-    final user = appCtrl.usuario;
-
     return Drawer(
-      width: 280,
+      width: 290,
       backgroundColor: Colors.white,
-      child: Column(
-        children: [
-          // ── Header ──────────────────────────────────────────
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(16, 48, 16, 20),
-            color: const Color(0xFF1A2233),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      shape: const RoundedRectangleBorder(),
+      child: StreamBuilder<AppModule>(
+        stream: baseCtrl.moduleStream.listen,
+        initialData: baseCtrl.moduleStream.value,
+        builder: (context, snap) {
+          final atual = snap.data ?? AppModule.dashboard;
+          final cadastroAtivo = _cadastros.contains(atual);
+          return Column(
+            children: [
+              const _DrawerCabecalho(),
+              Expanded(
+                child: ListView(
+                  padding: EdgeInsets.zero,
                   children: [
-                    // Avatar
-                    Container(
-                      width: 64,
-                      height: 64,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppColors.primaryMain,
-                        border: Border.all(color: Colors.white24, width: 2),
-                      ),
-                      child: Center(
-                        child: Text(
-                          user?.nome.isNotEmpty == true
-                              ? user!.nome[0].toUpperCase()
-                              : 'A',
-                          style: AppCss.largeBold.setColor(Colors.white),
-                        ),
-                      ),
-                    ),
-                    // Botão Versão e Configurações
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            'v$kAppVersion • $kBuildHash',
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        InkWell(
-                          onTap: () {
-                            Navigator.of(context).pop();
-                            Navigator.of(context).push(MaterialPageRoute(
-                              builder: (_) => const ConfigPage(),
-                            ));
-                          },
-                          borderRadius: BorderRadius.circular(8),
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            child: const Icon(
-                              Icons.settings_outlined,
-                              color: Colors.white70,
-                              size: 22,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  user?.nome ?? 'Usuário',
-                  style: AppCss.mediumBold.setColor(Colors.white),
-                ),
-                Text(
-                  user?.email ?? '',
-                  style: AppCss.minimumRegular
-                      .setColor(Colors.white60),
-                ),
-              ],
-            ),
-          ),
-
-          // ── Itens do menu ────────────────────────────────────
-          Expanded(
-            child: StreamBuilder<AppModule>(
-              stream: baseCtrl.moduleStream.listen,
-              builder: (context, snap) {
-                final current = snap.data ?? AppModule.dashboard;
-                return ListView(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  children: [
-                    _buildItem(
-                      icon: Icons.dashboard_outlined,
-                      label: 'Área de Trabalho',
+                    _DrawerItem(
                       module: AppModule.dashboard,
-                      current: current,
+                      ativo: atual == AppModule.dashboard,
+                      onTap: () => _navegar(AppModule.dashboard),
                     ),
-                    const Divider(height: 1),
-
-                    // ── Cadastros (expansível) ───────────────
-                    _buildExpansionItem(
-                      icon: Icons.add_circle_outline,
-                      label: 'Cadastros',
-                      expanded: _cadastrosExpanded,
-                      onToggle: () => setState(
-                          () => _cadastrosExpanded = !_cadastrosExpanded),
-                      children: [
-                        _buildSubItem(AppModule.cliente, current,
-                            Icons.group_outlined, 'Clientes'),
-                        _buildSubItem(AppModule.bitolas, current,
-                            Icons.inventory_2_outlined, 'Bitolas'),
-                        _buildSubItem(AppModule.fabricantes, current,
-                            Icons.business_outlined, 'Fabricantes'),
-                        _buildSubItem(AppModule.formas, current,
-                            Icons.architecture, 'Formas'),
-
-                      ],
+                    _divisor(),
+                    Theme(
+                      // Sem as linhas que o ExpansionTile desenha ao abrir
+                      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                      child: ExpansionTile(
+                        initiallyExpanded: _cadastrosAberto || cadastroAtivo,
+                        onExpansionChanged: (v) => _cadastrosAberto = v,
+                        iconColor: AppColors.neutralDark,
+                        collapsedIconColor: AppColors.neutralDark,
+                        tilePadding: const EdgeInsets.only(left: 16, right: 16),
+                        leading: Icon(Symbols.folder_open, color: AppColors.neutralDark),
+                        title: Text(
+                          'Cadastros',
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: AppColors.black,
+                            fontWeight: cadastroAtivo ? FontWeight.w700 : FontWeight.w500,
+                          ),
+                        ),
+                        children: [
+                          for (final m in _cadastros)
+                            _DrawerItem(
+                              module: m,
+                              ativo: atual == m,
+                              recuado: true,
+                              onTap: () => _navegar(m),
+                            ),
+                        ],
+                      ),
                     ),
-                    const Divider(height: 1),
+                    _divisor(),
                   ],
-                );
-              },
-            ),
-          ),
+                ),
+              ),
+              _divisor(),
+              ListTile(
+                leading: Icon(Icons.logout, color: AppColors.error, size: 22),
+                title: Text('Sair', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w600)),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  appCtrl.logout();
+                },
+              ),
+              const _DrawerVersao(),
+            ],
+          );
+        },
+      ),
+    );
+  }
 
-          // ── Rodapé: Sair ─────────────────────────────────────
-          const Divider(height: 1),
-          ListTile(
-            leading: Icon(Icons.exit_to_app_rounded,
-                color: AppColors.error, size: 22),
-            title: Text('Sair',
-                style: AppCss.smallBold.setColor(AppColors.error)),
-            onTap: () {
-              Navigator.of(context).pop();
-              appCtrl.logout();
-            },
+  Widget _divisor() => Divider(height: 1, color: AppColors.black.withValues(alpha: 0.08));
+}
+
+class _DrawerCabecalho extends StatelessWidget {
+  const _DrawerCabecalho();
+
+  @override
+  Widget build(BuildContext context) {
+    final user = appCtrl.usuario;
+    final perfil = user?.tipo?.nome ?? '';
+    return Container(
+      width: double.infinity,
+      height: 190,
+      color: AppColors.primaryMain,
+      padding: EdgeInsets.fromLTRB(16, 16 + MediaQuery.paddingOf(context).top, 8, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Logo inteiro em quadrado branco (o círculo cortava o "2")
+              Container(
+                width: 60,
+                height: 60,
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
+              ),
+              const Spacer(),
+              IconButton(
+                tooltip: 'Configurações',
+                style: IconButton.styleFrom(backgroundColor: Colors.transparent),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ConfigPage()));
+                },
+                icon: const Icon(Icons.settings_outlined, color: Colors.white),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
+          const Spacer(),
+          Text(
+            user?.nome ?? 'Usuário',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppCss.mediumBold.setSize(15).setColor(Colors.white),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            perfil.isNotEmpty ? perfil : (user?.email ?? ''),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppCss.minimumRegular.setSize(12.5).setColor(Colors.white.withValues(alpha: 0.7)),
+          ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildItem({
-    required IconData icon,
-    required String label,
-    required AppModule module,
-    required AppModule current,
-    bool hasExternalButton = false,
-  }) {
-    final isSelected = module == current;
-    return ListTile(
-      selected: isSelected,
-      selectedTileColor: AppColors.primaryMain.withValues(alpha: 0.06),
-      leading: Icon(
-        icon,
-        size: 22,
-        color: isSelected ? AppColors.primaryMain : const Color(0xFF555F6E),
-      ),
-      title: Text(
-        label,
-        style: AppCss.smallRegular.setColor(
-          isSelected ? AppColors.primaryMain : const Color(0xFF1A2233),
+class _DrawerItem extends StatelessWidget {
+  final AppModule module;
+  final bool ativo;
+  final bool recuado;
+  final VoidCallback onTap;
+
+  const _DrawerItem({
+    required this.module,
+    required this.ativo,
+    required this.onTap,
+    this.recuado = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Item ativo: fundo vermelho-claro, faixa e ícone no vermelho da marca
+    return Container(
+      decoration: BoxDecoration(
+        color: ativo ? AppColors.brandSoft : null,
+        border: Border(
+          left: BorderSide(color: ativo ? AppColors.brand : Colors.transparent, width: 3),
         ),
       ),
-      trailing: hasExternalButton
-          ? _externalButton(module)
-          : null,
-      onTap: () => _navigate(module),
-    );
-  }
-
-  Widget _externalButton(AppModule module) {
-    return InkWell(
-      onTap: () => _navigate(module),
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: const Color(0xFF1A2233),
-          borderRadius: BorderRadius.circular(8),
+      child: ListTile(
+        dense: recuado,
+        contentPadding: EdgeInsets.only(left: recuado ? 36 : 13, right: 16),
+        leading: Icon(
+          module.icon,
+          size: recuado ? 20 : 24,
+          color: ativo ? AppColors.brand : AppColors.neutralDark,
         ),
-        child: const Icon(Icons.open_in_new_rounded,
-            color: Colors.white, size: 18),
-      ),
-    );
-  }
-
-  Widget _buildExpansionItem({
-    required IconData icon,
-    required String label,
-    required bool expanded,
-    required VoidCallback onToggle,
-    required List<Widget> children,
-  }) {
-    return Column(
-      children: [
-        ListTile(
-          leading: Icon(icon, size: 22, color: const Color(0xFF555F6E)),
-          title: Text(label,
-              style: AppCss.smallRegular.setColor(const Color(0xFF1A2233))),
-          trailing: AnimatedRotation(
-            turns: expanded ? 0.5 : 0,
-            duration: const Duration(milliseconds: 200),
-            child:
-                const Icon(Icons.keyboard_arrow_down, color: Color(0xFF555F6E)),
+        title: Text(
+          module.label,
+          style: TextStyle(
+            fontSize: recuado ? 14 : 15,
+            color: AppColors.black,
+            fontWeight: ativo ? FontWeight.w700 : FontWeight.w400,
           ),
-          onTap: onToggle,
         ),
-        AnimatedCrossFade(
-          duration: const Duration(milliseconds: 200),
-          crossFadeState: expanded
-              ? CrossFadeState.showSecond
-              : CrossFadeState.showFirst,
-          firstChild: const SizedBox.shrink(),
-          secondChild: Column(children: children),
-        ),
-      ],
+        onTap: onTap,
+      ),
     );
   }
+}
 
-  Widget _buildSubItem(
-      AppModule module, AppModule current, IconData icon, String label) {
-    final isSelected = module == current;
-    return ListTile(
-      contentPadding: const EdgeInsets.only(left: 48, right: 16),
-      selected: isSelected,
-      selectedTileColor: AppColors.primaryMain.withValues(alpha: 0.06),
-      leading:
-          Icon(icon, size: 20, color: isSelected ? AppColors.primaryMain : const Color(0xFF555F6E)),
-      title: Text(
-        label,
-        style: AppCss.minimumRegular.setColor(
-          isSelected ? AppColors.primaryMain : const Color(0xFF555F6E),
-        ),
+/// Rodapé do menu: versão e commit, discretos. Selo DEV quando roda local.
+class _DrawerVersao extends StatelessWidget {
+  const _DrawerVersao();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: AppColors.neutralLight)),
       ),
-      onTap: () => _navigate(module),
+      child: Row(
+        children: [
+          if (kBuildHash == 'local') ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              decoration: BoxDecoration(
+                color: AppColors.statusAtencao,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Text(
+                'DEV',
+                style: TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.w700),
+              ),
+            ),
+            const SizedBox(width: 6),
+          ],
+          Expanded(
+            child: Text(
+              kVersaoLabel,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 11, color: AppColors.neutralMedium),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

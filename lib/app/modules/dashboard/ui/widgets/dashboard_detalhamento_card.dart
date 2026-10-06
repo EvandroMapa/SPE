@@ -34,6 +34,8 @@ class _DashboardDetalhamentoCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final temPedidos = pedidosVinculados.isNotEmpty;
     final fmt = DateFormat('dd/MM/yyyy');
+    // Tela estreita: ações no menu ⋮ para não espremer cliente/obra
+    final estreito = MediaQuery.sizeOf(context).width < 700;
 
     return GestureDetector(
       onTap: onSelecionar,
@@ -62,10 +64,13 @@ class _DashboardDetalhamentoCard extends StatelessWidget {
           children: [
             // ── Conteúdo principal ──
             ListTile(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 6,
+              ),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
+                borderRadius: BorderRadius.circular(10),
+              ),
               leading: Container(
                 width: 44,
                 height: 44,
@@ -106,8 +111,8 @@ class _DashboardDetalhamentoCard extends StatelessWidget {
                   final nomeExibicao = prefixo.isNotEmpty
                       ? '${detalhamento.clienteNome} - $prefixo'
                       : (detalhamento.clienteNome.isNotEmpty
-                          ? detalhamento.clienteNome
-                          : 'Cliente não informado');
+                            ? detalhamento.clienteNome
+                            : 'Cliente não informado');
 
                   return Text(
                     nomeExibicao,
@@ -149,37 +154,62 @@ class _DashboardDetalhamentoCard extends StatelessWidget {
                     },
                   ),
                   const SizedBox(height: 3),
-                  Row(
+                  // Quebra a linha em tela estreita (antes estourava)
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 2,
                     children: [
-                      Icon(Icons.layers_outlined,
-                          size: 12, color: Colors.grey[500]),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${detalhamento.elementos.length} elemento(s)',
-                        style: AppCss.minimumBold
-                            .setColor(Colors.grey[600]!)
-                            .setSize(11),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.layers_outlined,
+                            size: 12,
+                            color: Colors.grey[500],
+                          ),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              '${detalhamento.elementos.length} elemento(s)',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppCss.minimumBold
+                                  .setColor(Colors.grey[600]!)
+                                  .setSize(11),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 12),
-                      Icon(
-                        Icons.scale_outlined,
-                        size: 12,
-                        color: detalhamento.pesoTotal > 0
-                            ? const Color(0xFF10B981)
-                            : Colors.grey[400],
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        detalhamento.pesoTotal > 0
-                            ? (detalhamento.pesoTotal >= 1000
-                                ? '${(detalhamento.pesoTotal / 1000).toStringAsFixed(2)} t'
-                                : '${NumberFormat('#,##0.00', 'pt_BR').format(detalhamento.pesoTotal)} kg')
-                            : 'Sem peso',
-                        style: AppCss.minimumBold
-                            .setColor(detalhamento.pesoTotal > 0
-                                ? const Color(0xFF10B981)
-                                : Colors.grey[400]!)
-                            .setSize(11),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.scale_outlined,
+                            size: 12,
+                            color: detalhamento.pesoTotal > 0
+                                ? AppColors.statusPronto
+                                : Colors.grey[400],
+                          ),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              detalhamento.pesoTotal > 0
+                                  ? (detalhamento.pesoTotal >= 1000
+                                        ? '${NumberFormat('#,##0.00', 'pt_BR').format(detalhamento.pesoTotal / 1000)} t'
+                                        : '${NumberFormat('#,##0.00', 'pt_BR').format(detalhamento.pesoTotal)} kg')
+                                  : 'Sem peso',
+                              style: AppCss.minimumBold
+                                  .setColor(
+                                    detalhamento.pesoTotal > 0
+                                        ? AppColors.statusPronto
+                                        : Colors.grey[400]!,
+                                  )
+                                  .setSize(11),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -202,21 +232,27 @@ class _DashboardDetalhamentoCard extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(horizontal: 8),
                           decoration: BoxDecoration(
                             color: expandido
-                                ? const Color(0xFF3B82F6)
-                                    .withValues(alpha: 0.15)
-                                : const Color(0xFF3B82F6)
-                                    .withValues(alpha: 0.08),
+                                ? const Color(
+                                    0xFF3B82F6,
+                                  ).withValues(alpha: 0.15)
+                                : const Color(
+                                    0xFF3B82F6,
+                                  ).withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: const Color(0xFF3B82F6).withValues(
-                                  alpha: expandido ? 0.35 : 0.15),
+                              color: const Color(
+                                0xFF3B82F6,
+                              ).withValues(alpha: expandido ? 0.35 : 0.15),
                             ),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.assignment_outlined,
-                                  size: 14, color: Color(0xFF3B82F6)),
+                              const Icon(
+                                Icons.assignment_outlined,
+                                size: 14,
+                                color: Color(0xFF3B82F6),
+                              ),
                               const SizedBox(width: 4),
                               Text(
                                 '${pedidosVinculados.length}',
@@ -228,8 +264,11 @@ class _DashboardDetalhamentoCard extends StatelessWidget {
                               AnimatedRotation(
                                 turns: expandido ? 0.5 : 0,
                                 duration: const Duration(milliseconds: 200),
-                                child: const Icon(Icons.expand_more,
-                                    size: 14, color: Color(0xFF3B82F6)),
+                                child: const Icon(
+                                  Icons.expand_more,
+                                  size: 14,
+                                  color: Color(0xFF3B82F6),
+                                ),
                               ),
                             ],
                           ),
@@ -237,79 +276,103 @@ class _DashboardDetalhamentoCard extends StatelessWidget {
                       ),
                     ),
                   if (temPedidos) const SizedBox(width: 8),
-                  Tooltip(
-                    message: 'Gerar PDF',
-                    child: InkWell(
-                      onTap: onPdf,
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: Colors.orange.withValues(alpha: 0.10),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(Icons.picture_as_pdf_outlined,
-                            size: 18, color: Colors.orange),
-                      ),
-                    ),
-                  ),
-                  if (onGerarPedido != null) ...[
+                  if (!estreito) ...[
                     Tooltip(
-                      message: 'Emitir Pedido Técnico',
+                      message: 'Gerar PDF',
                       child: InkWell(
-                        onTap: onGerarPedido,
+                        onTap: onPdf,
                         borderRadius: BorderRadius.circular(8),
                         child: Container(
                           width: 36,
                           height: 36,
                           decoration: BoxDecoration(
-                            color: const Color(0xFF059669).withValues(alpha: 0.10),
+                            color: Colors.orange.withValues(alpha: 0.10),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Icon(Icons.post_add_outlined,
-                              size: 18, color: Color(0xFF059669)),
+                          child: const Icon(
+                            Icons.picture_as_pdf_outlined,
+                            size: 18,
+                            color: Colors.orange,
+                          ),
                         ),
                       ),
                     ),
                     const SizedBox(width: 8),
+                    if (onGerarPedido != null) ...[
+                      Tooltip(
+                        message: 'Emitir Pedido Técnico',
+                        child: InkWell(
+                          onTap: onGerarPedido,
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: const Color(
+                                0xFF059669,
+                              ).withValues(alpha: 0.10),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(
+                              Icons.post_add_outlined,
+                              size: 18,
+                              color: Color(0xFF059669),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    Tooltip(
+                      message: 'Editar',
+                      child: InkWell(
+                        onTap: onEditar,
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryMain.withValues(
+                              alpha: 0.10,
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            Icons.edit_outlined,
+                            size: 18,
+                            color: AppColors.primaryMain,
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
-                  Tooltip(
-                    message: 'Editar',
-                    child: InkWell(
-                      onTap: onEditar,
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: AppColors.primaryMain
-                              .withValues(alpha: 0.10),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(Icons.edit_outlined,
-                            size: 18, color: AppColors.primaryMain),
+                  // Excluir no menu, longe de um clique acidental (padrão PCP)
+                  CadastroMenu([
+                    if (estreito) ...[
+                      CadastroAcao(
+                        Icons.picture_as_pdf_outlined,
+                        'Gerar PDF',
+                        onPdf,
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Tooltip(
-                    message: 'Excluir',
-                    child: InkWell(
-                      onTap: onExcluir,
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: AppColors.error.withValues(alpha: 0.10),
-                          borderRadius: BorderRadius.circular(8),
+                      if (onGerarPedido != null)
+                        CadastroAcao(
+                          Icons.post_add_outlined,
+                          'Emitir pedido técnico',
+                          onGerarPedido!,
                         ),
-                        child: Icon(Icons.delete_outline,
-                            size: 18, color: AppColors.error),
+                      CadastroAcao(
+                        Icons.edit_outlined,
+                        'Editar projeto',
+                        onEditar,
                       ),
+                    ],
+                    CadastroAcao(
+                      Icons.delete_outline,
+                      'Excluir projeto',
+                      onExcluir,
+                      destrutiva: true,
                     ),
-                  ),
+                  ]),
                 ],
               ),
             ),
@@ -329,8 +392,11 @@ class _DashboardDetalhamentoCard extends StatelessWidget {
                             padding: const EdgeInsets.only(bottom: 6),
                             child: Row(
                               children: [
-                                Icon(Icons.assignment_outlined,
-                                    size: 13, color: Colors.grey[500]),
+                                Icon(
+                                  Icons.assignment_outlined,
+                                  size: 13,
+                                  color: Colors.grey[500],
+                                ),
                                 const SizedBox(width: 5),
                                 Text(
                                   'PEDIDOS TÉCNICOS',
@@ -346,47 +412,56 @@ class _DashboardDetalhamentoCard extends StatelessWidget {
                             final statusColor = p.isAberto
                                 ? const Color(0xFF10B981)
                                 : Colors.grey[400]!;
-                            final statusLabel =
-                                p.isAberto ? 'ABERTO' : 'CANCELADO';
+                            final statusLabel = p.isAberto
+                                ? 'ABERTO'
+                                : 'CANCELADO';
                             return InkWell(
                               onTap: () => onAbrirPedido(p),
                               borderRadius: BorderRadius.circular(8),
                               child: Container(
                                 margin: const EdgeInsets.only(bottom: 4),
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 8),
+                                  horizontal: 10,
+                                  vertical: 8,
+                                ),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFF8FAFC),
                                   borderRadius: BorderRadius.circular(8),
                                   border: Border.all(
-                                      color: const Color(0xFFE2E8F0)),
+                                    color: const Color(0xFFE2E8F0),
+                                  ),
                                 ),
                                 child: Row(
                                   children: [
-                                    Icon(Icons.assignment_outlined,
-                                        size: 14,
-                                        color: AppColors.primaryMain),
+                                    Icon(
+                                      Icons.assignment_outlined,
+                                      size: 14,
+                                      color: AppColors.primaryMain,
+                                    ),
                                     const SizedBox(width: 8),
                                     Expanded(
                                       child: Text(
                                         p.identificador.isNotEmpty
                                             ? p.identificador
                                             : 'PT ${p.codigo}',
-                                        style: AppCss.minimumBold
-                                            .setSize(12),
+                                        style: AppCss.minimumBold.setSize(12),
                                       ),
                                     ),
                                     Container(
                                       padding: const EdgeInsets.symmetric(
-                                          horizontal: 6, vertical: 2),
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
                                       decoration: BoxDecoration(
-                                        color: statusColor
-                                            .withValues(alpha: 0.12),
-                                        borderRadius:
-                                            BorderRadius.circular(8),
+                                        color: statusColor.withValues(
+                                          alpha: 0.12,
+                                        ),
+                                        borderRadius: BorderRadius.circular(8),
                                         border: Border.all(
-                                            color: statusColor
-                                                .withValues(alpha: 0.30)),
+                                          color: statusColor.withValues(
+                                            alpha: 0.30,
+                                          ),
+                                        ),
                                       ),
                                       child: Text(
                                         statusLabel,
@@ -403,8 +478,11 @@ class _DashboardDetalhamentoCard extends StatelessWidget {
                                           .setSize(10),
                                     ),
                                     const SizedBox(width: 4),
-                                    Icon(Icons.chevron_right,
-                                        size: 14, color: Colors.grey[350]),
+                                    Icon(
+                                      Icons.chevron_right,
+                                      size: 14,
+                                      color: Colors.grey[350],
+                                    ),
                                   ],
                                 ),
                               ),

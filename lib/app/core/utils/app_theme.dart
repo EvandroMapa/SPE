@@ -5,11 +5,49 @@ import 'package:flutter/material.dart';
 class AppTheme {
   static ThemeData theme = ThemeData(
     fontFamily: 'WorkSans',
-    colorSchemeSeed: AppColors.primaryMain,
+    // Cores definidas explicitamente: com colorSchemeSeed o Flutter gerava
+    // tons próprios (barra azul-arroxeada em Pedidos/Ordens/Estoque, fundos
+    // lilases em diálogos e menus).
+    primaryColor: AppColors.primaryMain,
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: AppColors.primaryMain,
+      primary: AppColors.primaryMain,
+      onPrimary: AppColors.white,
+      secondary: AppColors.secondary,
+      onSecondary: AppColors.white,
+      error: AppColors.error,
+      onError: AppColors.white,
+      surface: AppColors.white,
+      onSurface: AppColors.black,
+      onSurfaceVariant: AppColors.neutralDark,
+      surfaceTint: Colors.transparent,
+      surfaceContainerLowest: AppColors.white,
+      surfaceContainerLow: AppColorsSystem.light.primary[50]!,
+      surfaceContainer: AppColors.neutralLightest,
+      surfaceContainerHigh: const Color(0xFFE6EAEF),
+      surfaceContainerHighest: AppColors.neutralLight,
+      outline: AppColors.primaryMedium,
+      outlineVariant: AppColors.neutralLight,
+    ),
+    dialogTheme: const DialogThemeData(backgroundColor: Colors.white),
+    popupMenuTheme: const PopupMenuThemeData(color: Colors.white),
+    drawerTheme: const DrawerThemeData(backgroundColor: Colors.white),
+    bottomSheetTheme:
+        const BottomSheetThemeData(backgroundColor: Colors.white),
+    cardTheme: const CardThemeData(color: Colors.white),
     textSelectionTheme: TextSelectionThemeData(
-      cursorColor: const Color(0xFFBFD0D0),
-      selectionColor: const Color(0xFFBFD0D0).withValues(alpha: 0.3),
-      selectionHandleColor: const Color(0xFFBFD0D0),
+      cursorColor: AppColors.neutralDark,
+      selectionColor: AppColors.secondary.withValues(alpha: 0.25),
+      selectionHandleColor: AppColors.neutralDark,
+    ),
+    datePickerTheme: DatePickerThemeData(
+      dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
+          return AppColors.primaryMain;
+        }
+        return null;
+      }),
+      backgroundColor: AppColors.white,
     ),
     textButtonTheme: TextButtonThemeData(
       style: ButtonStyle(

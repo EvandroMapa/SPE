@@ -1,12 +1,17 @@
+import 'package:acoplan/app/app_controller.dart';
+import 'package:acoplan/app/core/client/backend_client.dart';
+import 'package:acoplan/app/core/client/models/usuario_model.dart';
 import 'package:acoplan/app/core/components/app_scaffold.dart';
+import 'package:acoplan/app/core/components/cadastro/cadastro_lista.dart';
 import 'package:acoplan/app/core/components/empty_data.dart';
 import 'package:acoplan/app/core/components/stream_out.dart';
-import 'package:acoplan/app/core/client/models/usuario_model.dart';
+import 'package:acoplan/app/core/dialogs/confirm_dialog.dart';
+import 'package:acoplan/app/core/models/text_controller.dart';
 import 'package:acoplan/app/core/utils/app_colors.dart';
 import 'package:acoplan/app/core/utils/app_css.dart';
 import 'package:acoplan/app/core/utils/global_resource.dart';
-import 'package:acoplan/app/modules/usuario/usuario_controller.dart';
 import 'package:acoplan/app/modules/usuario/ui/usuario_create_page.dart';
+import 'package:acoplan/app/modules/usuario/usuario_controller.dart';
 import 'package:flutter/material.dart';
 
 class UsuariosPage extends StatefulWidget {
@@ -17,120 +22,94 @@ class UsuariosPage extends StatefulWidget {
 }
 
 class _UsuariosPageState extends State<UsuariosPage> {
-  final TextEditingController _searchCtrl = TextEditingController();
-  String _filter = '';
+  final TextController _busca = TextController();
+
+  @override
+  void initState() {
+    setWebTitle('Usuários');
+    super.initState();
+  }
 
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
+      backgroundColor: AppColors.neutralLightest,
       appBar: AppBar(
-        iconTheme: const IconThemeData(color: Colors.white, size: 20),
-        backgroundColor: AppColors.primaryMain,
-        title: Text('Usuários', style: AppCss.mediumBold.setColor(Colors.white)),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add, color: Colors.white),
-            onPressed: () => _openCreateUser(null),
-          ),
-        ],
+        iconTheme: const IconThemeData(color: Colors.white),
+        title: Text('Usuários', style: AppCss.largeBold.setSize(18).setColor(Colors.white)),
+        actions: [CadastroBotaoNovo('Novo usuário', onTap: () => _abrir(null))],
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: TextField(
-              controller: _searchCtrl,
-              onChanged: (val) => setState(() => _filter = val),
-              decoration: InputDecoration(
-                hintText: 'Buscar usuário...',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _filter.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () {
-                          _searchCtrl.clear();
-                          setState(() => _filter = '');
-                        },
-                      )
-                    : null,
+      body: StreamOut<List<UsuarioModel>>(
+        stream: usuarioCtrl.usuariosStream.listen,
+        builder: (context, todos) {
+          final q = _busca.text.trim().toLowerCase();
+          final usuarios = todos
+              .where((u) => q.isEmpty || u.nome.toLowerCase().contains(q) || u.email.toLowerCase().contains(q))
+              .toList()
+            ..sort((a, b) => a.nome.toLowerCase().compareTo(b.nome.toLowerCase()));
+          return Column(
+            children: [
+              CadastroBusca(
+                hint: 'Buscar por nome ou e-mail',
+                controller: _busca,
+                contador: usuarios.length == 1 ? '1 usuário' : '${usuarios.length} usuários',
+                onChanged: () => setState(() {}),
               ),
-            ),
-          ),
-          Expanded(
-            child: StreamOut<List<UsuarioModel>>(
-              stream: usuarioCtrl.usuariosStream.listen,
-              builder: (context, usuarios) {
-                final filtered = usuarios.where((u) {
-                  final query = _filter.toLowerCase();
-                  return u.nome.toLowerCase().contains(query) ||
-                      u.email.toLowerCase().contains(query);
-                }).toList();
-
-                if (filtered.isEmpty) {
-                  return const EmptyData(message: 'Nenhum usuário encontrado');
-                }
-
-                return ListView.separated(
-                  itemCount: filtered.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final user = filtered[index];
-                    return ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: AppColors.primaryMain.withValues(alpha: 0.1),
-                        child: Text(
-                          user.nome.isNotEmpty ? user.nome[0].toUpperCase() : '?',
-                          style: AppCss.smallBold.setColor(AppColors.primaryMain),
-                        ),
+              Expanded(
+                child: usuarios.isEmpty
+                    ? const EmptyData(message: 'Nenhum usuário encontrado')
+                    : CadastroLista(
+                        onRefresh: () => BackendClient.usuarios.fetch(),
+                        itens: usuarios.map(_linha).toList(),
                       ),
-                      title: Text(user.nome, style: AppCss.smallBold),
-                      subtitle: Text(user.email, style: AppCss.minimumRegular),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.edit_outlined),
-                            onPressed: () => _openCreateUser(user),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline_rounded, color: Colors.red),
-                            onPressed: () => _confirmDelete(user),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-        ],
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
-  void _openCreateUser(UsuarioModel? user) {
+  Widget _linha(UsuarioModel user) {
+    final euMesmo = user.id == appCtrl.usuario?.id;
+    final semLogin = user.authUserId.isEmpty;
+    return CadastroLinha(
+      onTap: () => _abrir(user),
+      leading: Container(
+        width: 40,
+        height: 40,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(color: AppColors.neutralLightest, borderRadius: BorderRadius.circular(8)),
+        child: Text(
+          user.nome.trim().isNotEmpty ? user.nome.trim()[0].toUpperCase() : '?',
+          style: AppCss.mediumBold.setSize(16).setColor(AppColors.neutralDark),
+        ),
+      ),
+      titulo: user.nome.trim().isEmpty ? 'Sem nome' : user.nome.trim(),
+      selos: [
+        if (user.tipo != null) CadastroSelo(user.tipo!.nome),
+        if (euMesmo) const CadastroSelo('Você', cor: AppColors.statusProduzindo),
+        // Usuário sem login no Supabase Auth não consegue entrar
+        if (semLogin) const CadastroSelo('Sem login', cor: AppColors.statusCritico),
+      ],
+      pares: [('E-mail', user.email)],
+      trailing: CadastroMenu([
+        CadastroAcao(Icons.edit_outlined, semLogin ? 'Definir login' : 'Editar usuário', () => _abrir(user)),
+        if (!euMesmo)
+          CadastroAcao(Icons.delete_outline, 'Excluir usuário', () => _excluir(user), destrutiva: true),
+      ]),
+    );
+  }
+
+  void _abrir(UsuarioModel? user) {
     usuarioCtrl.init(user);
-    push(context, const UsuarioCreatePage());
+    showDialog(context: context, builder: (_) => const UsuarioFormDialog());
   }
 
-  void _confirmDelete(UsuarioModel user) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Excluir Usuário'),
-        content: Text('Deseja realmente excluir o usuário ${user.nome}?'),
-        actions: [
-          TextButton(onPressed: () => pop(context), child: const Text('Cancelar')),
-          TextButton(
-            onPressed: () {
-              pop(context);
-              usuarioCtrl.onDelete(context, user);
-            },
-            child: const Text('Excluir', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
+  Future<void> _excluir(UsuarioModel user) async {
+    if (await showConfirmDialog('Excluir usuário', 'O usuário ${user.nome} perderá o acesso ao sistema.') &&
+        mounted) {
+      usuarioCtrl.onDelete(context, user);
+    }
   }
 }

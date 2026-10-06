@@ -1,12 +1,10 @@
 import 'package:acoplan/app/core/client/backend_client.dart';
 import 'package:acoplan/app/core/client/models/bitola_model.dart';
-import 'package:acoplan/app/core/components/app_field.dart';
+import 'package:acoplan/app/core/components/cadastro/cadastro_lista.dart';
 import 'package:acoplan/app/core/components/empty_data.dart';
 import 'package:acoplan/app/core/components/stream_out.dart';
 import 'package:acoplan/app/core/utils/app_colors.dart';
-import 'package:acoplan/app/core/utils/app_css.dart';
 import 'package:acoplan/app/core/utils/global_resource.dart';
-import 'package:acoplan/app/modules/base/base_controller.dart';
 import 'package:acoplan/app/modules/bitola/bitola_controller.dart';
 import 'package:acoplan/app/modules/bitola/bitola_view_model.dart';
 import 'package:acoplan/app/modules/bitola/ui/bitola_create_page.dart';
@@ -41,34 +39,35 @@ class _BitolasPageState extends State<BitolasPage> {
                   if (cmp != 0) return cmp;
                   return a.nome.compareTo(b.nome);
                 });
-          return Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: AppField(
-                  hint: 'Pesquisar',
+          return Container(
+            color: AppColors.neutralLightest,
+            child: Column(
+              children: [
+                CadastroBusca(
+                  hint: 'Buscar bitola',
                   controller: utils.search,
-                  suffixIcon: Icons.search,
-                  onChanged: (_) => bitolaCtrl.utilsStream.update(),
+                  contador: produtos.length == 1 ? '1 bitola' : '${produtos.length} bitolas',
+                  onChanged: () => bitolaCtrl.utilsStream.update(),
                 ),
-              ),
-              Expanded(
-                child: produtos.isEmpty
-                    ? const EmptyData()
-                    : ReorderableListView.builder(
-                        buildDefaultDragHandles: false,
-                        itemCount: produtos.length,
-                        onReorder: (oldIndex, newIndex) {
-                          if (newIndex > oldIndex) newIndex -= 1;
-                          final item = produtos.removeAt(oldIndex);
-                          produtos.insert(newIndex, item);
-                          bitolaCtrl.onReorder(produtos);
-                        },
-                        itemBuilder: (_, i) =>
-                            _itemProdutoWidget(produtos[i], i),
-                      ),
-              ),
-            ],
+                Expanded(
+                  child: produtos.isEmpty
+                      ? const EmptyData(message: 'Nenhuma bitola encontrada')
+                      // A ordem é definida arrastando pela alça
+                      : ReorderableListView.builder(
+                          padding: const EdgeInsets.only(bottom: 32),
+                          buildDefaultDragHandles: false,
+                          itemCount: produtos.length,
+                          onReorder: (oldIndex, newIndex) {
+                            if (newIndex > oldIndex) newIndex -= 1;
+                            final item = produtos.removeAt(oldIndex);
+                            produtos.insert(newIndex, item);
+                            bitolaCtrl.onReorder(produtos);
+                          },
+                          itemBuilder: (_, i) => _itemProdutoWidget(produtos[i], i),
+                        ),
+                ),
+              ],
+            ),
           );
         },
       ),
@@ -76,33 +75,33 @@ class _BitolasPageState extends State<BitolasPage> {
   }
 
   Widget _itemProdutoWidget(BitolaModel produto, int index) {
-    return Container(
+    String num(double v) => v.toString().replaceAll(RegExp(r'\.0$'), '').replaceAll('.', ',');
+    return KeyedSubtree(
       key: ValueKey(produto.id),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          bottom: BorderSide(color: Colors.grey[200]!, width: 1),
-        ),
-      ),
-      child: ListTile(
+      child: CadastroLinha(
         onTap: () => push(context, BitolaCreatePage(produto: produto)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
         leading: ReorderableDragStartListener(
           index: index,
-          child: Container(
-            width: 36,
-            height: 36,
-            alignment: Alignment.center,
-            child: Icon(Icons.drag_handle, color: Colors.grey[400], size: 24),
+          child: Tooltip(
+            message: 'Arraste para mudar a ordem',
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppColors.neutralLightest,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(Icons.drag_indicator, size: 20, color: AppColors.neutralMedium),
+            ),
           ),
         ),
-        title: Text(produto.nome, style: AppCss.mediumBold),
-        subtitle: Text(produto.descricao),
-        trailing: Icon(
-          Icons.arrow_forward_ios,
-          size: 14,
-          color: AppColors.neutralMedium,
-        ),
+        titulo: produto.nome.trim(),
+        selos: [if (produto.diametro > 0) CadastroSelo('ø ${num(produto.diametro)} mm')],
+        pares: [
+          ('Descrição', produto.descricao),
+          ('Massa', produto.massaFinal > 0 ? '${num(produto.massaFinal)} kg/m' : ''),
+          ('Cód. financeiro', produto.codigoFinanceiro),
+        ],
       ),
     );
   }

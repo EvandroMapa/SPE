@@ -4,6 +4,7 @@ import 'package:acoplan/app/core/client/models/cliente_model.dart';
 import 'package:acoplan/app/core/client/models/detalhamento_model.dart';
 import 'package:acoplan/app/core/client/models/pedido_tecnico_model.dart';
 import 'package:acoplan/app/core/components/app_scaffold.dart';
+import 'package:acoplan/app/core/components/cadastro/cadastro_lista.dart';
 import 'package:acoplan/app/core/services/notification_service.dart';
 import 'package:acoplan/app/core/utils/app_colors.dart';
 import 'package:acoplan/app/core/utils/app_css.dart';
@@ -442,7 +443,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                 currentIndex: _activeTab,
                                 badgeColor: const Color(0xFF2563EB),
                                 icon: Icons.view_kanban_rounded,
-                                title: '1. Demandas de Detalhamento',
+                                title: '1. Demandas',
                                 count: filteredDemandas.length,
                                 onTap: () => setState(() {
                                   _activeTab = 0;
@@ -458,7 +459,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                 currentIndex: _activeTab,
                                 badgeColor: const Color(0xFF0D9488),
                                 icon: Icons.architecture_rounded,
-                                title: '2. PROJETOS - DETALHAMENTO',
+                                title: '2. Projetos',
                                 count: filteredDetalhamentos.length,
                                 onTap: () => setState(() {
                                   _activeTab = 1;
@@ -474,7 +475,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                 currentIndex: _activeTab,
                                 badgeColor: const Color(0xFF6366F1),
                                 icon: Icons.receipt_long_rounded,
-                                title: '3. Pedidos Técnicos',
+                                title: '3. Pedidos técnicos',
                                 count: filteredPedidos.length,
                                 onTap: () => setState(() {
                                   _activeTab = 2;
@@ -491,8 +492,8 @@ class _DashboardPageState extends State<DashboardPage> {
                       Container(
                         color: Colors.white,
                         padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                        child: Row(
-                          children: [
+                        child: LayoutBuilder(builder: (context, cons) {
+                          final acoes = <Widget>[
                             if (_activeTab == 0) ...[
                               ElevatedButton.icon(
                                 onPressed: _dialogNovaDemanda,
@@ -684,11 +685,9 @@ class _DashboardPageState extends State<DashboardPage> {
                               _filtroStatusPedidoChip(
                                   'Cancelados', 'cancelado'),
                             ],
-                            const Spacer(),
-
-                            // Campo de Busca compacto
-                            SizedBox(
-                              width: 280,
+                          ];
+                          Widget busca(double? largura) => SizedBox(
+                              width: largura,
                               height: 34,
                               child: TextField(
                                 controller: _searchCtrl,
@@ -743,10 +742,24 @@ class _DashboardPageState extends State<DashboardPage> {
                                         width: 1.5),
                                   ),
                                 ),
+                              ));
+                          // Tela larga: tudo numa linha. Estreita: ações roláveis e
+                          // busca embaixo (antes estourava a largura).
+                          if (cons.maxWidth >= 1000) {
+                            return Row(children: [...acoes, const Spacer(), busca(280)]);
+                          }
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Row(children: acoes),
                               ),
-                            ),
-                          ],
-                        ),
+                              const SizedBox(height: 8),
+                              busca(null),
+                            ],
+                          );
+                        }),
                       ),
                       const Divider(height: 1, color: Color(0xFFE2E8F0)),
 
@@ -1137,7 +1150,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Text(
-                        'Nenhuma etapa aqui',
+                        'Nenhuma demanda aqui',
                         style: AppCss.minimumRegular
                             .setSize(11)
                             .setColor(const Color(0xFF94A3B8)),

@@ -117,29 +117,8 @@ class SignUpPageState extends State<SignUpPage>
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // ── Logo Placeholder ──
-                    Container(
-                      width: 72,
-                      height: 72,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.black, width: 2.5),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.15),
-                            blurRadius: 16,
-                            offset: const Offset(0, 6),
-                          ),
-                        ],
-                      ),
-                      padding: const EdgeInsets.all(12),
-                      child: const Icon(
-                        Icons.architecture_rounded,
-                        size: 40,
-                        color: Color(0xFF0F172A),
-                      ),
-                    ),
+                    // ── Logo M2 (o mesmo do PCP) ──
+                    Image.asset('assets/images/logo.png', width: 76, height: 76, fit: BoxFit.contain),
                     const SizedBox(height: 20),
                     const Text(
                       'SPE',
@@ -164,8 +143,8 @@ class SignUpPageState extends State<SignUpPage>
                     // ── Campo Login ──
                     _buildField(
                       controller: email,
-                      label: 'Login',
-                      icon: Icons.person_outline_rounded,
+                      label: 'E-mail',
+                      icon: Icons.mail_outline_rounded,
                       action: TextInputAction.next,
                       autofocus: true,
                       onSubmit: () =>
@@ -182,6 +161,8 @@ class SignUpPageState extends State<SignUpPage>
                       action: TextInputAction.go,
                       onSubmit: _doLogin,
                       suffix: IconButton(
+                        tooltip: _obscure ? 'Mostrar senha' : 'Esconder senha',
+                        style: IconButton.styleFrom(backgroundColor: Colors.transparent),
                         icon: Icon(
                           _obscure
                               ? Icons.visibility_off_outlined

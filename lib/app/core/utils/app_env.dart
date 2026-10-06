@@ -10,3 +10,6 @@ const String kBuildHash =
 
 /// Versão do aplicativo
 const String kAppVersion = '1.0.0+1';
+
+/// Rótulo da versão exibido no rodapé do menu e no login.
+String get kVersaoLabel => 'v$kAppVersion · $kBuildHash';

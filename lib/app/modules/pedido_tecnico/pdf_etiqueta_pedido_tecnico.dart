@@ -1,3 +1,4 @@
+import 'package:acoplan/app/core/calculo/calculo_aco.dart';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:acoplan/app/app_controller.dart';
@@ -277,36 +278,11 @@ class PdfEtiquetaPedidoTecnico {
     String compUnitStr;
     String compCorteStr;
     if (temVar) {
-      // Pré-calcular medidas expandidas por trecho variável
-      final expandidasMap = <String, List<int>>{};
-      for (final entry in pos.variaveisConfig.entries) {
-        if (entry.value.inicial > 0 && entry.value.final_ > 0) {
-          expandidasMap[entry.key] = entry.value.medidasExpandidas(pos.multiplicador);
-        }
-      }
-
       // Calcular min/max comprimento por peça
       int compMin = 999999; double compMax = 0;
       final desconto = pos.descontoDobraSnapshot ?? 0;
       final dCm = (double.tryParse(bitolaStr.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0) / 10.0;
-      for (int peca = 0; peca < pos.qtde; peca++) {
-        double soma = 0;
-        for (final entry in pos.comprimentos.entries) {
-          final trecho = entry.key;
-          final isVar = pos.variaveis[trecho] ?? false;
-          if (isVar) {
-            final expandidas = expandidasMap[trecho] ?? expandidasMap.values.firstOrNull;
-            if (expandidas != null && expandidas.isNotEmpty) {
-              soma += peca < expandidas.length
-                  ? expandidas[peca].toDouble()
-                  : expandidas.last.toDouble();
-            } else {
-              soma += entry.value;
-            }
-          } else {
-            soma += entry.value;
-          }
-        }
+      for (final soma in CalculoAco.comprimentosPorPeca(pos)) {
         if (soma < compMin) compMin = soma.toInt();
         if (soma > compMax) compMax = soma;
       }
@@ -568,59 +544,10 @@ class PdfEtiquetaPedidoTecnico {
     return '${bitolaIdNorm}_${bitolaNomeNorm}_${formaCodNorm}_${trechosStr}_${corteStr}_$descDobraStr';
   }
 
-  static double _massaLinear(PosicaoModel pos) {
-    final produto = _bitolasMap[pos.bitolaId] ??
-        _bitolas.where((p) => p.id == pos.bitolaId).firstOrNull;
-    if (produto != null && produto.massaFinal > 0) {
-      return produto.massaFinal;
-    }
-    final str = pos.bitolaNome.split('-').first.replaceAll(RegExp(r'[^0-9.]'), '');
-    final d = double.tryParse(str) ?? 0;
-    return (d * d) / 162;
-  }
+  /// Peso de todas as peças da posição — ver CalculoAco.
+  static double _calcularPesoPosicao(PosicaoModel pos) =>
+      CalculoAco.pesoPosicao(pos, _bitolas);
 
-  static double _calcularPesoPosicao(PosicaoModel pos) {
-    final w = _massaLinear(pos);
-    if (w <= 0 || pos.qtde <= 0) return 0;
-
-    final temVar = pos.variaveisConfig.isNotEmpty &&
-        pos.variaveis.values.any((v) => v);
-
-    if (!temVar) {
-      final somaCm = pos.comprimentos.values.fold<double>(0.0, (s, v) => s + v);
-      return (somaCm / 100.0) * w * pos.qtde;
-    }
-
-    final expandidasMap = <String, List<int>>{};
-    for (final entry in pos.variaveisConfig.entries) {
-      if (entry.value.inicial > 0 && entry.value.final_ > 0) {
-        expandidasMap[entry.key] = entry.value.medidasExpandidas(pos.multiplicador);
-      }
-    }
-
-    double pesoTotal = 0;
-    for (int peca = 0; peca < pos.qtde; peca++) {
-      double somaCm = 0.0;
-      for (final entry in pos.comprimentos.entries) {
-        final trecho = entry.key;
-        final isVar = pos.variaveis[trecho] ?? false;
-        if (isVar) {
-          final expandidas = expandidasMap[trecho] ?? expandidasMap.values.firstOrNull;
-          if (expandidas != null && expandidas.isNotEmpty) {
-            somaCm += peca < expandidas.length
-                ? expandidas[peca].toDouble()
-                : expandidas.last.toDouble();
-          } else {
-            somaCm += entry.value;
-          }
-        } else {
-          somaCm += entry.value;
-        }
-      }
-      pesoTotal += (somaCm / 100.0) * w;
-    }
-    return pesoTotal;
-  }
   static pw.Widget _buildTarjaLocalizadorSeq(String localizador, String seqLabel) {
     return _boxPreta(
       radius: 5,
@@ -1026,35 +953,8 @@ class PdfEtiquetaPedidoTecnico {
     final id = _limpar(pedido.identificador.isNotEmpty ? pedido.identificador : 'PT ${pedido.codigo.toString().padLeft(3, '0')}');
     final pesoPos = _calcularPesoPosicao(pos);
 
-    final expandidasMap = <String, List<int>>{};
-    for (final entry in pos.variaveisConfig.entries) {
-      if (entry.value.inicial > 0 && entry.value.final_ > 0) {
-        expandidasMap[entry.key] = entry.value.medidasExpandidas(pos.multiplicador);
-      }
-    }
-
     // Comprimento total por peça
-    final comprimentosPorPeca = <double>[];
-    for (int peca = 0; peca < pos.qtde; peca++) {
-      double soma = 0;
-      for (final entry in pos.comprimentos.entries) {
-        final trecho = entry.key;
-        final isVar = pos.variaveis[trecho] ?? false;
-        if (isVar) {
-          final expandidas = expandidasMap[trecho] ?? expandidasMap.values.firstOrNull;
-          if (expandidas != null && expandidas.isNotEmpty) {
-            soma += peca < expandidas.length
-                ? expandidas[peca].toDouble()
-                : expandidas.last.toDouble();
-          } else {
-            soma += entry.value;
-          }
-        } else {
-          soma += entry.value;
-        }
-      }
-      comprimentosPorPeca.add(soma);
-    }
+    final comprimentosPorPeca = CalculoAco.comprimentosPorPeca(pos);
 
     // Desconto de dobra para comprimento de corte
     final desconto = pos.descontoDobraSnapshot ?? 0;

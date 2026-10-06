@@ -137,76 +137,22 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> with Fo
   }
 
   /// Verifica se a posição tem algum trecho variável configurado
-  bool _temVariavel(PosicaoCreateModel pos) {
-    return pos.variaveisConfig.isNotEmpty &&
-        pos.variaveis.values.any((v) => v);
-  }
+  // Cálculos de peso centralizados em CalculoAco (via view models).
+  bool _temVariavel(PosicaoCreateModel pos) => pos.temTrechoVariavel;
 
-  /// Peso unitário (para posição SEM trechos variáveis) =
-  /// comprimento bruto (soma dos trechos, cm→m) × massa linear (kg/m)
-  double _pesoUnitPosicao(PosicaoCreateModel pos) {
-    if (pos.bitolaSelecionada == null) return 0;
-    final massaLinear = pos.bitolaSelecionada!.massaFinal; // kg/m
-    final somaCm = pos.comprimentos.values.fold(0.0, (s, v) => s + v);
-    return (somaCm / 100.0) * massaLinear;
-  }
+  /// Peso de 1 peça (posição sem trechos variáveis)
+  double _pesoUnitPosicao(PosicaoCreateModel pos) => pos.pesoPeca();
 
-  /// Peso total de uma posição.
-  /// Se tem trecho variável: calcula peça a peça (cada peça pode ter
-  /// comprimento diferente). Não pode usar atalho soma×qtde.
-  /// Se não tem variável: peso unitário × quantidade.
-  double _pesoTotalPosicao(PosicaoCreateModel pos) {
-    if (pos.bitolaSelecionada == null) return 0;
-    final massaLinear = pos.bitolaSelecionada!.massaFinal;
-    final qtde = int.tryParse(pos.qtde.text) ?? 1;
+  /// Peso de todas as peças da posição (peça a peça quando há variáveis)
+  double _pesoTotalPosicao(PosicaoCreateModel pos) => pos.pesoTotal();
 
-    if (!_temVariavel(pos)) {
-      return _pesoUnitPosicao(pos) * qtde;
-    }
+  /// Peso de 1 unidade do elemento
+  double _pesoUnitElemento(ElementoCreateModel elem) => elem.pesoUnitario();
 
-    // Calcula peça a peça
-    double pesoTotal = 0;
-    for (int peca = 0; peca < qtde; peca++) {
-      double somaCm = 0.0;
-      for (final entry in pos.comprimentos.entries) {
-        final trecho = entry.key;
-        final isVar = pos.variaveis[trecho] ?? false;
-        if (isVar) {
-          // Busca config: própria ou do líder do grupo
-          final config = pos.variaveisConfig[trecho]
-              ?? pos.variaveisConfig.values.firstOrNull;
-          if (config != null && config.inicial > 0 && config.final_ > 0) {
-            final expandidas = config.medidasExpandidas(pos.multiplicador);
-            somaCm += peca < expandidas.length
-                ? expandidas[peca].toDouble()
-                : (expandidas.isNotEmpty ? expandidas.last.toDouble() : 0.0);
-          } else {
-            somaCm += entry.value; // config incompleta, usa valor fixo
-          }
-        } else {
-          somaCm += entry.value; // trecho fixo
-        }
-      }
-      pesoTotal += (somaCm / 100.0) * massaLinear;
-    }
-    return pesoTotal;
-  }
+  int _qtdeTotalElemento(ElementoCreateModel elem) => elem.quantidadeTotal;
 
-  /// Peso unitário de um elemento = somatório dos pesos totais das posições
-  double _pesoUnitElemento(ElementoCreateModel elem) {
-    return elem.posicoes.fold<double>(0, (s, p) => s + _pesoTotalPosicao(p));
-  }
-
-  int _qtdeTotalElemento(ElementoCreateModel elem) {
-    final qtdePai = int.tryParse(elem.quantidade.text) ?? 1;
-    final somaEquiv = elem.elementosEquivalentes.fold<int>(0, (s, e) => s + e.quantidade);
-    return qtdePai + somaEquiv;
-  }
-
-  /// Peso total de um elemento = pesoUnit × qtdePai + Σ(pesoUnit × qtdeEquiv)
-  double _pesoTotalElemento(ElementoCreateModel elem) {
-    return _pesoUnitElemento(elem) * _qtdeTotalElemento(elem);
-  }
+  /// Peso total do elemento (pai + equivalentes)
+  double _pesoTotalElemento(ElementoCreateModel elem) => elem.pesoTotal;
 
   String _formatPeso(double v) => v > 0 ? v.toStringAsFixed(2) : '-';
 

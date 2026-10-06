@@ -37,16 +37,19 @@ class AppSupabaseClient {
       demandas.listen();
 
 
-      // 2. Fetches sequenciais (dados iniciais)
-      await usuarioTipos.start().catchError((e) => log('Error starting usuarioTipos: $e'));
-      await usuarios.start().catchError((e) => log('Error starting usuarios: $e'));
-      await clientes.start().catchError((e) => log('Error starting clientes: $e'));
-      await bitolas.start().catchError((e) => log('Error starting bitolas: $e'));
-      await fabricantes.start().catchError((e) => log('Error starting fabricantes: $e'));
-      await formas.start().catchError((e) => log('Error starting formas: $e'));
-      await detalhamentos.start().catchError((e) => log('Error starting detalhamentos: $e'));
-      await pedidosTecnicos.start().catchError((e) => log('Error starting pedidosTecnicos: $e'));
-      await demandas.start().catchError((e) => log('Error starting demandas: $e'));
+      // 2. Dados iniciais. Bitolas antes dos detalhamentos (usadas no cálculo
+      // de peso); o restante em paralelo.
+      await Future.wait([
+        usuarioTipos.fetch().catchError((e) => log('Error starting usuarioTipos: $e')),
+        usuarios.fetch().catchError((e) => log('Error starting usuarios: $e')),
+        clientes.fetch().catchError((e) => log('Error starting clientes: $e')),
+        bitolas.fetch().catchError((e) => log('Error starting bitolas: $e')),
+        fabricantes.fetch().catchError((e) => log('Error starting fabricantes: $e')),
+        formas.fetch().catchError((e) => log('Error starting formas: $e')),
+        pedidosTecnicos.fetch().catchError((e) => log('Error starting pedidosTecnicos: $e')),
+        demandas.fetch().catchError((e) => log('Error starting demandas: $e')),
+      ]);
+      await detalhamentos.fetch().catchError((e) => log('Error starting detalhamentos: $e'));
 
     } catch (e) {
       log('AppSupabaseClient: Critical error during init: $e');

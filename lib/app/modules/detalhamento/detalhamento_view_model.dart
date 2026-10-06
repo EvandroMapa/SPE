@@ -1,3 +1,5 @@
+import 'package:acoplan/app/core/calculo/calculo_aco.dart';
+import 'package:acoplan/app/core/client/backend_client.dart';
 import 'package:acoplan/app/core/client/models/cliente_model.dart';
 import 'package:acoplan/app/core/client/models/forma_model.dart';
 import 'package:acoplan/app/core/client/models/detalhamento_model.dart';
@@ -66,8 +68,19 @@ class ElementoCreateModel {
     elementosEquivalentes = List.from(modelo.elementosEquivalentes);
   }
 
-  /// Peso total = soma dos pesos das posições (a ser calculado futuramente)
-  double get pesoTotal => 0; // TODO: calcular a partir das posições
+  /// Quantidade do pai + soma das quantidades dos equivalentes.
+  int get quantidadeTotal =>
+      (int.tryParse(quantidade.text) ?? 0) +
+      elementosEquivalentes.fold<int>(0, (s, e) => s + e.quantidade);
+
+  /// Peso de 1 unidade do elemento (soma dos pesos das posições).
+  double pesoUnitario([Iterable<BitolaModel>? bitolas]) {
+    final b = bitolas ?? BackendClient.bitolas.data;
+    return posicoes.fold<double>(0, (s, p) => s + p.pesoTotal(b));
+  }
+
+  /// Peso total do elemento (pai + equivalentes).
+  double get pesoTotal => pesoUnitario() * quantidadeTotal;
 
   ElementoModel toElementoModel() => ElementoModel(
         id: id,
@@ -111,6 +124,19 @@ class PosicaoCreateModel {
   }
 
   PosicaoCreateModel() : id = HashService.get;
+
+  /// Peso de 1 peça sem considerar variação (soma dos trechos × massa linear).
+  double pesoPeca([Iterable<BitolaModel>? bitolas]) {
+    final m = toPosicaoModel();
+    return CalculoAco.somaTrechos(m) / 100.0 *
+        CalculoAco.massaLinearPosicao(m, bitolas ?? BackendClient.bitolas.data);
+  }
+
+  /// Peso de todas as peças da posição (1 unidade do elemento).
+  double pesoTotal([Iterable<BitolaModel>? bitolas]) =>
+      CalculoAco.pesoPosicao(toPosicaoModel(), bitolas ?? BackendClient.bitolas.data);
+
+  bool get temTrechoVariavel => CalculoAco.temTrechoVariavel(toPosicaoModel());
 
   PosicaoCreateModel.fromModel(PosicaoModel modelo) : id = modelo.id {
     posicao.text = modelo.posicao;

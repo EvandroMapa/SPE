@@ -36,20 +36,44 @@ class UsuarioController {
       if (form.nome.text.isEmpty || form.email.text.isEmpty) {
         throw Exception('Nome e email são obrigatórios');
       }
+      final model = form.toUsuarioModel();
+      final senha = form.senha.text;
+      final usuarios = BackendClient.usuarios;
 
       if (form.isEdit) {
-        await BackendClient.usuarios.update(form.toUsuarioModel());
+        final original = usuarios.getById(model.id);
+        var authId = model.authUserId;
+        if (authId.isEmpty) {
+          // Usuário ainda sem login (não migrado): precisa de senha
+          if (senha.isEmpty) {
+            throw Exception('Defina uma senha para que este usuário possa entrar.');
+          }
+          authId = await usuarios.definirLogin(email: model.email, senha: senha);
+        } else if (senha.isNotEmpty ||
+            original.email.trim().toLowerCase() != model.email.trim().toLowerCase()) {
+          await usuarios.definirLogin(email: model.email, senha: senha, authUserId: authId);
+        }
+        await usuarios.update(model.copyWith(authUserId: authId));
       } else {
-        await BackendClient.usuarios.add(form.toUsuarioModel());
+        if (senha.length < 6) {
+          throw Exception('Informe uma senha com pelo menos 6 caracteres');
+        }
+        final authId = await usuarios.definirLogin(email: model.email, senha: senha);
+        try {
+          await usuarios.add(model.copyWith(authUserId: authId));
+        } catch (_) {
+          await usuarios.removerLogin(authId); // não deixa login órfão
+          rethrow;
+        }
       }
 
-      pop(context);
+      if (context.mounted) pop(context);
       NotificationService.showPositive(
         'Usuário ${form.isEdit ? 'Editado' : 'Adicionado'}',
         'Operação realizada com sucesso',
       );
     } catch (e) {
-      NotificationService.showNegative('Erro ao salvar', e.toString());
+      NotificationService.showNegative('Erro ao salvar', mensagemErro(e));
     }
   }
 
@@ -62,7 +86,7 @@ class UsuarioController {
       await BackendClient.usuarios.delete(user);
       NotificationService.showPositive('Usuário Excluído', '');
     } catch (e) {
-      NotificationService.showNegative('Erro ao excluir', e.toString());
+      NotificationService.showNegative('Erro ao excluir', mensagemErro(e));
     }
   }
 }

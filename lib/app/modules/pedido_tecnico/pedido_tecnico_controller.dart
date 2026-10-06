@@ -1,3 +1,4 @@
+import 'package:acoplan/app/core/calculo/calculo_aco.dart';
 import 'package:acoplan/app/core/client/backend_client.dart';
 import 'package:acoplan/app/core/client/models/pedido_tecnico_model.dart';
 import 'package:acoplan/app/core/client/models/detalhamento_model.dart';
@@ -7,6 +8,7 @@ import 'package:acoplan/app/core/utils/global_resource.dart';
 import 'package:acoplan/app/modules/pedido_tecnico/pedido_tecnico_view_model.dart';
 import 'package:flutter/material.dart';
 import 'package:overlay_support/overlay_support.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
 final pedidoTecnicoCtrl = PedidoTecnicoController();
 
@@ -46,12 +48,8 @@ class PedidoTecnicoController {
     final lista = <ElementoDetalhamentoViewModel>[];
 
     for (final elem in detalhamento.elementos) {
-      // Calcular peso unitário (1 peça) a partir das posições
-      // Usa o valor do banco se disponível, senão calcula on-the-fly
-      final pesoUnitCalculado = elem.calcularPesoUnitario(bitolas);
-      final pesoUnit = elem.pesoTotal > 0 && elem.quantidadeExpandida > 0
-          ? elem.pesoTotal / elem.quantidadeExpandida
-          : pesoUnitCalculado;
+      // Peso unitário (1 peça) sempre calculado a partir das posições
+      final pesoUnit = CalculoAco.pesoUnitarioElemento(elem, bitolas);
 
       // Itera sobre [pai, ...equivalentes] com a quantidade correta de cada um
       final todosEntries = <({String nome, int qtdeTotal})>[
@@ -160,21 +158,30 @@ class PedidoTecnicoController {
           quantidadeSolicitada: elem.quantidadeSolicitada,
           pesoTotal: elem.pesoTotal,
           sequenciaInicio: ini,
+          // Snapshot do elemento: reimpressões futuras não mudam se o
+          // detalhamento for editado depois.
+          elementoSnapshot: elemDet?.toMap(),
         );
       }).toList();
 
-      final modelComSeq = model.copyWith(elementos: elementosComSeq);
+      // Editar não reabre um pedido cancelado
+      final statusAtual = form.isEdit
+          ? pedidos.where((p) => p.id == form.id).firstOrNull?.status
+          : null;
+      final modelComSeq = model.copyWith(
+        elementos: elementosComSeq,
+        status: statusAtual ?? model.status,
+      );
       // ──────────────────────────────────────────────────────────────────────
 
       // Calcular resumo de aço (totais por bitola e elemento)
       final resumoAco = _calcularResumoAco(modelComSeq);
       final modelFinal = modelComSeq.copyWith(resumoAco: resumoAco);
 
+      // Pedido + elementos gravados numa única transação (RPC), com
+      // validação de saldo de peças feita pelo banco.
+      final salvo = await BackendClient.pedidosTecnicos.salvar(modelFinal);
       if (form.isEdit) {
-        await BackendClient.pedidosTecnicos.atualizarCompleto(
-          modelFinal,
-          resumoAco: resumoAco,
-        );
         if (!auto) {
           NotificationService.showPositive(
             'Pedido atualizado',
@@ -183,11 +190,9 @@ class PedidoTecnicoController {
           );
         }
       } else {
-        final createdModel =
-            await BackendClient.pedidosTecnicos.criar(modelFinal);
-        form.id = createdModel.id;
-        form.codigo = createdModel.codigo;
-        form.identificador = createdModel.identificador;
+        form.id = salvo.id;
+        form.codigo = salvo.codigo;
+        form.identificador = salvo.identificador;
         formStream.update();
         if (!auto) {
           NotificationService.showPositive(
@@ -199,10 +204,12 @@ class PedidoTecnicoController {
       }
       return true;
     } catch (e) {
-      if (!auto) {
+      // Erros de regra de negócio (ex: saldo insuficiente) aparecem mesmo no auto-save
+      final regraNegocio = e is PostgrestException && e.code == 'P0001';
+      if (!auto || regraNegocio) {
         NotificationService.showNegative(
           'Erro ao salvar',
-          e.toString(),
+          mensagemErro(e),
           position: NotificationPosition.bottom,
         );
       }
@@ -213,8 +220,8 @@ class PedidoTecnicoController {
   /// Calcula o resumo de aço do pedido técnico:
   /// - Peso total por bitola (para importação no PCP)
   /// - Peso total por elemento (corrigido, sem inflação de equivalentes)
-  /// Usa a MESMA lógica de calcularPesoUnitario (com variáveis peça a peça),
-  /// acumulando por bitolaNome, garantindo Σ bitolas == Σ elementos.
+  /// Usa CalculoAco (com variáveis peça a peça), acumulando por bitolaNome,
+  /// garantindo Σ bitolas == Σ elementos.
   Map<String, dynamic> _calcularResumoAco(PedidoTecnicoModel pedido) {
     final detalhamento = BackendClient.detalhamentos.data
         .where((d) => d.id == pedido.detalhamentoId)
@@ -234,71 +241,14 @@ class PedidoTecnicoController {
       final qtdeElem = elem.quantidadeSolicitada;
       double pesoElemento = 0;
 
-      // Calcular peso por posição (mesma lógica de calcularPesoUnitario)
       for (final pos in elemDet.posicoes) {
         final bitolaNome = pos.bitolaNome;
+        if (CalculoAco.massaLinearPosicao(pos, bitolas) <= 0) continue;
 
-        // Massa linear da bitola
-        final bitolaModel =
-            bitolas.where((b) => b.id == pos.bitolaId).firstOrNull;
-        double massaLinear;
-        if (bitolaModel != null && bitolaModel.massaFinal > 0) {
-          massaLinear = bitolaModel.massaFinal;
-        } else {
-          final str =
-              pos.bitolaNome.split('-').first.replaceAll(RegExp(r'[^0-9.]'), '');
-          final d = double.tryParse(str) ?? 0;
-          massaLinear = (d * d) / 162;
-        }
-        if (massaLinear <= 0) continue;
-
-        // ── Peso unitário desta posição (1 unidade do elemento) ──
-        // Mesma lógica de calcularPesoUnitario: trata variáveis peça a peça
-        double pesoPosUnit = 0;
-        final temVar = pos.variaveisConfig.isNotEmpty &&
-            pos.variaveis.values.any((v) => v);
-
-        if (!temVar) {
-          final somaCm =
-              pos.comprimentos.values.fold<double>(0.0, (s, v) => s + v);
-          pesoPosUnit = (somaCm / 100.0) * massaLinear * pos.qtde;
-        } else {
-          // Calcula peça a peça (cada peça pode ter comprimento diferente)
-          for (int peca = 0; peca < pos.qtde; peca++) {
-            double somaCm = 0.0;
-            for (final entry in pos.comprimentos.entries) {
-              final trecho = entry.key;
-              final isVar = pos.variaveis[trecho] ?? false;
-              if (isVar) {
-                final config = pos.variaveisConfig[trecho] ??
-                    pos.variaveisConfig.values.firstOrNull;
-                if (config != null &&
-                    config.inicial > 0 &&
-                    config.final_ > 0) {
-                  final expandidas =
-                      config.medidasExpandidas(pos.multiplicador);
-                  somaCm += peca < expandidas.length
-                      ? expandidas[peca].toDouble()
-                      : (expandidas.isNotEmpty ? expandidas.last.toDouble() : 0.0);
-                } else {
-                  somaCm += entry.value;
-                }
-              } else {
-                somaCm += entry.value;
-              }
-            }
-            pesoPosUnit += (somaCm / 100.0) * massaLinear;
-          }
-        }
-
-        // Peso total da posição = unitário × qtde do elemento
-        final pesoPosTotal = pesoPosUnit * qtdeElem;
+        // Peso e comprimento consideram trechos variáveis peça a peça
+        final pesoPosTotal = CalculoAco.pesoPosicao(pos, bitolas) * qtdeElem;
         pesoElemento += pesoPosTotal;
-
-        // Comprimento total (sem variáveis — valor de referência)
-        final somaCmRef =
-            pos.comprimentos.values.fold<double>(0.0, (s, v) => s + v);
-        final compM = (somaCmRef * pos.qtde * qtdeElem) / 100.0;
+        final compM = CalculoAco.comprimentoTotalPosicao(pos) * qtdeElem / 100.0;
 
         // Acumular por bitola
         final atual = resumoBitolas[bitolaNome];
@@ -348,7 +298,7 @@ class PedidoTecnicoController {
     } catch (e) {
       NotificationService.showNegative(
         'Erro ao excluir',
-        e.toString(),
+        mensagemErro(e),
         position: NotificationPosition.bottom,
       );
     }

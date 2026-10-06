@@ -31,6 +31,17 @@ class BackupController {
     await onFetch();
   }
 
+  /// Colunas de `usuarios` incluídas no backup (nunca a coluna antiga `senha`).
+  static const _colunasUsuarios =
+      'id, nome, email, role, perfil_id, permission, deviceTokens, auth_user_id';
+
+  static Future<List<Map<String, dynamic>>> _exportar(String table) async {
+    final rows = await SupabaseService.client
+        .from(table)
+        .select(table == 'usuarios' ? _colunasUsuarios : '*');
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
   // ─── LISTAR BACKUPS ──────────────────────────────────────────────────────
   Future<void> onFetch() async {
     try {
@@ -76,7 +87,7 @@ class BackupController {
           '(${i + 1}/${tables.length}) Exportando: $table...',
         );
         try {
-          data[table] = await SupabaseService.client.from(table).select();
+          data[table] = await _exportar(table);
         } catch (_) {
           data[table] = [];
         }
@@ -125,7 +136,7 @@ class BackupController {
       final Map<String, dynamic> data = {};
       for (final table in tables) {
         try {
-          data[table] = await SupabaseService.client.from(table).select();
+          data[table] = await _exportar(table);
         } catch (_) {
           data[table] = [];
         }
@@ -199,6 +210,22 @@ class BackupController {
         'perfis',
       ];
 
+      // Logins atuais por e-mail: backups antigos não têm auth_user_id e,
+      // sem isso, os usuários restaurados não conseguiriam entrar.
+      final loginsPorEmail = <String, String>{};
+      try {
+        final atuais = await SupabaseService.client
+            .from('usuarios')
+            .select('email, auth_user_id');
+        for (final u in atuais) {
+          final email = (u['email'] ?? '').toString().trim().toLowerCase();
+          final authId = u['auth_user_id']?.toString();
+          if (email.isNotEmpty && authId != null && authId.isNotEmpty) {
+            loginsPorEmail[email] = authId;
+          }
+        }
+      } catch (_) {}
+
       // 2. Deleta (filhos -> pais)
       for (var i = 0; i < deleteOrder.length; i++) {
         final table = deleteOrder[i];
@@ -221,8 +248,18 @@ class BackupController {
       final insertOrder = deleteOrder.reversed.toList();
       for (var i = 0; i < insertOrder.length; i++) {
         final table = insertOrder[i];
-        final rows = (data[table] as List?)?.cast<Map<String, dynamic>>();
+        var rows = (data[table] as List?)?.cast<Map<String, dynamic>>();
         if (rows == null || rows.isEmpty) continue;
+        if (table == 'usuarios') {
+          rows = rows.map((r) {
+            final u = Map<String, dynamic>.from(r)..remove('senha');
+            final email = (u['email'] ?? '').toString().trim().toLowerCase();
+            if ((u['auth_user_id'] ?? '').toString().isEmpty && loginsPorEmail.containsKey(email)) {
+              u['auth_user_id'] = loginsPorEmail[email];
+            }
+            return u;
+          }).toList();
+        }
         progressStream
             .add('(${i + 1}/${insertOrder.length}) Restaurando: $table...');
         try {

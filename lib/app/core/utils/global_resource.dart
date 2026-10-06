@@ -1,6 +1,7 @@
 import 'package:acoplan/app/app_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show AuthException, PostgrestException;
 
 const String empty = '';
 
@@ -60,4 +61,13 @@ int compararNatural(String a, String b) {
   final cmpLen = matchesA.length.compareTo(matchesB.length);
   if (cmpLen != 0) return cmpLen;
   return a.compareTo(b);
+}
+
+/// Mensagem legível de um erro para exibir ao usuário
+/// (sem o prefixo "Exception:" e com a mensagem das exceções do Supabase).
+String mensagemErro(Object e) {
+  if (e is PostgrestException) return e.message;
+  if (e is AuthException) return e.message;
+  final texto = e.toString();
+  return texto.startsWith('Exception: ') ? texto.substring(11) : texto;
 }

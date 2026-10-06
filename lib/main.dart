@@ -16,5 +16,6 @@ void main() async {
 
   runApp(const App());
 
-  Service.initAplicationServices().then((_) => appCtrl.onInit());
+  // Restaura a sessão (se houver) e carrega os dados depois de autenticar
+  appCtrl.onInit();
 }

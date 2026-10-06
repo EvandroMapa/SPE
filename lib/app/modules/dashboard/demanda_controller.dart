@@ -5,7 +5,6 @@ import 'package:acoplan/app/core/client/models/detalhamento_model.dart';
 import 'package:acoplan/app/core/models/app_stream.dart';
 import 'package:acoplan/app/core/services/hash_service.dart';
 import 'package:acoplan/app/core/services/notification_service.dart';
-import 'package:acoplan/app/core/utils/app_colors.dart';
 import 'package:acoplan/app/core/utils/global_resource.dart';
 import 'package:acoplan/app/modules/dashboard/models/demanda_model.dart';
 import 'package:flutter/material.dart';
@@ -42,8 +41,26 @@ class DemandaController {
     }
   }
 
-  /// Adiciona nova demanda (apenas na coluna Aguardando na Fila)
-  Future<DemandaModel> adicionarDemanda({
+  /// Executa uma gravação no banco. Em caso de erro avisa o usuário e
+  /// recarrega as demandas para desfazer a atualização otimista da tela.
+  Future<bool> _persistir(Future<void> Function() gravar) async {
+    try {
+      await gravar();
+      return true;
+    } catch (e) {
+      NotificationService.showNegative(
+        'Não foi possível salvar a demanda',
+        mensagemErro(e),
+        position: NotificationPosition.bottom,
+      );
+      await BackendClient.demandas.fetch();
+      return false;
+    }
+  }
+
+  /// Adiciona nova demanda (apenas na coluna Aguardando na Fila).
+  /// Retorna null se não foi possível salvar.
+  Future<DemandaModel?> adicionarDemanda({
     required String clienteNome,
     String clienteId = '',
     String clienteTelefone = '',
@@ -56,10 +73,6 @@ class DemandaController {
     String prioridade = 'normal',
   }) async {
     final list = List<DemandaModel>.from(demandas);
-    final proximoCodigo = list.isEmpty
-        ? 1
-        : list.map((d) => d.codigo).reduce((a, b) => a > b ? a : b) + 1;
-
     final fila =
         list.where((d) => d.etapa == DemandaEtapa.aguardandoFila).toList();
     final proximaOrdem = fila.isEmpty
@@ -71,7 +84,7 @@ class DemandaController {
     final nova = DemandaModel(
       id: HashService.get,
       ordem: proximaOrdem,
-      codigo: proximoCodigo,
+      codigo: 0, // gerado pelo banco
       clienteId: clienteId,
       clienteNome: clienteNome,
       clienteTelefone: clienteTelefone,
@@ -91,15 +104,10 @@ class DemandaController {
       criadoEm: DateTime.now(),
     );
 
-    // Salva no Supabase via Collection
-    final criado = await BackendClient.demandas.criar(nova);
-    final finalDemanda = criado ?? nova;
-
-    if (!demandas.any((d) => d.id == finalDemanda.id)) {
-      list.add(finalDemanda);
-      demandasStream.add(list);
-    }
-    return finalDemanda;
+    // Salva no Supabase via Collection (a collection atualiza a lista)
+    DemandaModel? criada;
+    await _persistir(() async => criada = await BackendClient.demandas.criar(nova));
+    return criada;
   }
 
   /// Retorna todos os detalhamentos vinculados a esta demanda (relação 1 -> N)
@@ -167,7 +175,7 @@ class DemandaController {
       etapa: novaEtapa,
     );
 
-    await BackendClient.demandas.atualizar(demandaAtualizada);
+    await _persistir(() => BackendClient.demandas.atualizar(demandaAtualizada));
 
     final list = List<DemandaModel>.from(demandas);
     final idx = list.indexWhere((d) => d.id == demanda.id);
@@ -200,13 +208,10 @@ class DemandaController {
       final itemAtual = fila[index];
       final itemAcima = fila[index - 1];
 
-      final tempOrdem = itemAtual.ordem;
-      itemAtual.ordem = itemAcima.ordem;
-      itemAcima.ordem = tempOrdem;
-
-      BackendClient.demandas.atualizar(itemAtual);
-      BackendClient.demandas.atualizar(itemAcima);
-      demandasStream.add(list);
+      _persistir(() => BackendClient.demandas.atualizarOrdens({
+            itemAtual.id: itemAcima.ordem,
+            itemAcima.id: itemAtual.ordem,
+          }));
     }
   }
 
@@ -223,31 +228,33 @@ class DemandaController {
       final itemAtual = fila[index];
       final itemAbaixo = fila[index + 1];
 
-      final tempOrdem = itemAtual.ordem;
-      itemAtual.ordem = itemAbaixo.ordem;
-      itemAbaixo.ordem = tempOrdem;
-
-      BackendClient.demandas.atualizar(itemAtual);
-      BackendClient.demandas.atualizar(itemAbaixo);
-      demandasStream.add(list);
+      _persistir(() => BackendClient.demandas.atualizarOrdens({
+            itemAtual.id: itemAbaixo.ordem,
+            itemAbaixo.id: itemAtual.ordem,
+          }));
     }
   }
 
   /// Reordena a fila inteira a partir de uma lista ordenada de IDs
   void reordenarFila(List<String> idsEmOrdem) {
     final list = List<DemandaModel>.from(demandas);
+    final novasOrdens = <String, int>{};
     for (int i = 0; i < idsEmOrdem.length; i++) {
       final id = idsEmOrdem[i];
       final index = list.indexWhere((d) => d.id == id);
-      if (index != -1) {
+      if (index != -1 && list[index].ordem != i + 1) {
         list[index] = list[index].copyWith(ordem: i + 1);
-        BackendClient.demandas.atualizar(list[index]);
+        novasOrdens[id] = i + 1;
       }
     }
     demandasStream.add(list);
+    // Atualiza só o que mudou, em paralelo, sem recarregar a fila a cada item
+    if (novasOrdens.isNotEmpty) {
+      _persistir(() => BackendClient.demandas.atualizarOrdens(novasOrdens));
+    }
   }
 
-  /// Transiciona de etapa no Kanban com validação de trava de integridade
+  /// Transiciona de etapa no Kanban de forma independente
   bool moverEtapa(
     BuildContext context,
     String id,
@@ -259,20 +266,6 @@ class DemandaController {
     if (index == -1) return false;
 
     final d = list[index];
-
-    // REGRA DE TRAVA: Se está em Liberado e possui Pedido Técnico emitido em qualquer detalhamento, NÃO pode sair de Liberado
-    if (d.etapa == DemandaEtapa.finalizadoLiberado &&
-        novaEtapa != DemandaEtapa.finalizadoLiberado) {
-      final vinculados = obterDetalhamentosDaDemanda(d);
-      final temPedidos = vinculados.any((det) => BackendClient.pedidosTecnicos.data
-          .any((p) => p.detalhamentoId == det.id));
-
-      if (temPedidos) {
-        _mostrarDialogoBloqueioPedido(context);
-        return false;
-      }
-    }
-
     final atualizada = d.copyWith(
       etapa: novaEtapa,
       motivoCorrecao: motivoCorrecao ?? d.motivoCorrecao,
@@ -280,56 +273,11 @@ class DemandaController {
     list[index] = atualizada;
     demandasStream.add(list);
 
-    BackendClient.demandas.atualizar(atualizada);
-
-    // Sincroniza a etapa em todos os detalhamentos vinculados
-    final vinculados = obterDetalhamentosDaDemanda(d);
-    for (final det in vinculados) {
-      BackendClient.detalhamentos
-          .atualizarEtapaKanban(det.id, novaEtapa.name);
-    }
-
+    _persistir(() => BackendClient.demandas.atualizar(atualizada));
     return true;
   }
 
-  /// Diálogo informativo de bloqueio (Diretriz 4.3)
-  void _mostrarDialogoBloqueioPedido(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Icon(Icons.info_outline, size: 40, color: Colors.orange[700]),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Text(
-                'Detalhamento com Pedido Vinculado',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
-        ),
-        content: const Text(
-          'Este detalhamento já possui Pedido(s) Técnico(s) gerado(s) (total ou parcial).\n\n'
-          'Para garantir a rastreabilidade e integridade das ordens de produção emitidas, ele não pode ser movido da coluna Liberado.',
-          style: TextStyle(fontSize: 13, height: 1.4),
-        ),
-        actions: [
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryMain,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () => pop(ctx),
-            child: const Text('Entendi'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Arquivar demanda (e todos os seus detalhamentos vinculados)
+  /// Arquivar demanda
   Future<void> arquivarDemanda(String id) async {
     final list = List<DemandaModel>.from(demandas);
     final index = list.indexWhere((d) => d.id == id);
@@ -338,27 +286,17 @@ class DemandaController {
       list[index] = atualizada;
       demandasStream.add(list);
 
-      await BackendClient.demandas.atualizar(atualizada);
-
-      final vinculados = obterDetalhamentosDaDemanda(atualizada);
-      final detIds = <String>{
-        ...vinculados.map((d) => d.id),
-        if (atualizada.detalhamentoId != null && atualizada.detalhamentoId!.isNotEmpty)
-          atualizada.detalhamentoId!,
-      };
-      for (final detId in detIds) {
-        await BackendClient.detalhamentos.arquivarDetalhamento(detId);
-      }
+      if (!await _persistir(() => BackendClient.demandas.atualizar(atualizada))) return;
 
       NotificationService.showPositive(
         'Demanda Arquivada',
-        'A demanda e seus detalhamentos foram arquivados.',
+        'A demanda foi arquivada com sucesso.',
         position: NotificationPosition.bottom,
       );
     }
   }
 
-  /// Desarquivar demanda (retorna SEMPRE para Liberado)
+  /// Desarquivar demanda (retorna para Liberado)
   Future<void> desarquivarDemanda(String id) async {
     final list = List<DemandaModel>.from(demandas);
     final index = list.indexWhere((d) => d.id == id);
@@ -370,62 +308,37 @@ class DemandaController {
       list[index] = atualizada;
       demandasStream.add(list);
 
-      await BackendClient.demandas.atualizar(atualizada);
-
-      final vinculados = obterDetalhamentosDaDemanda(atualizada);
-      final detIds = <String>{
-        ...vinculados.map((d) => d.id),
-        if (atualizada.detalhamentoId != null && atualizada.detalhamentoId!.isNotEmpty)
-          atualizada.detalhamentoId!,
-      };
-      for (final detId in detIds) {
-        await BackendClient.detalhamentos.desarquivarDetalhamento(detId);
-      }
+      if (!await _persistir(() => BackendClient.demandas.atualizar(atualizada))) return;
 
       NotificationService.showPositive(
         'Demanda Desarquivada',
-        'A demanda e seus detalhamentos retornaram para Liberado.',
+        'A demanda retornou para Liberado.',
         position: NotificationPosition.bottom,
       );
     }
   }
 
-  /// Atualiza os dados cadastrais da demanda
-  Future<void> atualizarDemanda(DemandaModel demandaAtualizada) async {
+  /// Atualiza os dados cadastrais da demanda. Retorna false se não salvou.
+  Future<bool> atualizarDemanda(DemandaModel demandaAtualizada) async {
     final list = List<DemandaModel>.from(demandas);
     final idx = list.indexWhere((d) => d.id == demandaAtualizada.id);
     if (idx != -1) {
       list[idx] = demandaAtualizada;
       demandasStream.add(list);
     }
-    await BackendClient.demandas.atualizar(demandaAtualizada);
-
-    // Sincroniza dados cadastrais básicos em detalhamentos vinculados se existirem
-    final vinculados = obterDetalhamentosDaDemanda(demandaAtualizada);
-    for (final det in vinculados) {
-      if (det.clienteNome != demandaAtualizada.clienteNome ||
-          det.obraNome != demandaAtualizada.obraNome) {
-        final detAtualizado = det.copyWith(
-          clienteNome: demandaAtualizada.clienteNome,
-          obraNome: demandaAtualizada.obraNome,
-          prioridade: demandaAtualizada.prioridade,
-        );
-        await BackendClient.detalhamentos
-            .atualizarDetalhamento(detAtualizado);
-      }
-    }
+    return _persistir(() => BackendClient.demandas.atualizar(demandaAtualizada));
   }
 
-  /// Verifica se a demanda pode ser excluída (regra: somente se não tiver detalhamento vinculado)
+  /// Verifica se a demanda pode ser excluída
   bool podeExcluirDemanda(DemandaModel demanda) {
-    return obterDetalhamentosDaDemanda(demanda).isEmpty;
+    return true;
   }
 
-  /// Excluir demanda
-  Future<void> excluirDemanda(String id) async {
+  /// Excluir demanda. Retorna false se não foi possível excluir.
+  Future<bool> excluirDemanda(String id) async {
     final list = List<DemandaModel>.from(demandas)..removeWhere((d) => d.id == id);
     demandasStream.add(list);
-    await BackendClient.demandas.delete(id);
+    return _persistir(() => BackendClient.demandas.delete(id));
   }
 }
 

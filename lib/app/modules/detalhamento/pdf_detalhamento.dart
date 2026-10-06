@@ -1,3 +1,4 @@
+import 'package:acoplan/app/core/calculo/calculo_aco.dart';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:acoplan/app/core/client/models/forma_model.dart';
@@ -32,7 +33,7 @@ class PdfDetalhamento {
             ),
             pw.SizedBox(height: 10),
             pw.Text('Cliente: ${detalhamento.clienteNome}', style: const pw.TextStyle(fontSize: 14)),
-            pw.Text('Peso Total: ${detalhamento.pesoTotal.toStringAsFixed(2)} kg', style: const pw.TextStyle(fontSize: 14)),
+            pw.Text('Peso Total: ${detalhamento.pesoCalculado(_produtos).toStringAsFixed(2)} kg', style: const pw.TextStyle(fontSize: 14)),
             pw.SizedBox(height: 20),
 
             // Elementos
@@ -289,8 +290,7 @@ class PdfDetalhamento {
       final qtdeTotalElem = elem.quantidadeExpandida;
       for (var pos in elem.posicoes) {
         final bitola = pos.bitolaNome.split('-').first.trim();
-        final compUnit = pos.comprimentos.values.fold<double>(0.0, (sum, val) => sum + val);
-        final compTotalCm = compUnit * pos.qtde * qtdeTotalElem;
+        final compTotalCm = CalculoAco.comprimentoTotalPosicao(pos) * qtdeTotalElem;
         final pesoTotal = _pesoTotalPosicao(pos) * qtdeTotalElem;
 
         resumoAco[bitola] = (resumoAco[bitola] ?? 0) + pesoTotal;
@@ -354,63 +354,9 @@ class PdfDetalhamento {
     return partes.join('=');
   }
 
-  /// Massa linear (kg/m) a partir da bitola — busca massaFinal real no cadastro,
-  /// fallback para fórmula (d²/162) se não encontrado.
-  static double _massaLinear(PosicaoModel pos) {
-    // Buscar produto cadastrado pelo bitolaId
-    final produto = _produtos.where((p) => p.id == pos.bitolaId).firstOrNull;
-    if (produto != null && produto.massaFinal > 0) {
-      return produto.massaFinal;
-    }
-    // Fallback: fórmula genérica
-    final str = pos.bitolaNome.split('-').first.replaceAll(RegExp(r'[^0-9.]'), '');
-    final d = double.tryParse(str) ?? 0;
-    return (d * d) / 162;
-  }
-
-  /// Peso total de uma posição (todas as peças).
-  /// Se tem trechos variáveis: calcula peça a peça.
-  /// Se não tem variável: peso unitário × quantidade.
-  static double _pesoTotalPosicao(PosicaoModel pos) {
-    final w = _massaLinear(pos);
-    if (w <= 0 || pos.qtde <= 0) return 0;
-
-    // Verifica se tem algum trecho variável
-    final temVar = pos.variaveisConfig.isNotEmpty &&
-        pos.variaveis.values.any((v) => v);
-
-    if (!temVar) {
-      final somaCm = pos.comprimentos.values.fold<double>(0.0, (s, v) => s + v);
-      return (somaCm / 100.0) * w * pos.qtde;
-    }
-
-    // Peça a peça
-    double pesoTotal = 0;
-    for (int peca = 0; peca < pos.qtde; peca++) {
-      double somaCm = 0.0;
-      for (final entry in pos.comprimentos.entries) {
-        final trecho = entry.key;
-        final isVar = pos.variaveis[trecho] ?? false;
-        if (isVar) {
-          // Busca config: própria ou do líder do grupo
-          final config = pos.variaveisConfig[trecho]
-              ?? pos.variaveisConfig.values.firstOrNull;
-          if (config != null && config.inicial > 0 && config.final_ > 0) {
-            final expandidas = config.medidasExpandidas(pos.multiplicador);
-            somaCm += peca < expandidas.length
-                ? expandidas[peca].toDouble()
-                : (expandidas.isNotEmpty ? expandidas.last.toDouble() : 0.0);
-          } else {
-            somaCm += entry.value;
-          }
-        } else {
-          somaCm += entry.value;
-        }
-      }
-      pesoTotal += (somaCm / 100.0) * w;
-    }
-    return pesoTotal;
-  }
+  /// Peso total de uma posição (todas as peças) — ver CalculoAco.
+  static double _pesoTotalPosicao(PosicaoModel pos) =>
+      CalculoAco.pesoPosicao(pos, _produtos);
 
   static pw.Widget _buildDesenhoForma(FormaModel forma, PosicaoModel pos) {
     final medidas = pos.comprimentos;

@@ -20,10 +20,11 @@ abstract class Service {
     }
   }
 
-  /// Inicializa dados (queries ao banco) — chamado em background após runApp
+  /// Carrega os dados (queries ao banco). Chamado depois que o usuário está
+  /// autenticado — com RLS, antes do login o banco não retorna nada.
+  /// Pode ser chamado de novo (ex: novo login) para recarregar tudo.
   static Future<void> initAplicationServices() async {
     if (!isCoreInitialized) await initCoreServices();
-    if (isInitialized) return;
     isInitialized = true;
 
     await AppSupabaseClient.init();

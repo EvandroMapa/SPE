@@ -13,7 +13,9 @@ class UsuarioCreateModel {
   final String id;
   TextController nome = TextController();
   TextController email = TextController();
+  /// Senha do login. Na edição começa vazia ("deixe em branco para manter").
   TextController senha = TextController();
+  String authUserId = '';
   UsuarioPermissionCreateModel permission = UsuarioPermissionCreateModel();
   UsuarioRole? role;
   String usuarioTipoId = '';
@@ -30,7 +32,7 @@ class UsuarioCreateModel {
     email.text = user.email;
     role = user.role;
     usuarioTipoId = user.usuarioTipoId;
-    senha.text = user.senha;
+    authUserId = user.authUserId;
     permission = UsuarioPermissionCreateModel.edit(user);
   }
 
@@ -41,6 +43,7 @@ class UsuarioCreateModel {
         role: role ?? UsuarioRole.operador,
         usuarioTipoId: usuarioTipoId,
         senha: senha.text,
+        authUserId: authUserId,
         permission: permission.toUserPermissionModel(),
         deviceTokens: [],
       );

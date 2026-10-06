@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:developer';
 import 'package:acoplan/app/core/client/models/pedido_tecnico_model.dart';
 import 'package:acoplan/app/core/models/app_stream.dart';
 import 'package:acoplan/app/core/services/supabase_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class PedidoTecnicoSupabaseCollection {
   static final PedidoTecnicoSupabaseCollection _instance =
@@ -16,6 +18,9 @@ class PedidoTecnicoSupabaseCollection {
   List<PedidoTecnicoModel> get data => dataStream.value;
   bool _isStarted = false;
 
+  /// Pedido + elementos numa única consulta.
+  static const String _select = '*, pedido_tecnico_elementos(*)';
+
   Future<void> fetch() async {
     _isStarted = false;
     await start(lock: false);
@@ -28,179 +33,78 @@ class PedidoTecnicoSupabaseCollection {
     try {
       final response = await SupabaseService.client
           .from(name)
-          .select()
+          .select(_select)
           .order('codigo', ascending: false);
-      final pedidos = List<Map<String, dynamic>>.from(response);
-
-      final items = <PedidoTecnicoModel>[];
-      for (final p in pedidos) {
-        final pedidoId = p['id'] as String;
-        final elementosRaw = List<Map<String, dynamic>>.from(
-          await SupabaseService.client
-              .from('pedido_tecnico_elementos')
-              .select()
-              .eq('pedido_id', pedidoId),
-        );
-        items.add(PedidoTecnicoModel.fromSupabaseMap(p, elementosRaw));
-      }
-      dataStream.add(items);
+      dataStream.add(List<Map<String, dynamic>>.from(response)
+          .map(PedidoTecnicoModel.fromSupabaseRow)
+          .toList());
     } catch (e) {
       log('Supabase Error (PedidoTecnico.start): $e');
     }
   }
 
   bool _isListen = false;
+  Timer? _debounce;
   Future<void> listen() async {
     if (_isListen) return;
     _isListen = true;
+    void agendar(PostgresChangePayload _) {
+      _debounce?.cancel();
+      _debounce = Timer(const Duration(milliseconds: 500), fetch);
+    }
+
     SupabaseService.client
-        .from(name)
-        .stream(primaryKey: ['id']).listen((_) => fetch());
+        .channel('spe-pedidos-tecnicos')
+        .onPostgresChanges(event: PostgresChangeEvent.all, schema: 'public', table: name, callback: agendar)
+        .onPostgresChanges(
+            event: PostgresChangeEvent.all, schema: 'public', table: 'pedido_tecnico_elementos', callback: agendar)
+        .subscribe();
+  }
+
+  void _substituirLocal(PedidoTecnicoModel pedido) {
+    final list = List<PedidoTecnicoModel>.from(data);
+    final idx = list.indexWhere((p) => p.id == pedido.id);
+    if (idx != -1) {
+      list[idx] = pedido;
+    } else {
+      list.add(pedido);
+      list.sort((a, b) => b.codigo.compareTo(a.codigo));
+    }
+    dataStream.add(list);
   }
 
   // ── CRUD ──────────────────────────────────────────────
 
-  /// Cria o pedido e seus vínculos de elementos. Retorna o modelo completo gerado.
-  Future<PedidoTecnicoModel> criar(PedidoTecnicoModel model) async {
-    final proximoCodigo = data.isEmpty
-        ? 1
-        : data.map((p) => p.codigo).reduce((a, b) => a > b ? a : b) + 1;
-        
-    // Calcular o sequencial correto baseado apenas na obra selecionada
-    final pedidosDaObra = data.where((p) => p.obraId == model.obraId).toList();
-    int maxSeq = 0;
-    for (final p in pedidosDaObra) {
-      final parts = p.identificador.split('.');
-      if (parts.length > 1) {
-        final numStr = parts.last;
-        final seq = int.tryParse(numStr) ?? 0;
-        if (seq > maxSeq) maxSeq = seq;
-      }
-    }
-    
-    // O modelo original já tem o prefixo na string antes do '.'
-    final prefixo = model.identificador.split('.').first; 
-    final seqStr = (maxSeq + 1).toString().padLeft(3, '0');
-    final identificadorCorreto = '$prefixo.$seqStr';
-
-    final m = model.copyWith(
-      codigo: proximoCodigo,
-      identificador: identificadorCorreto,
+  /// Cria ou atualiza o pedido e seus elementos numa única transação no banco
+  /// (RPC `salvar_pedido_tecnico`). O banco gera código e sequencial do
+  /// identificador e valida o saldo de peças — lança exceção se não houver saldo.
+  Future<PedidoTecnicoModel> salvar(PedidoTecnicoModel model) async {
+    final pedidoMap = model.toSupabaseMap();
+    final elementos = model.elementos.map((e) => e.toSupabaseMap('')..remove('pedido_id')).toList();
+    final result = await SupabaseService.client.rpc(
+      'salvar_pedido_tecnico',
+      params: {'p_pedido': pedidoMap, 'p_elementos': elementos},
     );
-    final inserted = await SupabaseService.client
-        .from(name)
-        .insert(m.toSupabaseMap())
-        .select()
-        .single();
-    final pedidoId = inserted['id'] as String;
-
-    // Inserir elementos vinculados
-    for (final elem in model.elementos) {
-      await SupabaseService.client
-          .from('pedido_tecnico_elementos')
-          .insert(elem.toSupabaseMap(pedidoId));
-    }
-    // Gravar resumo_aco se disponível
-    if (model.resumoAco != null) {
-      await SupabaseService.client
-          .from(name)
-          .update({'resumo_aco': model.resumoAco})
-          .eq('id', pedidoId);
-    }
-    await fetch();
-    return PedidoTecnicoModel.fromSupabaseMap(
-      inserted,
-      model.elementos.map((e) => e.toMap()).toList() // Passamos map apenas pra não quebrar parser, though fromSupabaseMap expects DB keys
-    );
+    final salvo = PedidoTecnicoModel.fromSupabaseRow(Map<String, dynamic>.from(result as Map));
+    _substituirLocal(salvo);
+    return salvo;
   }
 
-  /// Atualiza dados gerais do pedido (sem alterar elementos)
-  /// Não faz fetch() — use `atualizarCompleto()` para fluxo otimizado.
-  Future<void> atualizar(PedidoTecnicoModel model) async {
-    await SupabaseService.client
-        .from(name)
-        .update(model.toSupabaseMap())
-        .eq('id', model.id);
+  Future<void> _atualizarStatus(String pedidoId, String status) async {
+    await SupabaseService.client.from(name).update({'status': status}).eq('id', pedidoId);
+    final atual = data.where((p) => p.id == pedidoId).firstOrNull;
+    if (atual != null) _substituirLocal(atual.copyWith(status: status));
   }
 
-  Future<void> atualizarElementos(
-      String pedidoId, List<PedidoTecnicoElementoModel> elementos,
-      {Map<String, dynamic>? resumoAco}) async {
-    await SupabaseService.client
-        .from('pedido_tecnico_elementos')
-        .delete()
-        .eq('pedido_id', pedidoId);
-    if (elementos.isNotEmpty) {
-      // Batch insert: envia todos os elementos numa única chamada
-      await SupabaseService.client
-          .from('pedido_tecnico_elementos')
-          .insert(elementos.map((e) => e.toSupabaseMap(pedidoId)).toList());
-    }
-    // Gravar resumo_aco se disponível
-    if (resumoAco != null) {
-      await SupabaseService.client
-          .from(name)
-          .update({'resumo_aco': resumoAco})
-          .eq('id', pedidoId);
-    }
-  }
+  Future<void> cancelar(String pedidoId) => _atualizarStatus(pedidoId, 'cancelado');
 
-  /// Fluxo otimizado: atualiza pedido + elementos + resumo em sequência,
-  /// com UM ÚNICO fetch() no final. Evita 3 fetches redundantes.
-  Future<void> atualizarCompleto(
-    PedidoTecnicoModel model, {
-    Map<String, dynamic>? resumoAco,
-  }) async {
-    // 1. Atualizar dados gerais do pedido
-    final mapUpdate = model.toSupabaseMap();
-    if (resumoAco != null) mapUpdate['resumo_aco'] = resumoAco;
-    await SupabaseService.client
-        .from(name)
-        .update(mapUpdate)
-        .eq('id', model.id);
+  Future<void> reabrir(String pedidoId) => _atualizarStatus(pedidoId, 'aberto');
 
-    // 2. Delete + batch insert dos elementos
-    await SupabaseService.client
-        .from('pedido_tecnico_elementos')
-        .delete()
-        .eq('pedido_id', model.id);
-    if (model.elementos.isNotEmpty) {
-      await SupabaseService.client
-          .from('pedido_tecnico_elementos')
-          .insert(model.elementos.map((e) => e.toSupabaseMap(model.id)).toList());
-    }
-
-    // 3. Único fetch no final
-    await fetch();
-  }
-
-  Future<void> cancelar(String pedidoId) async {
-    await SupabaseService.client
-        .from(name)
-        .update({'status': 'cancelado'})
-        .eq('id', pedidoId);
-    await fetch();
-  }
-
-  Future<void> reabrir(String pedidoId) async {
-    await SupabaseService.client
-        .from(name)
-        .update({'status': 'aberto'})
-        .eq('id', pedidoId);
-    await fetch();
-  }
-
+  /// Exclui o pedido (os elementos vinculados são removidos em cascata pelo banco).
+  /// Lança exceção em caso de erro.
   Future<void> delete(PedidoTecnicoModel model) async {
-    try {
-      await SupabaseService.client
-          .from('pedido_tecnico_elementos')
-          .delete()
-          .eq('pedido_id', model.id);
-      await SupabaseService.client.from(name).delete().eq('id', model.id);
-      await fetch();
-    } catch (e) {
-      log('Supabase Error (PedidoTecnico.delete): $e');
-    }
+    await SupabaseService.client.from(name).delete().eq('id', model.id);
+    dataStream.add(data.where((p) => p.id != model.id).toList());
   }
 
   /// Retorna mapa: elementoId -> PedidoTecnicoModel (pedido aberto)
@@ -229,17 +133,30 @@ class PedidoTecnicoSupabaseCollection {
     return mapa;
   }
 
-  /// Retorna a quantidade total solicitada de cada elemento considerando 
+  /// Retorna a quantidade total solicitada de cada elemento considerando
   /// todos os pedidos abertos (exceto o pedido atual, se fornecido).
   Map<String, int> quantidadesAlocadas(String? pedidoIgnoradoId) {
     final mapa = <String, int>{};
     for (final pedido in data) {
       if (!pedido.isAberto) continue;
       if (pedidoIgnoradoId != null && pedido.id == pedidoIgnoradoId) continue;
-      
+
       for (final elem in pedido.elementos) {
         final chave = '${elem.elementoId}_${elem.elementoNome}';
         mapa[chave] = (mapa[chave] ?? 0) + elem.quantidadeSolicitada;
+      }
+    }
+    return mapa;
+  }
+
+  /// Quantidade alocada em pedidos abertos por nome (pai/equivalente) de um elemento.
+  Map<String, int> alocadoPorNome(String elementoId) {
+    final mapa = <String, int>{};
+    for (final pedido in data) {
+      if (!pedido.isAberto) continue;
+      for (final elem in pedido.elementos) {
+        if (elem.elementoId != elementoId) continue;
+        mapa[elem.elementoNome] = (mapa[elem.elementoNome] ?? 0) + elem.quantidadeSolicitada;
       }
     }
     return mapa;

@@ -3,6 +3,7 @@ import 'package:acoplan/app/core/client/backend_client.dart';
 import 'package:acoplan/app/core/client/models/detalhamento_model.dart';
 import 'package:acoplan/app/core/models/app_stream.dart';
 import 'package:acoplan/app/core/services/notification_service.dart';
+import 'package:acoplan/app/core/utils/global_resource.dart';
 import 'package:acoplan/app/modules/detalhamento/detalhamento_view_model.dart';
 import 'package:flutter/material.dart';
 import 'package:overlay_support/overlay_support.dart';
@@ -24,6 +25,9 @@ class DetalhamentoController {
   String? _detalhamentoDbId;
   String? get detalhamentoDbId => _detalhamentoDbId;
   StreamSubscription? _realtimeSub;
+  /// JSON do detalhamento carregado no form — evita recarregar (e sobrescrever
+  /// o que o usuário está digitando) quando o banco não mudou.
+  String? _assinaturaCarregada;
   bool _salvando = false;
   bool get salvando => _salvando;
 
@@ -37,12 +41,13 @@ class DetalhamentoController {
       _realtimeSub = detalhamentosStream.listen.listen((lista) {
         if (_detalhamentoDbId == null) return;
         final atualizado = lista.where((d) => d.id == _detalhamentoDbId).firstOrNull;
-        if (atualizado != null) {
+        if (atualizado != null && atualizado.toJson() != _assinaturaCarregada) {
           _carregarForm(atualizado);
         }
       });
     } else {
       _detalhamentoDbId = null;
+      _assinaturaCarregada = null;
       _realtimeSub?.cancel();
       final proximoCodigo = detalhamentos.isEmpty
           ? 1
@@ -54,6 +59,7 @@ class DetalhamentoController {
   }
 
   void _carregarForm(DetalhamentoModel detalhamento) {
+    _assinaturaCarregada = detalhamento.toJson();
     final createModel = DetalhamentoCreateModel.edit(detalhamento);
 
     // Restaurar referências
@@ -116,6 +122,9 @@ class DetalhamentoController {
         // Criar nova
         _detalhamentoDbId = await BackendClient.detalhamentos.criarDetalhamento(model);
         form.id = _detalhamentoDbId!;
+        // Código definitivo é gerado pelo banco
+        final criado = detalhamentos.where((d) => d.id == _detalhamentoDbId).firstOrNull;
+        if (criado != null) form.codigo = criado.codigo;
         form.isEdit = true;
         foiCriacao = true;
       }
@@ -199,23 +208,61 @@ class DetalhamentoController {
   }
 
   // ── Elemento: atualizar ──────────────────────────────────
-  Future<void> atualizarElemento(ElementoCreateModel elemCreate) async {
+  /// Retorna false se a alteração foi recusada (o form volta ao estado do banco).
+  Future<bool> atualizarElemento(ElementoCreateModel elemCreate) async {
     try {
-      if (!await _garantirDetalhamento()) return;
+      if (!await _garantirDetalhamento()) return false;
       final elemModel = elemCreate.toElementoModel();
+      validarElementoEmPedido(elemModel.id, elemModel);
       await BackendClient.detalhamentos.atualizarElemento(elemModel, _detalhamentoDbId!);
+      return true;
     } catch (e) {
-      NotificationService.showNegative('Erro', e.toString());
+      NotificationService.showNegative('Alteração não permitida', mensagemErro(e));
+      _restaurarFormDoBanco();
+      return false;
     }
   }
 
   // ── Elemento: excluir ────────────────────────────────────
-  Future<void> excluirElemento(String elementoId) async {
+  Future<bool> excluirElemento(String elementoId) async {
     try {
+      validarElementoEmPedido(elementoId, null);
       await BackendClient.detalhamentos.excluirElemento(elementoId);
+      return true;
     } catch (e) {
-      NotificationService.showNegative('Erro', e.toString());
+      NotificationService.showNegative('Exclusão não permitida', mensagemErro(e));
+      return false;
     }
+  }
+
+  /// Impede alterações que quebrariam pedidos técnicos abertos: excluir o
+  /// elemento ([novo] == null), renomear/remover o pai ou um equivalente que
+  /// tem peças em pedido, ou reduzir a quantidade abaixo do que já foi pedido.
+  /// (O banco aplica a mesma regra via trigger, inclusive para o plugin.)
+  void validarElementoEmPedido(String elementoId, ElementoModel? novo) {
+    final alocado = BackendClient.pedidosTecnicos.alocadoPorNome(elementoId);
+    for (final entry in alocado.entries) {
+      final nome = entry.key;
+      final pecas = entry.value;
+      if (novo == null) {
+        throw Exception('O elemento $nome está em pedido técnico aberto ($pecas peça(s)) e não pode ser excluído.');
+      }
+      final qtdeNova = nome == novo.nome
+          ? novo.quantidade
+          : novo.elementosEquivalentes.where((e) => e.nome == nome).firstOrNull?.quantidade;
+      if (qtdeNova == null) {
+        throw Exception('O elemento $nome está em pedido técnico aberto e não pode ser renomeado ou removido.');
+      }
+      if (qtdeNova < pecas) {
+        throw Exception('O elemento $nome tem $pecas peça(s) em pedido técnico aberto; a quantidade não pode ser menor que isso.');
+      }
+    }
+  }
+
+  /// Descarta alterações locais e recarrega o form com o estado do banco.
+  void _restaurarFormDoBanco() {
+    final atual = detalhamentos.where((d) => d.id == _detalhamentoDbId).firstOrNull;
+    if (atual != null) _carregarForm(atual);
   }
 
   // ── Posição: adicionar ───────────────────────────────────

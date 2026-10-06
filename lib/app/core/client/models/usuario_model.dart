@@ -8,7 +8,11 @@ class UsuarioModel {
   final String id;
   final String nome;
   final String email;
+  /// Senha digitada no formulário. Nunca é lida nem gravada em public.usuarios:
+  /// o login fica no Supabase Auth.
   final String senha;
+  /// Id do login no Supabase Auth (auth.users).
+  final String authUserId;
   final UsuarioRole role;
   final String usuarioTipoId;
   final UsuarioTipoModel? tipo;
@@ -29,6 +33,7 @@ class UsuarioModel {
     required this.nome,
     required this.email,
     required this.senha,
+    this.authUserId = '',
     required this.role,
     required this.usuarioTipoId,
     this.tipo,
@@ -41,6 +46,7 @@ class UsuarioModel {
     String? nome,
     String? email,
     String? senha,
+    String? authUserId,
     UsuarioRole? role,
     String? usuarioTipoId,
     UsuarioTipoModel? tipo,
@@ -52,6 +58,7 @@ class UsuarioModel {
       nome: nome ?? this.nome,
       email: email ?? this.email,
       senha: senha ?? this.senha,
+      authUserId: authUserId ?? this.authUserId,
       role: role ?? this.role,
       usuarioTipoId: usuarioTipoId ?? this.usuarioTipoId,
       tipo: tipo ?? this.tipo,
@@ -65,7 +72,7 @@ class UsuarioModel {
       'id': id,
       'nome': nome,
       'email': email,
-      'senha': senha,
+      'auth_user_id': authUserId,
       'role': role.index,
       'perfil_id': usuarioTipoId,
       'permission': permission.toMap(),
@@ -114,7 +121,8 @@ class UsuarioModel {
       id: map['id'] ?? '',
       nome: map['nome'] ?? '',
       email: map['email'] ?? '',
-      senha: map['senha'] ?? '',
+      senha: '',
+      authUserId: (map['auth_user_id'] ?? '').toString(),
       role: _parseRole(map['role']),
       usuarioTipoId: (map['perfil_id'] ?? '').toString(),
       tipo: tipo,
@@ -149,13 +157,13 @@ class UsuarioModel {
   Map<String, dynamic> toSupabaseMap() {
     final map = <String, dynamic>{
       'nome': nome,
-      'email': email,
-      'senha': senha,
+      'email': email.trim().toLowerCase(),
       'role': role.index,
       'perfil_id': usuarioTipoId.isEmpty ? null : usuarioTipoId,
       'permission': json.encode(permission.toMap()),
       'deviceTokens': json.encode(deviceTokens),
     };
+    if (authUserId.isNotEmpty) map['auth_user_id'] = authUserId;
     if (id.length == 36) {
       map['id'] = id;
     }

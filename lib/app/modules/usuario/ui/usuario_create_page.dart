@@ -35,7 +35,12 @@ class UsuarioCreatePage extends StatelessWidget {
                 const H(16),
                 _buildField('E-mail', form.email, Icons.email_outlined),
                 const H(16),
-                _buildField('Senha', form.senha, Icons.lock_outline, obscure: true),
+                _buildField(
+                  form.isEdit ? 'Nova senha (deixe em branco para manter)' : 'Senha',
+                  form.senha,
+                  Icons.lock_outline,
+                  obscure: true,
+                ),
                 const H(24),
                 Text('Perfil de Acesso', style: AppCss.smallBold),
                 const H(8),

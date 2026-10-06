@@ -2,6 +2,7 @@ import 'package:acoplan/app/app_repository.dart';
 import 'package:acoplan/app/core/client/backend_client.dart';
 import 'package:acoplan/app/core/client/models/usuario_model.dart';
 import 'package:acoplan/app/core/models/app_stream.dart';
+import 'package:acoplan/app/core/models/service_model.dart';
 import 'package:acoplan/app/core/services/supabase_service.dart';
 import 'package:acoplan/app/modules/usuario/usuario_controller.dart';
 import 'package:flutter/material.dart';
@@ -23,38 +24,45 @@ class AppController {
   final AppStream<bool> etiquetaRotacao180Stream = AppStream<bool>.seed(false);
   bool get etiquetaRotacao180 => etiquetaRotacao180Stream.value;
 
+  /// Restaura a sessão do Supabase Auth (se houver) ao abrir o app.
   Future<void> onInit() async {
-    final cachedUser = await AppRepository.get();
-    if (cachedUser != null) {
-      final dbUser = BackendClient.usuarios.getById(cachedUser.id);
-      final finalUser = dbUser.id.isNotEmpty ? dbUser : cachedUser;
-      usuarioStream.add(finalUser);
-      usuarioCtrl.usuarioStream.add(finalUser);
+    // Versões antigas guardavam o usuário (com senha) no armazenamento local
+    await AppRepository.removeUser();
+
+    final auth = SupabaseService.client.auth;
+    final authUser = auth.currentUser;
+    if (authUser == null) return;
+
+    // "Manter conectado" desmarcado: a sessão não sobrevive a reabrir o app
+    if (!await AppRepository.getManterConectado()) {
+      await auth.signOut();
+      return;
     }
-    
+    if (!await entrar(authUser.id)) await auth.signOut();
+  }
+
+  /// Carrega o usuário do SPE ligado ao login [authUserId] e os dados do app.
+  /// Retorna false se não houver usuário cadastrado para esse login.
+  Future<bool> entrar(String authUserId) async {
+    final usuario = await BackendClient.usuarios.buscarPorAuthId(authUserId);
+    if (usuario == null) return false;
+
+    // Com RLS, os dados só podem ser carregados depois de autenticar
+    await Service.initAplicationServices();
+
+    usuarioStream.add(usuario);
+    usuarioCtrl.usuarioStream.add(usuario);
+
     // Sincroniza a chave de API global e configurações gerais a partir do Supabase
     await syncGlobalApiKey();
     await syncEtiquetaRotacao180();
+    return true;
   }
 
-  Future<void> setCurrentUser(UsuarioModel user, bool keepConnected) async {
-    usuarioStream.add(user);
-    usuarioCtrl.usuarioStream.add(user);
-    if (keepConnected) {
-      await AppRepository.add(user);
-    } else {
-      await AppRepository.removeUser();
-    }
-    
-    // Sincroniza configurações ao logar
-    await syncGlobalApiKey();
-    await syncEtiquetaRotacao180();
-  }
-
-  void logout() {
+  Future<void> logout() async {
     usuarioStream.add(null);
     usuarioCtrl.usuarioStream.add(null);
-    AppRepository.removeUser();
+    await SupabaseService.client.auth.signOut();
     // NOTA: Como a chave de API é uma configuração global do app,
     // nós NÃO removemos o 'gemini_api_key' no logout para que o app continue configurado.
   }

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:acoplan/app/core/client/models/detalhamento_model.dart';
 import 'package:acoplan/app/core/services/hash_service.dart';
 
 class PedidoTecnicoModel {
@@ -57,12 +58,47 @@ class PedidoTecnicoModel {
 
   bool get isAberto => status == 'aberto';
 
+  /// Detalhamento como estava quando o pedido foi salvo: os elementos deste
+  /// pedido vêm do snapshot gravado (se houver), os demais do detalhamento atual.
+  /// Garante que reimprimir um pedido gere exatamente o que foi produzido.
+  DetalhamentoModel? detalhamentoDoPedido(DetalhamentoModel? atual) {
+    final snapshots = <String, ElementoModel>{};
+    for (final e in elementos) {
+      final snap = e.elementoDoSnapshot;
+      if (snap != null) snapshots[e.elementoId] = snap;
+    }
+    if (snapshots.isEmpty) return atual;
+
+    final base = atual ??
+        DetalhamentoModel(
+          id: detalhamentoId,
+          codigo: detalhamentoCodigo,
+          clienteId: clienteId,
+          clienteNome: clienteNome,
+          obraId: obraId,
+          obraNome: obraNome,
+          elementos: const [],
+        );
+    final idsAtuais = base.elementos.map((e) => e.id).toSet();
+    return base.copyWith(elementos: [
+      ...base.elementos.map((e) => snapshots[e.id] ?? e),
+      ...snapshots.values.where((s) => !idsAtuais.contains(s.id)),
+    ]);
+  }
+
   double get pesoTotal {
     final pesoResumo =
         double.tryParse(resumoAco?['peso_total']?.toString() ?? '0') ?? 0;
     if (pesoResumo > 0) return pesoResumo;
     return elementos.fold(0.0, (s, e) => s + e.pesoTotal);
   }
+
+  /// Converte a linha com os elementos aninhados (`pedido_tecnico_elementos`).
+  factory PedidoTecnicoModel.fromSupabaseRow(Map<String, dynamic> row) =>
+      PedidoTecnicoModel.fromSupabaseMap(
+        row,
+        List<Map<String, dynamic>>.from(row['pedido_tecnico_elementos'] as List? ?? const []),
+      );
 
   factory PedidoTecnicoModel.fromSupabaseMap(
     Map<String, dynamic> map,
@@ -187,6 +223,20 @@ class PedidoTecnicoElementoModel {
   /// As demais posições recebem sequenciaInicio+1, sequenciaInicio+2...
   /// null = pedido antigo (ainda não recalculado).
   final int? sequenciaInicio;
+  /// Cópia do elemento (com posições) no momento em que o pedido foi salvo.
+  /// null = pedido antigo (usa o detalhamento atual).
+  final Map<String, dynamic>? elementoSnapshot;
+
+  ElementoModel? get elementoDoSnapshot {
+    final snap = elementoSnapshot;
+    if (snap == null || snap.isEmpty) return null;
+    return ElementoModel.fromSupabaseMap(
+      snap,
+      List<Map<String, dynamic>>.from(
+        (snap['posicoes'] as List? ?? const []).map((p) => Map<String, dynamic>.from(p as Map)),
+      ),
+    );
+  }
 
   PedidoTecnicoElementoModel({
     required this.id,
@@ -197,6 +247,7 @@ class PedidoTecnicoElementoModel {
     int? quantidadeSolicitada,
     required this.pesoTotal,
     this.sequenciaInicio,
+    this.elementoSnapshot,
   }) : quantidadeSolicitada = quantidadeSolicitada ?? elementoQuantidade;
 
   /// Retorna o número de sequência da posição de índice [indicePosicao] (base 0).
@@ -218,6 +269,9 @@ class PedidoTecnicoElementoModel {
       pesoTotal:
           double.tryParse(map['peso_total']?.toString() ?? '0') ?? 0.0,
       sequenciaInicio: int.tryParse(map['sequencia_inicio']?.toString() ?? ''),
+      elementoSnapshot: map['elemento_snapshot'] is Map
+          ? Map<String, dynamic>.from(map['elemento_snapshot'] as Map)
+          : null,
     );
   }
 
@@ -231,6 +285,7 @@ class PedidoTecnicoElementoModel {
       'peso_total': pesoTotal,
     };
     if (sequenciaInicio != null) map['sequencia_inicio'] = sequenciaInicio;
+    if (elementoSnapshot != null) map['elemento_snapshot'] = elementoSnapshot;
     return map;
   }
 
@@ -243,5 +298,6 @@ class PedidoTecnicoElementoModel {
         'quantidade_solicitada': quantidadeSolicitada,
         'peso_total': pesoTotal,
         'sequencia_inicio': sequenciaInicio,
+        'elemento_snapshot': elementoSnapshot,
       };
 }

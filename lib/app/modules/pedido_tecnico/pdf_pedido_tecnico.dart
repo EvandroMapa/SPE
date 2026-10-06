@@ -1,3 +1,4 @@
+import 'package:acoplan/app/core/calculo/calculo_aco.dart';
 import 'dart:typed_data';
 import 'package:acoplan/app/core/client/models/bitola_model.dart';
 import 'package:acoplan/app/core/client/models/pedido_tecnico_model.dart';
@@ -863,56 +864,9 @@ class PdfPedidoTecnico {
         ),
       );
 
-  // ── Massa linear (kg/m) ──────────────────────────────────────────────────
-  /// Busca massaFinal real no cadastro de produtos, fallback para d²/162.
-  static double _massaLinear(PosicaoModel pos) {
-    final produto = _produtos.where((p) => p.id == pos.bitolaId).firstOrNull;
-    if (produto != null && produto.massaFinal > 0) {
-      return produto.massaFinal;
-    }
-    final str = pos.bitolaNome.split('-').first.replaceAll(RegExp(r'[^0-9.]'), '');
-    final d = double.tryParse(str) ?? 0;
-    return (d * d) / 162;
-  }
-
-  // ── Peso total de uma posição (peça a peça para variáveis) ──────────────
-  static double _pesoTotalPosicao(PosicaoModel pos) {
-    final w = _massaLinear(pos);
-    if (w <= 0 || pos.qtde <= 0) return 0;
-
-    final temVar = pos.variaveisConfig.isNotEmpty &&
-        pos.variaveis.values.any((v) => v);
-
-    if (!temVar) {
-      final somaCm = pos.comprimentos.values.fold<double>(0.0, (s, v) => s + v);
-      return (somaCm / 100.0) * w * pos.qtde;
-    }
-
-    double pesoTotal = 0;
-    for (int peca = 0; peca < pos.qtde; peca++) {
-      double somaCm = 0.0;
-      for (final entry in pos.comprimentos.entries) {
-        final trecho = entry.key;
-        final isVar = pos.variaveis[trecho] ?? false;
-        if (isVar) {
-          final config = pos.variaveisConfig[trecho]
-              ?? pos.variaveisConfig.values.firstOrNull;
-          if (config != null && config.inicial > 0 && config.final_ > 0) {
-            final expandidas = config.medidasExpandidas(pos.multiplicador);
-            somaCm += peca < expandidas.length
-                ? expandidas[peca].toDouble()
-                : (expandidas.isNotEmpty ? expandidas.last.toDouble() : 0.0);
-          } else {
-            somaCm += entry.value;
-          }
-        } else {
-          somaCm += entry.value;
-        }
-      }
-      pesoTotal += (somaCm / 100.0) * w;
-    }
-    return pesoTotal;
-  }
+  // ── Peso total de uma posição (peça a peça para variáveis) — ver CalculoAco ──
+  static double _pesoTotalPosicao(PosicaoModel pos) =>
+      CalculoAco.pesoPosicao(pos, _produtos);
 
   // ── Resumo de Aço (tabela por bitola) ────────────────────────────────────
   static pw.Widget _buildResumoAco({
@@ -940,8 +894,7 @@ class PdfPedidoTecnico {
 
       for (final pos in elemDet.posicoes) {
         final bitola = pos.bitolaNome.split('-').first.trim();
-        final compUnit = pos.comprimentos.values.fold<double>(0.0, (s, v) => s + v);
-        final compTotalCm = compUnit * pos.qtde * qtdeElem;
+        final compTotalCm = CalculoAco.comprimentoTotalPosicao(pos) * qtdeElem;
         final pesoTotal = _pesoTotalPosicao(pos) * qtdeElem;
 
         resumoPeso[bitola] = (resumoPeso[bitola] ?? 0) + pesoTotal;

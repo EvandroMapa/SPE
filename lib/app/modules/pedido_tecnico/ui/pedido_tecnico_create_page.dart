@@ -225,7 +225,13 @@ class _PedidoTecnicoCreatePageState
     );
 
     if (confirmar == true && mounted) {
-      await BackendClient.pedidosTecnicos.delete(pedido);
+      try {
+        await BackendClient.pedidosTecnicos.delete(pedido);
+      } catch (e) {
+        NotificationService.showNegative('Erro ao excluir', mensagemErro(e),
+            position: NotificationPosition.bottom);
+        return;
+      }
       if (mounted) {
         pop(context);
         NotificationService.showPositive(
@@ -244,9 +250,10 @@ class _PedidoTecnicoCreatePageState
     }
     final pedido = _pedidoAtual;
     if (pedido == null) return;
-    final det = BackendClient.detalhamentos.data
+    // Elementos do pedido vêm do snapshot gravado (estado no momento do pedido)
+    final det = pedido.detalhamentoDoPedido(BackendClient.detalhamentos.data
         .where((p) => p.id == pedido.detalhamentoId)
-        .firstOrNull ?? _detalhamentoSel;
+        .firstOrNull ?? _detalhamentoSel);
 
     final pdfBytes = await PdfPedidoTecnico.gerar(
       pedido: pedido,
@@ -267,9 +274,10 @@ class _PedidoTecnicoCreatePageState
     }
     final pedido = _pedidoAtual;
     if (pedido == null) return;
-    final det = BackendClient.detalhamentos.data
+    // Elementos do pedido vêm do snapshot gravado (estado no momento do pedido)
+    final det = pedido.detalhamentoDoPedido(BackendClient.detalhamentos.data
         .where((p) => p.id == pedido.detalhamentoId)
-        .firstOrNull ?? _detalhamentoSel;
+        .firstOrNull ?? _detalhamentoSel);
 
     final pdfBytes = await PdfPedidoTecnico.gerarElementos(
       pedido: pedido,
@@ -295,9 +303,10 @@ class _PedidoTecnicoCreatePageState
       NotificationService.showNegative('Pedido não salvo', 'Salve o pedido antes de gerar etiquetas.', position: NotificationPosition.bottom);
       return;
     }
-    final det = BackendClient.detalhamentos.data
+    // Elementos do pedido vêm do snapshot gravado (estado no momento do pedido)
+    final det = pedido.detalhamentoDoPedido(BackendClient.detalhamentos.data
         .where((p) => p.id == pedido.detalhamentoId)
-        .firstOrNull ?? _detalhamentoSel;
+        .firstOrNull ?? _detalhamentoSel);
     if (det == null) {
       NotificationService.showNegative('Detalhamento não encontrado', 'Não foi possível carregar os dados do detalhamento.', position: NotificationPosition.bottom);
       return;
@@ -417,9 +426,7 @@ class _PedidoTecnicoCreatePageState
     final list = BackendClient.detalhamentos.data
         .where((p) =>
             p.clienteId == _clienteSel!.id &&
-            p.obraId == _obraSel!.id &&
-            p.isLiberado &&
-            !p.isArquivado)
+            p.obraId == _obraSel!.id)
         .toList();
     if (_detalhamentoSel != null && !list.any((d) => d.id == _detalhamentoSel!.id)) {
       list.insert(0, _detalhamentoSel!);
@@ -3100,11 +3107,8 @@ class _PedidoTecnicoCreatePageState
       final bitolas = BackendClient.bitolas.data;
       form.elementosSelecionados = detalhamento.elementos
           .expand((e) {
-            // Calcular peso unitário (1 peça) a partir das posições
-            final pesoUnitCalculado = e.calcularPesoUnitario(bitolas);
-            final pesoUnit = e.pesoTotal > 0 && e.quantidadeExpandida > 0
-                ? e.pesoTotal / e.quantidadeExpandida
-                : pesoUnitCalculado;
+            // Peso unitário (1 peça) sempre calculado a partir das posições
+            final pesoUnit = e.calcularPesoUnitario(bitolas);
             return e.todosNomes.map((nome) {
               final qtdeItem = nome == e.nome
                   ? e.quantidade

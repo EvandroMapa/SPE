@@ -137,9 +137,10 @@ class PedidoTecnicoModel {
       'identificador': identificador,
       'detalhamento_id': detalhamentoId,
       'detalhamento_codigo': detalhamentoCodigo,
-      'cliente_id': clienteId,
+      // IDs vazios viram null (o banco não aceita '' em coluna uuid)
+      'cliente_id': clienteId.isEmpty ? null : clienteId,
       'cliente_nome': clienteNome,
-      'obra_id': obraId,
+      'obra_id': obraId.isEmpty ? null : obraId,
       'obra_nome': obraNome,
       'status': status,
       'observacao': observacao,

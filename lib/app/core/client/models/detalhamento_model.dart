@@ -158,9 +158,10 @@ class DetalhamentoModel {
   /// não conhece esses campos e os apagaria ao salvar.
   Map<String, dynamic> toSupabaseMap() {
     final map = <String, dynamic>{
-      'cliente_id': clienteId,
+      // IDs vazios viram null (o banco não aceita '' em coluna uuid)
+      'cliente_id': clienteId.isEmpty ? null : clienteId,
       'cliente_nome': clienteNome,
-      'obra_id': obraId,
+      'obra_id': obraId.isEmpty ? null : obraId,
       'obra_nome': obraNome,
       'desenho': desenho.isEmpty ? null : desenho,
       'pavimento': pavimento.isEmpty ? null : pavimento,
@@ -181,7 +182,7 @@ class DetalhamentoModel {
         ...toSupabaseMap(),
         'etapa_kanban': etapaKanban.name,
         'prioridade': prioridade,
-        'demanda_id': demandaId,
+        'demanda_id': (demandaId ?? '').isEmpty ? null : demandaId,
         'is_arquivado': isArquivado,
         'situacao': situacao.name,
       };

@@ -6,6 +6,7 @@ import 'package:acoplan/app/core/client/models/pedido_tecnico_model.dart';
 import 'package:acoplan/app/core/components/app_scaffold.dart';
 import 'package:acoplan/app/core/components/cadastro/cadastro_form.dart';
 import 'package:acoplan/app/core/components/cadastro/cadastro_lista.dart';
+import 'package:acoplan/app/core/dialogs/confirm_dialog.dart';
 import 'package:acoplan/app/core/services/notification_service.dart';
 import 'package:acoplan/app/core/utils/app_colors.dart';
 import 'package:acoplan/app/core/utils/app_css.dart';
@@ -26,7 +27,6 @@ import 'package:intl/intl.dart';
 import 'package:overlay_support/overlay_support.dart';
 import 'package:printing/printing.dart';
 
-part 'widgets/dashboard_stage_tab_card.dart';
 part 'widgets/dashboard_demanda_card.dart';
 part 'widgets/dashboard_demanda_form_dialog.dart';
 part 'widgets/dashboard_demanda_detalhes_dialog.dart';
@@ -36,8 +36,11 @@ part 'widgets/dashboard_detalhamento_card.dart';
 part 'widgets/dashboard_pedido_card.dart';
 part 'widgets/dashboard_ciclo.dart';
 
+/// Demandas (aba 0), Detalhamentos (aba 1) e Pedidos técnicos (aba 2).
+/// Cada aba é aberta como uma área própria pelo menu.
 class DashboardPage extends StatefulWidget {
-  const DashboardPage({super.key});
+  final int aba;
+  const DashboardPage({this.aba = 0, super.key});
 
   @override
   State<DashboardPage> createState() => _DashboardPageState();
@@ -46,7 +49,7 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   final TextEditingController _searchCtrl = TextEditingController();
   String _filter = '';
-  int _activeTab = 0; // 0 = Demandas (Kanban), 1 = Projetos, 2 = Pedidos
+  late final int _activeTab = widget.aba; // 0 = Demandas (Kanban), 1 = Detalhamentos, 2 = Pedidos
   String _prioridadeFiltro = 'todas'; // 'todas' | 'alta' | 'urgente'
 
   // Estados da Aba 2 (Projetos / Detalhamentos)
@@ -55,8 +58,8 @@ class _DashboardPageState extends State<DashboardPage> {
   String _ordenarProjetosPor = 'codigo'; // 'codigo' | 'cliente' | 'obra' | 'peso' | 'elementos'
   bool _ordenarProjetosAsc = false;
 
-  // Situação mostrada na aba Projetos: 'projeto' | 'orcamento' | 'cancelado' | 'arquivados'
-  String _situacaoFiltroProjetos = 'projeto';
+  // Detalhamentos: 'ativos' | 'arquivados'
+  String _situacaoFiltroProjetos = 'ativos';
 
   // Estados da Aba 3 (Pedidos Técnicos)
   String _statusFiltroPedido = 'todos'; // 'todos' | 'aberto' | 'cancelado'
@@ -377,22 +380,12 @@ class _DashboardPageState extends State<DashboardPage> {
                   final uniqueDetalhamentos =
                       detalhamentos.where((d) => seenIds.add(d.id)).toList();
 
-                  // Planilhas em planejamento ficam no Kanban (dentro da demanda)
-                  final foraDoPlanejamento = uniqueDetalhamentos
-                      .where((d) => d.situacao != DetalhamentoSituacao.planejamento)
-                      .toList();
                   final contagemSituacao = <String, int>{
-                    'projeto': foraDoPlanejamento.where((d) => !d.isArquivado && d.situacao == DetalhamentoSituacao.projeto).length,
-                    'orcamento': foraDoPlanejamento.where((d) => !d.isArquivado && d.situacao == DetalhamentoSituacao.orcamento).length,
-                    'cancelado': foraDoPlanejamento.where((d) => !d.isArquivado && d.situacao == DetalhamentoSituacao.cancelado).length,
-                    'arquivados': foraDoPlanejamento.where((d) => d.isArquivado).length,
+                    'ativos': uniqueDetalhamentos.where((d) => !d.isArquivado).length,
+                    'arquivados': uniqueDetalhamentos.where((d) => d.isArquivado).length,
                   };
-                  var filteredDetalhamentos = foraDoPlanejamento.where((p) {
-                    if (_situacaoFiltroProjetos == 'arquivados') {
-                      if (!p.isArquivado) return false;
-                    } else if (p.isArquivado || p.situacao.name != _situacaoFiltroProjetos) {
-                      return false;
-                    }
+                  var filteredDetalhamentos = uniqueDetalhamentos.where((p) {
+                    if (p.isArquivado != (_situacaoFiltroProjetos == 'arquivados')) return false;
                     if (q.isEmpty) return true;
                     return p.codigo.toString().contains(q) ||
                         p.clienteNome.toLowerCase().contains(q) ||
@@ -451,62 +444,9 @@ class _DashboardPageState extends State<DashboardPage> {
 
                   return Column(
                     children: [
-                      // ── Barra Superior Única: As 3 Abas Dividindo a Largura (Compactas: 38px) ──
-                      Container(
-                        color: Colors.white,
-                        padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: _StageTabCard(
-                                index: 0,
-                                currentIndex: _activeTab,
-                                badgeColor: const Color(0xFF2563EB),
-                                icon: Icons.view_kanban_rounded,
-                                title: '1. Demandas',
-                                count: filteredDemandas.length,
-                                onTap: () => setState(() {
-                                  _activeTab = 0;
-                                  _searchCtrl.clear();
-                                  _filter = '';
-                                }),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: _StageTabCard(
-                                index: 1,
-                                currentIndex: _activeTab,
-                                badgeColor: const Color(0xFF0D9488),
-                                icon: Icons.architecture_rounded,
-                                title: '2. Projetos',
-                                count: filteredDetalhamentos.length,
-                                onTap: () => setState(() {
-                                  _activeTab = 1;
-                                  _searchCtrl.clear();
-                                  _filter = '';
-                                }),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: _StageTabCard(
-                                index: 2,
-                                currentIndex: _activeTab,
-                                badgeColor: const Color(0xFF6366F1),
-                                icon: Icons.receipt_long_rounded,
-                                title: '3. Pedidos técnicos',
-                                count: filteredPedidos.length,
-                                onTap: () => setState(() {
-                                  _activeTab = 2;
-                                  _searchCtrl.clear();
-                                  _filter = '';
-                                }),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                      // Cada aba agora é uma área própria do menu (Demandas,
+                      // Detalhamentos, Pedidos técnicos): sem barra de abas.
+                      Container(color: Colors.white, height: 10),
 
                       // ── Linha Única de Ações, Filtros e Busca (Compacta: 38px) ──
                       Container(
@@ -586,7 +526,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                 onPressed: _abrirNovoProjeto,
                                 icon: const Icon(Icons.add_rounded,
                                     size: 16, color: Colors.white),
-                                label: const Text('Novo Projeto'),
+                                label: const Text('Novo detalhamento'),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF0F172A),
                                   foregroundColor: Colors.white,
@@ -601,7 +541,7 @@ class _DashboardPageState extends State<DashboardPage> {
                               ),
                               const SizedBox(width: 8),
                               Tooltip(
-                                message: 'Duplicar projeto selecionado',
+                                message: 'Duplicar detalhamento selecionado',
                                 child: OutlinedButton.icon(
                                   onPressed: _selecionadoDetalhamentoId != null
                                       ? _duplicarProjeto
@@ -670,9 +610,7 @@ class _DashboardPageState extends State<DashboardPage> {
                               Container(height: 18, width: 1, color: const Color(0xFFE2E8F0)),
                               const SizedBox(width: 12),
                               for (final (rotulo, valor) in [
-                                ('Projetos', 'projeto'),
-                                ('Orçamentos', 'orcamento'),
-                                ('Cancelados', 'cancelado'),
+                                ('Ativos', 'ativos'),
                                 ('Arquivados', 'arquivados'),
                               ]) ...[
                                 _filtroSituacaoChip(rotulo, valor, contagemSituacao[valor] ?? 0),
@@ -730,7 +668,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                   hintText: _activeTab == 0
                                       ? 'Buscar por obra, cliente ou etapa...'
                                       : (_activeTab == 1
-                                          ? 'Buscar projetos por código, obra...'
+                                          ? 'Buscar detalhamentos por código, obra...'
                                           : 'Buscar por localizador, obra...'),
                                   hintStyle: AppCss.minimumRegular
                                       .setSize(12)
@@ -1253,9 +1191,9 @@ class _DashboardPageState extends State<DashboardPage> {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
         child: _buildEmptyTab(
           icon: Icons.architecture_outlined,
-          title: 'Nenhum projeto encontrado',
+          title: 'Nenhum detalhamento encontrado',
           subtitle: 'Inicie um novo detalhamento de peças de aço.',
-          actionLabel: '+ Criar Projeto',
+          actionLabel: '+ Novo detalhamento',
           onAction: _abrirNovoProjeto,
         ),
       );
@@ -1293,21 +1231,11 @@ class _DashboardPageState extends State<DashboardPage> {
           }),
           onEditar: () => _abrirProjeto(detalhamento),
           onPdf: () => _gerarPdfProjeto(detalhamento),
-          // Projeto que veio de demanda tem histórico: cancela/arquiva, não exclui
-          onExcluir: detalhamento.demandaId == null
-              ? () => _confirmarExclusaoProjeto(detalhamento)
-              : null,
+          onExcluir: () => _confirmarExclusaoProjeto(detalhamento),
           onAbrirPedido: _abrirPedido,
-          onGerarPedido: detalhamento.podeEmitirPedido
+          // Única trava: pedido técnico só com a demanda em Finalizado / Liberado
+          onGerarPedido: demandaCtrl.detalhamentoLiberadoParaPedido(detalhamento)
               ? () => _abrirNovoPedidoParaDetalhamento(detalhamento)
-              : null,
-          onConverter: detalhamento.situacao == DetalhamentoSituacao.orcamento && !detalhamento.isArquivado
-              ? () => _converterOrcamento(context, detalhamento)
-              : null,
-          onCancelar: (detalhamento.situacao == DetalhamentoSituacao.projeto ||
-                      detalhamento.situacao == DetalhamentoSituacao.orcamento) &&
-                  !detalhamento.isArquivado
-              ? () => _cancelarProjeto(context, detalhamento)
               : null,
           onArquivar: () => detalhamento.isArquivado
               ? BackendClient.detalhamentos.desarquivarProjeto(detalhamento.id)

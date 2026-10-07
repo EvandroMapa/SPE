@@ -75,6 +75,8 @@ class UsuarioTipoCreateModel {
   bool isOperador = false;
   bool isArmador = false;
   bool isEdit = false;
+  /// Áreas visíveis; null = todas
+  List<String>? modulos;
 
   UsuarioTipoCreateModel()
       : id = '',
@@ -88,6 +90,7 @@ class UsuarioTipoCreateModel {
     isPermitirEditarElementos = m.isPermitirEditarElementos;
     isOperador = m.isOperador;
     isArmador = m.isArmador;
+    modulos = m.modulos == null ? null : List<String>.from(m.modulos!);
   }
 
   UsuarioTipoModel toModel() => UsuarioTipoModel(
@@ -98,5 +101,6 @@ class UsuarioTipoCreateModel {
         isOperador: isOperador,
         isArmador: isArmador,
         createdAt: DateTime.now(),
+        modulos: modulos,
       );
 }

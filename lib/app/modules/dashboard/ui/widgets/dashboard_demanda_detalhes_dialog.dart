@@ -367,46 +367,12 @@ class _DemandaDetalhesDialog extends StatelessWidget {
                 ),
               ],
 
-              // Desfecho (decisão em Finalizado)
-              if (demanda.desfecho != null) ...[
-                const SizedBox(height: 16),
-                Text('DESFECHO',
-                    style: AppCss.minimumBold.setSize(11).setColor(const Color(0xFF64748B)).setLetterSpacing(0.8)),
-                const SizedBox(height: 8),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: _corDesfecho(demanda.desfecho!).withValues(alpha: 0.06),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: _corDesfecho(demanda.desfecho!).withValues(alpha: 0.3)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(demanda.desfecho!.label,
-                          style: AppCss.minimumBold.setSize(13).setColor(_corDesfecho(demanda.desfecho!))),
-                      if (demanda.motivoDesfecho.isNotEmpty)
-                        Text(demanda.motivoDesfecho, style: AppCss.minimumRegular.setSize(12)),
-                      Text(
-                        [
-                          if (demanda.desfechoPor.isNotEmpty) 'por ${demanda.desfechoPor}',
-                          if (demanda.desfechoEm != null)
-                            'em ${DateFormat('dd/MM/yyyy HH:mm').format(demanda.desfechoEm!.toLocal())}',
-                        ].join(' '),
-                        style: AppCss.minimumRegular.setSize(11).setColor(const Color(0xFF64748B)),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-
-              // Planilhas da demanda
+              // Etapas e detalhamentos da demanda
               const SizedBox(height: 16),
               Row(
                 children: [
                   Expanded(
-                    child: Text('PLANILHAS',
+                    child: Text('ETAPAS E DETALHAMENTOS',
                         style: AppCss.minimumBold.setSize(11).setColor(const Color(0xFF64748B)).setLetterSpacing(0.8)),
                   ),
                   TextButton.icon(
@@ -415,13 +381,12 @@ class _DemandaDetalhesDialog extends StatelessWidget {
                       foregroundColor: AppColors.statusProduzindo,
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                     ),
-                    onPressed: () => _abrirPlanilhasDemanda(context, demanda),
-                    icon: const Icon(Icons.description_outlined, size: 16),
+                    onPressed: () => _abrirEtapasDemanda(context, demanda),
+                    icon: const Icon(Icons.checklist, size: 16),
                     label: Text(
-                      () {
-                        final n = demandaCtrl.obterDetalhamentosDaDemanda(demanda).length;
-                        return n == 0 ? 'Criar planilha' : 'Ver $n planilha${n == 1 ? '' : 's'}';
-                      }(),
+                      demanda.etapas.isEmpty
+                          ? 'Definir etapas'
+                          : '${demanda.etapas.length} etapa(s) • ${demandaCtrl.obterDetalhamentosDaDemanda(demanda).length} detalhamento(s)',
                       style: AppCss.minimumBold.setSize(12).setColor(AppColors.statusProduzindo),
                     ),
                   ),

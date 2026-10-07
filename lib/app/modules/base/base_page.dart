@@ -1,3 +1,4 @@
+import 'package:acoplan/app/app_controller.dart';
 import 'package:acoplan/app/core/components/drawer/app_drawer.dart';
 import 'package:acoplan/app/core/components/stream_out.dart';
 import 'package:acoplan/app/core/enums/app_module.dart';
@@ -14,6 +15,15 @@ class BasePage extends StatelessWidget {
     return StreamOut<AppModule>(
       stream: baseCtrl.moduleStream.listen,
       builder: (context, module) {
+        // Área não permitida para o perfil: abre a primeira que ele pode ver
+        final usuario = appCtrl.usuario;
+        if (usuario != null && !usuario.podeVer(module.area)) {
+          final permitido = AppModule.values.where((m) => usuario.podeVer(m.area)).firstOrNull;
+          if (permitido != null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) => baseCtrl.setModule(permitido));
+            return const Scaffold(body: SizedBox.shrink());
+          }
+        }
         return Scaffold(
           backgroundColor: AppColors.neutralLightest,
           appBar: AppBar(

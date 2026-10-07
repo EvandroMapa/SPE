@@ -87,37 +87,43 @@ void _dadosDeExemplo() {
 }
 
 void _dadosDashboard() {
-  DemandaModel d(int cod, String cli, String obra, String etapaProj, DemandaEtapa etapa,
-          {String prio = 'normal', DemandaDesfecho? desfecho}) =>
+  DemandaEtapaModel et(String dem, String id, String nome, int o, [String? det]) =>
+      DemandaEtapaModel(id: id, demandaId: dem, nome: nome, ordem: o, detalhamentoId: det);
+  DemandaModel d(int cod, String cli, String obra, String escopo, DemandaEtapa etapa,
+          {String prio = 'normal', List<DemandaEtapaModel> etapas = const []}) =>
       DemandaModel(
         id: 'd$cod', ordem: cod, codigo: cod, clienteId: 'c12', clienteNome: cli, obraId: 'o120', obraNome: obra,
-        etapaProjeto: etapaProj, etapa: etapa, prioridade: prio, desfecho: desfecho,
+        etapaProjeto: escopo, etapa: etapa, prioridade: prio, etapas: etapas,
         solicitanteComercial: 'Carlos (Comercial)', criadoPorNome: 'Evandro', criadoEm: DateTime(2026, 10, cod),
       );
   BackendClient.demandas.dataStream.add([
-    d(1, 'Construtora Horizonte', 'Residencial Aurora', 'Fundações e blocos', DemandaEtapa.aguardandoFila, prio: 'urgente'),
-    d(2, 'Natália Xavier', 'Casa Xavier', 'Vigas baldrame', DemandaEtapa.aguardandoFila),
-    d(3, 'Living Materiais', 'Galpão Living', 'Pilares 1º pav.', DemandaEtapa.emProducao, prio: 'alta'),
-    d(4, 'Construtora Horizonte', 'Residencial Aurora', 'Lajes 2º pav.', DemandaEtapa.aguardandoCorrecao),
-    d(5, 'Natália Xavier', 'Casa Xavier', 'Pilares', DemandaEtapa.finalizadoLiberado, desfecho: DemandaDesfecho.projeto),
-    d(6, 'Living Materiais', 'Galpão Living', 'Cobertura', DemandaEtapa.finalizadoLiberado),
-    d(7, 'Construtora Horizonte', 'Torre B', 'Sapatas', DemandaEtapa.finalizadoLiberado, desfecho: DemandaDesfecho.orcamento),
+    d(1, 'Construtora Horizonte', 'Residencial Aurora', 'Estrutura completa', DemandaEtapa.aguardandoFila, prio: 'urgente'),
+    d(2, 'Natália Xavier', 'Casa Xavier', 'Fundações', DemandaEtapa.aguardandoFila,
+        etapas: [et('d2', 'e21', 'Sapatas', 1), et('d2', 'e22', 'Vigas baldrame', 2)]),
+    d(3, 'Living Materiais', 'Galpão Living', 'Estrutura', DemandaEtapa.emProducao, prio: 'alta', etapas: [
+      et('d3', 'e31', 'Sapatas', 1, 'det1'),
+      et('d3', 'e32', 'Vigas 0', 2, 'det1'),
+      et('d3', 'e33', 'Pilares', 3, 'det3'),
+      et('d3', 'e34', 'Vigas', 4),
+    ]),
+    d(4, 'Construtora Horizonte', 'Residencial Aurora', 'Lajes 2º pav.', DemandaEtapa.aguardandoCorrecao,
+        etapas: [et('d4', 'e41', 'Lajes 2º pav.', 1, 'det4')]),
+    d(5, 'Natália Xavier', 'Casa Xavier', 'Pilares', DemandaEtapa.finalizadoLiberado,
+        etapas: [et('d5', 'e51', 'Pilares', 1, 'det2')]),
   ]);
   final b = BackendClient.bitolas.data;
   PosicaoModel pos(String n, int q, double c) => PosicaoModel(
       id: 'p$n$q', posicao: n, bitolaId: b[1].id, bitolaNome: '10.0 - CA50', formaId: 'f1', formaCodigo: '1', qtde: q, comprimentos: {'T1': c});
-  DetalhamentoModel det(String id, int cod, String dem, String pav, DetalhamentoSituacao sit, {bool arq = false}) => DetalhamentoModel(
+  DetalhamentoModel det(String id, int cod, String dem, String pav, {String func = 'u1'}) => DetalhamentoModel(
         id: id, codigo: cod, clienteId: 'c11', clienteNome: 'Natália Xavier', obraId: 'o110', obraNome: 'Casa Xavier',
-        desenho: 'E-0$cod', pavimento: pav, demandaId: dem, situacao: sit, isArquivado: arq, funcionarioNome: 'Carla Souza',
+        desenho: 'E-0$cod', pavimento: pav, demandaId: dem, funcionarioId: func, funcionarioNome: 'Evandro',
         elementos: [ElementoModel(id: 'e$id', nome: 'P1', quantidade: 4, pesoTotal: 0, posicoes: [pos('1', 4, 300), pos('2', 20, 110)])],
       );
   BackendClient.detalhamentos.dataStream.add([
-    det('det1', 41, 'd3', 'Pilares 1º pav.', DetalhamentoSituacao.planejamento),
-    det('det2', 42, 'd5', 'Pilares', DetalhamentoSituacao.projeto),
-    det('det3', 43, 'd6', 'Cobertura - Tesouras', DetalhamentoSituacao.planejamento),
-    det('det4', 44, 'd6', 'Cobertura - Terças', DetalhamentoSituacao.planejamento),
-    det('det5', 45, 'd7', 'Sapatas', DetalhamentoSituacao.orcamento),
-    det('det6', 46, 'd5', 'Vigas', DetalhamentoSituacao.cancelado),
+    det('det1', 41, 'd3', 'Sapatas + Vigas 0'),
+    det('det3', 43, 'd3', 'Pilares'),
+    det('det4', 44, 'd4', 'Lajes 2º pav.', func: 'u2'),
+    det('det2', 42, 'd5', 'Pilares'),
   ]);
   BackendClient.pedidosTecnicos.dataStream.add([
     PedidoTecnicoModel(id: 'pt1', codigo: 7, identificador: 'Xavier-Casa.001', detalhamentoId: 'det2', detalhamentoCodigo: 42,
@@ -129,9 +135,22 @@ void _dadosDashboard() {
 
 Widget _tela(String nome) {
   switch (nome) {
+    case 'painel':
     case 'dashboard':
       _dadosDashboard();
       baseCtrl.setModule(AppModule.dashboard);
+      return const BasePage();
+    case 'demandas':
+      _dadosDashboard();
+      baseCtrl.setModule(AppModule.demandas);
+      return const BasePage();
+    case 'detalhamentos':
+      _dadosDashboard();
+      baseCtrl.setModule(AppModule.projetos);
+      return const BasePage();
+    case 'pedidos':
+      _dadosDashboard();
+      baseCtrl.setModule(AppModule.pedidosTecnicos);
       return const BasePage();
     case 'clientes':
       baseCtrl.setModule(AppModule.cliente);
@@ -143,7 +162,7 @@ Widget _tela(String nome) {
       baseCtrl.setModule(AppModule.bitolas);
       return const BasePage();
     case 'menu':
-      baseCtrl.setModule(AppModule.bitolas);
+      baseCtrl.setModule(AppModule.demandas);
       return const Scaffold(body: Row(children: [AppDrawerMenu()]));
     case 'bitola_form':
       return BitolaCreatePage(produto: BackendClient.bitolas.data[1]);

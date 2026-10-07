@@ -6,6 +6,9 @@ class UsuarioTipoModel {
   final bool isOperador;
   final bool isArmador;
   final DateTime createdAt;
+  /// Áreas que o perfil enxerga (painel, demandas, detalhamentos, pedidos).
+  /// null = todas.
+  final List<String>? modulos;
 
   UsuarioTipoModel({
     required this.id,
@@ -15,6 +18,7 @@ class UsuarioTipoModel {
     required this.isOperador,
     required this.isArmador,
     required this.createdAt,
+    this.modulos,
   });
 
   factory UsuarioTipoModel.empty() => UsuarioTipoModel(
@@ -38,6 +42,7 @@ class UsuarioTipoModel {
       createdAt: map['created_at'] != null
           ? DateTime.tryParse(map['created_at'].toString()) ?? DateTime.now()
           : DateTime.now(),
+      modulos: map['modulos'] is List ? List<String>.from((map['modulos'] as List).map((e) => e.toString())) : null,
     );
   }
 
@@ -48,6 +53,7 @@ class UsuarioTipoModel {
       'permitir_editar_elementos': isPermitirEditarElementos,
       'is_operador': isOperador,
       'is_armador': isArmador,
+      'modulos': modulos,
     };
     if (id.length == 36) {
       map['id'] = id;

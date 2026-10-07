@@ -18,6 +18,15 @@ class AppDrawerMenu extends StatefulWidget {
 }
 
 class _AppDrawerMenuState extends State<AppDrawerMenu> {
+  static const _areasPrincipais = [
+    AppModule.dashboard,
+    AppModule.demandas,
+    AppModule.projetos,
+    AppModule.pedidosTecnicos,
+  ];
+
+  bool _pode(AppModule m) => appCtrl.usuario?.podeVer(m.area) ?? true;
+
   static const _cadastros = [
     AppModule.cliente,
     AppModule.bitolas,
@@ -50,41 +59,55 @@ class _AppDrawerMenuState extends State<AppDrawerMenu> {
                 child: ListView(
                   padding: EdgeInsets.zero,
                   children: [
-                    _DrawerItem(
-                      module: AppModule.dashboard,
-                      ativo: atual == AppModule.dashboard,
-                      onTap: () => _navegar(AppModule.dashboard),
-                    ),
-                    _divisor(),
-                    Theme(
-                      // Sem as linhas que o ExpansionTile desenha ao abrir
-                      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                      child: ExpansionTile(
-                        initiallyExpanded: _cadastrosAberto || cadastroAtivo,
-                        onExpansionChanged: (v) => _cadastrosAberto = v,
-                        iconColor: AppColors.neutralDark,
-                        collapsedIconColor: AppColors.neutralDark,
-                        tilePadding: const EdgeInsets.only(left: 16, right: 16),
-                        leading: Icon(Symbols.folder_open, color: AppColors.neutralDark),
-                        title: Text(
-                          'Cadastros',
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: AppColors.black,
-                            fontWeight: cadastroAtivo ? FontWeight.w700 : FontWeight.w500,
-                          ),
+                    // Áreas de trabalho (cada perfil vê só as suas)
+                    for (final m in _areasPrincipais)
+                      if (_pode(m))
+                        _DrawerItem(
+                          module: m,
+                          ativo: atual == m,
+                          onTap: () => _navegar(m),
                         ),
-                        children: [
-                          for (final m in _cadastros)
-                            _DrawerItem(
-                              module: m,
-                              ativo: atual == m,
-                              recuado: true,
-                              onTap: () => _navegar(m),
+                    _divisor(),
+                    if (_pode(AppModule.cliente))
+                      Theme(
+                        // Sem as linhas que o ExpansionTile desenha ao abrir
+                        data: Theme.of(
+                          context,
+                        ).copyWith(dividerColor: Colors.transparent),
+                        child: ExpansionTile(
+                          initiallyExpanded: _cadastrosAberto || cadastroAtivo,
+                          onExpansionChanged: (v) => _cadastrosAberto = v,
+                          iconColor: AppColors.neutralDark,
+                          collapsedIconColor: AppColors.neutralDark,
+                          tilePadding: const EdgeInsets.only(
+                            left: 16,
+                            right: 16,
+                          ),
+                          leading: Icon(
+                            Symbols.folder_open,
+                            color: AppColors.neutralDark,
+                          ),
+                          title: Text(
+                            'Cadastros',
+                            style: TextStyle(
+                              fontSize: 15,
+                              color: AppColors.black,
+                              fontWeight: cadastroAtivo
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
                             ),
-                        ],
+                          ),
+                          children: [
+                            for (final m in _cadastros)
+                              _DrawerItem(
+                                module: m,
+                                ativo: atual == m,
+                                recuado: true,
+                                onTap: () => _navegar(m),
+                              ),
+                          ],
+                        ),
                       ),
-                    ),
                     _divisor(),
                   ],
                 ),
@@ -92,7 +115,13 @@ class _AppDrawerMenuState extends State<AppDrawerMenu> {
               _divisor(),
               ListTile(
                 leading: Icon(Icons.logout, color: AppColors.error, size: 22),
-                title: Text('Sair', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w600)),
+                title: Text(
+                  'Sair',
+                  style: TextStyle(
+                    color: AppColors.error,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 onTap: () {
                   Navigator.of(context).pop();
                   appCtrl.logout();
@@ -106,7 +135,8 @@ class _AppDrawerMenuState extends State<AppDrawerMenu> {
     );
   }
 
-  Widget _divisor() => Divider(height: 1, color: AppColors.black.withValues(alpha: 0.08));
+  Widget _divisor() =>
+      Divider(height: 1, color: AppColors.black.withValues(alpha: 0.08));
 }
 
 class _DrawerCabecalho extends StatelessWidget {
@@ -120,7 +150,12 @@ class _DrawerCabecalho extends StatelessWidget {
       width: double.infinity,
       height: 190,
       color: AppColors.primaryMain,
-      padding: EdgeInsets.fromLTRB(16, 16 + MediaQuery.paddingOf(context).top, 8, 16),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        16 + MediaQuery.paddingOf(context).top,
+        8,
+        16,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -136,15 +171,22 @@ class _DrawerCabecalho extends StatelessWidget {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
+                child: Image.asset(
+                  'assets/images/logo.png',
+                  fit: BoxFit.contain,
+                ),
               ),
               const Spacer(),
               IconButton(
                 tooltip: 'Configurações',
-                style: IconButton.styleFrom(backgroundColor: Colors.transparent),
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                ),
                 onPressed: () {
                   Navigator.of(context).pop();
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ConfigPage()));
+                  Navigator.of(
+                    context,
+                  ).push(MaterialPageRoute(builder: (_) => const ConfigPage()));
                 },
                 icon: const Icon(Icons.settings_outlined, color: Colors.white),
               ),
@@ -162,7 +204,9 @@ class _DrawerCabecalho extends StatelessWidget {
             perfil.isNotEmpty ? perfil : (user?.email ?? ''),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: AppCss.minimumRegular.setSize(12.5).setColor(Colors.white.withValues(alpha: 0.7)),
+            style: AppCss.minimumRegular
+                .setSize(12.5)
+                .setColor(Colors.white.withValues(alpha: 0.7)),
           ),
         ],
       ),
@@ -190,7 +234,10 @@ class _DrawerItem extends StatelessWidget {
       decoration: BoxDecoration(
         color: ativo ? AppColors.brandSoft : null,
         border: Border(
-          left: BorderSide(color: ativo ? AppColors.brand : Colors.transparent, width: 3),
+          left: BorderSide(
+            color: ativo ? AppColors.brand : Colors.transparent,
+            width: 3,
+          ),
         ),
       ),
       child: ListTile(
@@ -238,7 +285,11 @@ class _DrawerVersao extends StatelessWidget {
               ),
               child: const Text(
                 'DEV',
-                style: TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.w700),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
             const SizedBox(width: 6),

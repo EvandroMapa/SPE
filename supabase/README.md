@@ -10,6 +10,7 @@ mais de uma vez sem efeito colateral.
 | 2 | `20261006_02_auth.sql` | Antes de publicar o app novo | Não |
 | 3 | `20261006_03_rls.sql` | Depois que todos entrarem no app novo **e** o plugin novo estiver instalado | **Sim** (app e plugin antigos param) |
 | 4 | `20261007_04_ciclo_demanda.sql` | Antes de publicar a versão com o ciclo Demanda → Projeto | Não |
+| 5 | `20261007_05_etapas_e_areas.sql` | Antes de publicar a versão com Painel e áreas separadas | Não |
 
 ## Passo a passo
 
@@ -59,6 +60,12 @@ mais de uma vez sem efeito colateral.
   planejamento; cancelado não reativa; pedido técnico só de projeto liberado.
 - RPCs `definir_desfecho_demanda`, `converter_orcamento_em_projeto` e
   `cancelar_projeto` (cancela também os pedidos técnicos abertos).
+
+**05 – etapas e áreas**
+- Tabela `demanda_etapas`: etapas da demanda e o detalhamento que cobre cada uma.
+- `perfis.modulos`: áreas que cada perfil enxerga (null = todas).
+- Pedido técnico só com a demanda em Finalizado / Liberado.
+- Desativa as regras de desfecho da 04 (situação volta a "projeto" para todos).
 
 ## Depois do 03
 

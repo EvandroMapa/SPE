@@ -199,18 +199,6 @@ class _DemandaCard extends StatelessWidget {
             ),
             const SizedBox(height: 5),
 
-            // Desfecho (Projeto / Orçamento)
-            if (demanda.desfecho != null) ...[
-              _SeloCiclo(
-                demanda.desfecho == DemandaDesfecho.projeto
-                    ? 'Projeto'
-                    : demanda.desfecho!.label,
-                _corDesfecho(demanda.desfecho!),
-                icon: demanda.travada ? Icons.lock_outline : null,
-              ),
-              const SizedBox(height: 4),
-            ],
-
             // Obra Principal
             Text(
               demanda.obraNome,
@@ -307,7 +295,7 @@ class _DemandaCard extends StatelessWidget {
             ),
 
             // Planilhas (detalhamentos) da demanda
-            _linhaPlanilhas(context),
+            _linhaEtapas(context),
 
             // Motivo de correção se houver
             if (demanda.motivoCorrecao != null &&
@@ -638,124 +626,35 @@ class _DemandaCard extends StatelessWidget {
         );
 
       case DemandaEtapa.finalizadoLiberado:
-        // Virou projeto: travada, só arquivar
-        if (demanda.travada) {
-          return Row(
-            children: [
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 7),
-                  decoration: BoxDecoration(
-                    color: AppColors.statusPronto.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.lock_outline,
-                        size: 12,
-                        color: AppColors.statusPronto,
-                      ),
-                      const SizedBox(width: 4),
-                      Flexible(
-                        child: Text(
-                          'Virou projeto',
-                          overflow: TextOverflow.ellipsis,
-                          style: AppCss.minimumBold
-                              .setSize(10)
-                              .setColor(AppColors.statusPronto),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 4),
-              Expanded(child: _botaoArquivar()),
-            ],
-          );
-        }
         return Row(
           children: [
-            if (demanda.desfecho == null)
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () {
-                    onMover(DemandaEtapa.corrigindo);
-                    NotificationService.showNeutral(
-                      'Demanda Retornada',
-                      '${demanda.obraNome} retornou para Corrigindo.',
-                      position: NotificationPosition.bottom,
-                    );
-                  },
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 6,
-                      horizontal: 2,
-                    ),
-                    side: const BorderSide(color: Color(0xFFCBD5E1)),
-                    backgroundColor: const Color(0xFFF8FAFC),
-                    foregroundColor: const Color(0xFF475569),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                  ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.arrow_back_rounded, size: 12),
-                      SizedBox(width: 3),
-                      Flexible(
-                        child: Text(
-                          'Corrigindo',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-            else
-              // Orçamento: pode ser arquivado enquanto aguarda o cliente
-              Expanded(child: _botaoArquivar()),
-            const SizedBox(width: 4),
             Expanded(
-              child: ElevatedButton.icon(
-                onPressed: () => _abrirDesfecho(context, demanda),
-                icon: const Icon(
-                  Icons.flag_outlined,
-                  size: 13,
-                  color: Colors.white,
+              child: OutlinedButton(
+                onPressed: () => onMover(DemandaEtapa.corrigindo),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                  side: const BorderSide(color: Color(0xFFCBD5E1)),
+                  backgroundColor: const Color(0xFFF8FAFC),
+                  foregroundColor: const Color(0xFF475569),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                 ),
-                label: Text(
-                  demanda.desfecho == DemandaDesfecho.orcamento
-                      ? 'Aprovar / encerrar'
-                      : 'Desfecho',
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.statusPronto,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 6,
-                    horizontal: 4,
-                  ),
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  textStyle: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.arrow_back_rounded, size: 12),
+                    SizedBox(width: 3),
+                    Flexible(
+                      child: Text('Corrigindo',
+                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                          overflow: TextOverflow.ellipsis),
+                    ),
+                  ],
                 ),
               ),
             ),
+            const SizedBox(width: 4),
+            Expanded(child: _botaoArquivar()),
           ],
         );
     }
@@ -781,56 +680,81 @@ class _DemandaCard extends StatelessWidget {
     );
   }
 
-  /// Planilhas da demanda: abre a lista (ou cria a primeira)
-  Widget _linhaPlanilhas(BuildContext context) {
-    final planilhas = demandaCtrl.obterDetalhamentosDaDemanda(demanda);
-    final podeCriar = demandaCtrl.podeCriarPlanilha(demanda);
-    if (planilhas.isEmpty && !podeCriar) return const SizedBox.shrink();
-    final vazia = planilhas.isEmpty;
+  /// Etapas da demanda e quantas já têm detalhamento; abre a janela de
+  /// etapas e detalhamentos.
+  Widget _linhaEtapas(BuildContext context) {
+    final etapas = demanda.etapas;
+    final cobertas = etapas.where((e) => e.temDetalhamento).length;
+    final dets = demandaCtrl.obterDetalhamentosDaDemanda(demanda).length;
+    final vazia = etapas.isEmpty;
     final cor = vazia ? AppColors.statusProduzindo : AppColors.neutralDark;
-    final kg = planilhas.fold<double>(
-      0,
-      (s, p) => s + p.pesoCalculado(BackendClient.bitolas.data),
-    );
     return Padding(
       padding: const EdgeInsets.only(top: 5),
       child: InkWell(
-        onTap: () => _abrirPlanilhasDemanda(context, demanda),
+        onTap: () => _abrirEtapasDemanda(context, demanda),
         borderRadius: BorderRadius.circular(4),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
           decoration: BoxDecoration(
-            color: vazia
-                ? AppColors.statusProduzindo.withValues(alpha: 0.06)
-                : const Color(0xFFF8FAFC),
+            color: vazia ? AppColors.statusProduzindo.withValues(alpha: 0.06) : const Color(0xFFF8FAFC),
             borderRadius: BorderRadius.circular(4),
             border: Border.all(
-              color: vazia
-                  ? AppColors.statusProduzindo.withValues(alpha: 0.3)
-                  : const Color(0xFFE2E8F0),
-            ),
+                color: vazia ? AppColors.statusProduzindo.withValues(alpha: 0.3) : const Color(0xFFE2E8F0)),
           ),
-          child: Row(
-            children: [
-              Icon(
-                vazia ? Icons.note_add_outlined : Icons.description_outlined,
-                size: 11,
-                color: cor,
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Text(
-                  vazia
-                      ? 'Criar planilha'
-                      : '${planilhas.length} planilha${planilhas.length == 1 ? '' : 's'}${kg > 0 ? ' • ${_formatarPeso(kg)}' : ''}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppCss.minimumBold.setSize(10).setColor(cor),
+          child: vazia
+              ? Row(
+                  children: [
+                    Icon(Icons.playlist_add, size: 12, color: cor),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text('Definir etapas',
+                          style: AppCss.minimumBold.setSize(10).setColor(cor)),
+                    ),
+                    Icon(Icons.chevron_right, size: 12, color: cor),
+                  ],
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.checklist, size: 12, color: cor),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            '$cobertas/${etapas.length} etapa${etapas.length == 1 ? '' : 's'} • $dets detalhamento${dets == 1 ? '' : 's'}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppCss.minimumBold.setSize(10).setColor(cor),
+                          ),
+                        ),
+                        Icon(Icons.chevron_right, size: 12, color: cor),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Wrap(
+                      spacing: 3,
+                      runSpacing: 3,
+                      children: [
+                        for (final e in etapas)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: e.temDetalhamento
+                                  ? AppColors.statusPronto.withValues(alpha: 0.10)
+                                  : AppColors.neutralLightest,
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                            child: Text(
+                              e.nome,
+                              style: AppCss.minimumRegular.setSize(9).setColor(
+                                  e.temDetalhamento ? AppColors.statusPronto : AppColors.neutralMedium),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
                 ),
-              ),
-              Icon(Icons.chevron_right, size: 12, color: cor),
-            ],
-          ),
         ),
       ),
     );

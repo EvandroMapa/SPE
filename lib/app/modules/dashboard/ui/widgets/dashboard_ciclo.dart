@@ -1,39 +1,31 @@
 part of '../dashboard_page.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Ciclo Demanda → Projeto: planilhas da demanda, desfecho, cancelamento de
-// projeto e histórico. As regras valem no banco (migração 04); aqui é a tela.
+// Demanda → Etapas → Detalhamentos
+// A demanda (Kanban) é dividida em etapas (Sapatas, Vigas baldrame...). Cada
+// detalhamento cobre uma ou mais etapas e pode ganhar/perder etapas depois.
+// Única trava: pedido técnico só com a demanda em Finalizado / Liberado.
 // ─────────────────────────────────────────────────────────────────────────────
-
-Color _corSituacao(DetalhamentoSituacao s) {
-  switch (s) {
-    case DetalhamentoSituacao.planejamento:
-      return AppColors.statusProduzindo;
-    case DetalhamentoSituacao.orcamento:
-      return AppColors.statusAtencao;
-    case DetalhamentoSituacao.projeto:
-      return AppColors.statusPronto;
-    case DetalhamentoSituacao.cancelado:
-      return AppColors.statusCritico;
-  }
-}
-
-Color _corDesfecho(DemandaDesfecho d) {
-  switch (d) {
-    case DemandaDesfecho.projeto:
-      return AppColors.statusPronto;
-    case DemandaDesfecho.orcamento:
-      return AppColors.statusAtencao;
-    case DemandaDesfecho.desistencia:
-      return AppColors.statusCritico;
-  }
-}
 
 String _formatarPeso(double kg) => kg >= 1000
     ? '${NumberFormat('#,##0.00', 'pt_BR').format(kg / 1000)} t'
     : '${NumberFormat('#,##0.0', 'pt_BR').format(kg)} kg';
 
-/// Selo pequeno e colorido (situação/desfecho)
+Color _corEtapaKanban(DemandaEtapa e) {
+  switch (e) {
+    case DemandaEtapa.aguardandoFila:
+      return AppColors.statusAguardando;
+    case DemandaEtapa.emProducao:
+      return AppColors.statusProduzindo;
+    case DemandaEtapa.aguardandoCorrecao:
+    case DemandaEtapa.corrigindo:
+      return AppColors.statusAtencao;
+    case DemandaEtapa.finalizadoLiberado:
+      return AppColors.statusPronto;
+  }
+}
+
+/// Selo pequeno e colorido
 class _SeloCiclo extends StatelessWidget {
   final String texto;
   final Color cor;
@@ -51,409 +43,457 @@ class _SeloCiclo extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (icon != null) ...[Icon(icon, size: 10, color: cor), const SizedBox(width: 3)],
-          Text(texto.toUpperCase(), style: AppCss.minimumBold.setSize(9).setColor(cor)),
+          if (icon != null) ...[
+            Icon(icon, size: 10, color: cor),
+            const SizedBox(width: 3),
+          ],
+          Text(
+            texto.toUpperCase(),
+            style: AppCss.minimumBold.setSize(9).setColor(cor),
+          ),
         ],
       ),
     );
   }
 }
 
-// ── Planilhas da demanda ───────────────────────────────────────────────────
+// ── Etapas e detalhamentos da demanda ───────────────────────────────────────
 
-Future<void> _abrirPlanilhasDemanda(BuildContext context, DemandaModel demanda) async {
-  final planilhas = demandaCtrl.obterDetalhamentosDaDemanda(demanda);
-  // Uma planilha só e nada a decidir: abre direto no editor
-  if (planilhas.length == 1 && !demandaCtrl.podeCriarPlanilha(demanda)) {
-    await push(context, DetalhamentoCreatePage(detalhamento: planilhas.first));
-    return;
-  }
-  await showDialog(context: context, builder: (_) => _PlanilhasDialog(demandaId: demanda.id));
+Future<void> _abrirEtapasDemanda(
+  BuildContext context,
+  DemandaModel demanda,
+) async {
+  await showDialog(
+    context: context,
+    builder: (_) => _EtapasDialog(demandaId: demanda.id),
+  );
 }
 
-class _PlanilhasDialog extends StatelessWidget {
+class _EtapasDialog extends StatefulWidget {
   final String demandaId;
-  const _PlanilhasDialog({required this.demandaId});
+  const _EtapasDialog({required this.demandaId});
+
+  @override
+  State<_EtapasDialog> createState() => _EtapasDialogState();
+}
+
+class _EtapasDialogState extends State<_EtapasDialog> {
+  final _novaEtapa = TextEditingController();
+  final Set<String> _marcadas = {};
+
+  @override
+  void dispose() {
+    _novaEtapa.dispose();
+    super.dispose();
+  }
+
+  Future<void> _adicionar(DemandaModel demanda) async {
+    final nome = _novaEtapa.text.trim();
+    if (nome.isEmpty) return;
+    if (await demandaCtrl.adicionarEtapa(demanda, nome)) _novaEtapa.clear();
+  }
+
+  Future<void> _criarDetalhamento(
+    DemandaModel demanda,
+    List<DemandaEtapaModel> etapas,
+  ) async {
+    final criado = await demandaCtrl.criarDetalhamento(demanda, etapas);
+    if (criado == null || !mounted) return;
+    setState(_marcadas.clear);
+    NotificationService.showPositive(
+      'Detalhamento ${criado.codigo} criado',
+      'Cobre: ${etapas.map((e) => e.nome).join(', ')}',
+      position: NotificationPosition.bottom,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<List<DetalhamentoModel>>(
-      stream: BackendClient.detalhamentos.dataStream.listen,
-      builder: (context, _) {
-        final demanda = demandaCtrl.demandas.where((d) => d.id == demandaId).firstOrNull ??
-            BackendClient.demandas.data.where((d) => d.id == demandaId).firstOrNull;
-        if (demanda == null) return const SizedBox.shrink();
-        final planilhas = demandaCtrl.obterDetalhamentosDaDemanda(demanda);
-        final bitolas = BackendClient.bitolas.data;
-        final podeCriar = demandaCtrl.podeCriarPlanilha(demanda);
+    return StreamBuilder<List<DemandaModel>>(
+      stream: demandaCtrl.demandasStream.listen,
+      builder: (context, _) => StreamBuilder<List<DetalhamentoModel>>(
+        stream: BackendClient.detalhamentos.dataStream.listen,
+        builder: (context, _) {
+          final demanda = demandaCtrl.demandas
+              .where((d) => d.id == widget.demandaId)
+              .firstOrNull;
+          if (demanda == null) return const SizedBox.shrink();
+          final detalhamentos = demandaCtrl.obterDetalhamentosDaDemanda(
+            demanda,
+          );
+          final semDetalhamento = demanda.etapas
+              .where((e) => !e.temDetalhamento)
+              .toList();
+          _marcadas.removeWhere(
+            (id) => !semDetalhamento.any((e) => e.id == id),
+          );
+          final marcadas = semDetalhamento
+              .where((e) => _marcadas.contains(e.id))
+              .toList();
 
-        return Dialog(
-          backgroundColor: Colors.white,
-          insetPadding: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 14, 8, 10),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Planilhas da demanda D-${demanda.codigo}', style: AppCss.largeBold.setSize(16)),
-                            Text('${demanda.obraNome} • ${demanda.etapaProjeto}',
-                                style: AppCss.minimumRegular.setSize(12).setColor(AppColors.neutralMedium)),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Fechar',
-                        style: IconButton.styleFrom(backgroundColor: Colors.transparent),
-                        onPressed: () => Navigator.pop(context),
-                        icon: Icon(Icons.close, color: AppColors.neutralMedium),
-                      ),
-                    ],
-                  ),
-                ),
-                Divider(height: 1, color: AppColors.neutralLight),
-                Flexible(
-                  child: planilhas.isEmpty
-                      ? Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Text(
-                            'Nenhuma planilha ainda. Crie a primeira para começar o detalhamento.',
-                            textAlign: TextAlign.center,
-                            style: AppCss.minimumRegular.setColor(AppColors.neutralMedium),
+          return Dialog(
+            backgroundColor: Colors.white,
+            insetPadding: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 640, maxHeight: 720),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _cabecalho(context, demanda),
+                  Divider(height: 1, color: AppColors.neutralLight),
+                  Flexible(
+                    child: ListView(
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+                      children: [
+                        const CadastroSubtitulo('Etapas da demanda'),
+                        if (demanda.etapas.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Text(
+                              'Divida a demanda nas partes que serão detalhadas (ex.: Sapatas, Vigas baldrame, Vigas).',
+                              style: AppCss.minimumRegular
+                                  .setSize(12.5)
+                                  .setColor(AppColors.neutralMedium),
+                            ),
                           ),
-                        )
-                      : ListView(
-                          shrinkWrap: true,
+                        for (final e in demanda.etapas)
+                          _linhaEtapa(e, detalhamentos),
+                        const SizedBox(height: 6),
+                        Row(
                           children: [
-                            for (final p in planilhas)
-                              CadastroLinha(
-                                onTap: () => push(context, DetalhamentoCreatePage(detalhamento: p)),
-                                leading: Container(
-                                  width: 40,
-                                  height: 40,
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.neutralLightest,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text('${p.codigo}', style: AppCss.smallBold.setColor(AppColors.neutralDark)),
+                            Expanded(
+                              child: TextField(
+                                controller: _novaEtapa,
+                                decoration: const InputDecoration(
+                                  isDense: true,
+                                  hintText: 'Nova etapa (ex.: Vigas baldrame)',
                                 ),
-                                titulo: p.descricao.isNotEmpty ? p.descricao : 'Detalhamento ${p.codigo}',
-                                selos: [_SeloCiclo(p.situacao.label, _corSituacao(p.situacao))],
-                                pares: [
-                                  ('Elementos', '${p.elementos.length}'),
-                                  ('Peso', p.elementos.isEmpty ? '' : _formatarPeso(p.pesoCalculado(bitolas))),
-                                ],
-                                trailing: Icon(Icons.open_in_new, size: 18, color: AppColors.neutralMedium),
+                                onSubmitted: (_) => _adicionar(demanda),
                               ),
+                            ),
+                            const SizedBox(width: 8),
+                            OutlinedButton.icon(
+                              onPressed: () => _adicionar(demanda),
+                              icon: const Icon(Icons.add, size: 18),
+                              label: const Text('Adicionar'),
+                            ),
                           ],
                         ),
-                ),
-                Divider(height: 1, color: AppColors.neutralLight),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          podeCriar
-                              ? 'Uma demanda pode ter várias planilhas (ex.: uma por pavimento).'
-                              : (demanda.travada
-                                  ? 'Demanda já virou projeto: novas planilhas não são permitidas.'
-                                  : 'Demanda encerrada.'),
-                          style: AppCss.minimumRegular.setSize(11.5).setColor(AppColors.neutralMedium),
-                        ),
-                      ),
-                      if (podeCriar)
-                        FilledButton.icon(
-                          style: FilledButton.styleFrom(backgroundColor: AppColors.primaryMain),
-                          onPressed: () => _novaPlanilha(context, demanda),
-                          icon: const Icon(Icons.add, size: 18),
-                          label: const Text('Nova planilha'),
-                        ),
-                    ],
+                        const SizedBox(height: 18),
+                        const CadastroSubtitulo('Detalhamentos'),
+                        if (detalhamentos.isEmpty)
+                          Text(
+                            'Nenhum detalhamento ainda. Marque as etapas acima e crie um detalhamento para elas.',
+                            style: AppCss.minimumRegular
+                                .setSize(12.5)
+                                .setColor(AppColors.neutralMedium),
+                          ),
+                        for (final d in detalhamentos)
+                          _linhaDetalhamento(context, d, demanda),
+                      ],
+                    ),
                   ),
+                  Divider(height: 1, color: AppColors.neutralLight),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          semDetalhamento.isEmpty
+                              ? (demanda.etapas.isEmpty
+                                    ? 'Cadastre as etapas para criar detalhamentos.'
+                                    : 'Todas as etapas já têm detalhamento.')
+                              : marcadas.isEmpty
+                              ? 'Marque as etapas que o novo detalhamento vai cobrir.'
+                              : '${marcadas.length} etapa(s) marcada(s)',
+                          style: AppCss.minimumRegular
+                              .setSize(12)
+                              .setColor(AppColors.neutralMedium),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          alignment: WrapAlignment.end,
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            if (semDetalhamento.length > 1)
+                              TextButton(
+                                style: TextButton.styleFrom(
+                                  backgroundColor: Colors.transparent,
+                                  foregroundColor: AppColors.neutralDark,
+                                ),
+                                onPressed: () => setState(() {
+                                  if (marcadas.length ==
+                                      semDetalhamento.length) {
+                                    _marcadas.clear();
+                                  } else {
+                                    _marcadas.addAll(
+                                      semDetalhamento.map((e) => e.id),
+                                    );
+                                  }
+                                }),
+                                child: Text(
+                                  marcadas.length == semDetalhamento.length
+                                      ? 'Desmarcar'
+                                      : 'Marcar todas',
+                                ),
+                              ),
+                            FilledButton.icon(
+                              style: FilledButton.styleFrom(
+                                backgroundColor: AppColors.primaryMain,
+                              ),
+                              onPressed: marcadas.isEmpty
+                                  ? null
+                                  : () => _criarDetalhamento(demanda, marcadas),
+                              icon: const Icon(
+                                Icons.note_add_outlined,
+                                size: 18,
+                              ),
+                              label: const Text('Criar detalhamento'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _cabecalho(BuildContext context, DemandaModel demanda) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 14, 8, 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Etapas e detalhamentos • D-${demanda.codigo}',
+                  style: AppCss.largeBold.setSize(16),
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        '${demanda.obraNome} • ${demanda.clienteNome}',
+                        overflow: TextOverflow.ellipsis,
+                        style: AppCss.minimumRegular
+                            .setSize(12)
+                            .setColor(AppColors.neutralMedium),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    _SeloCiclo(
+                      demanda.etapa.label,
+                      _corEtapaKanban(demanda.etapa),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
-        );
-      },
-    );
-  }
-
-  Future<void> _novaPlanilha(BuildContext context, DemandaModel demanda) async {
-    final complemento = TextEditingController();
-    final desenho = TextEditingController();
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => CadastroDialog(
-        icon: Icons.note_add_outlined,
-        titulo: 'Nova planilha',
-        largura: 460,
-        onSalvar: () async => Navigator.pop(ctx, true),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('Etapa: ${demanda.etapaProjeto}', style: AppCss.minimumBold.setSize(13)),
-            const SizedBox(height: 12),
-            TextField(
-              controller: complemento,
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Complemento (opcional)',
-                hintText: 'Ex.: Vigas, Pilares, 2º pavimento',
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: desenho,
-              decoration: const InputDecoration(labelText: 'Desenho (opcional)', hintText: 'Ex.: E-03'),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (confirmar != true) return;
-    final criada = await demandaCtrl.criarPlanilha(
-      demanda,
-      complementoPavimento: complemento.text,
-      desenho: desenho.text,
-    );
-    if (criada != null && context.mounted) {
-      await push(context, DetalhamentoCreatePage(detalhamento: criada));
-    }
-  }
-}
-
-// ── Desfecho da demanda (em Finalizado) ─────────────────────────────────────
-
-Future<void> _abrirDesfecho(BuildContext context, DemandaModel demanda) async {
-  await showDialog(context: context, builder: (_) => _DesfechoDialog(demanda: demanda));
-}
-
-class _DesfechoDialog extends StatefulWidget {
-  final DemandaModel demanda;
-  const _DesfechoDialog({required this.demanda});
-
-  @override
-  State<_DesfechoDialog> createState() => _DesfechoDialogState();
-}
-
-class _DesfechoDialogState extends State<_DesfechoDialog> {
-  DemandaDesfecho? _escolha;
-  final _motivo = TextEditingController();
-
-  @override
-  Widget build(BuildContext context) {
-    final demanda = widget.demanda;
-    final planilhas = demandaCtrl
-        .obterDetalhamentosDaDemanda(demanda)
-        .where((p) => p.situacao == DetalhamentoSituacao.planejamento || p.situacao == DetalhamentoSituacao.orcamento)
-        .toList();
-    final bitolas = BackendClient.bitolas.data;
-    final peso = planilhas.fold<double>(0, (s, p) => s + p.pesoCalculado(bitolas));
-    final opcoes = [
-      (DemandaDesfecho.projeto, Icons.task_alt, 'Liberar como projeto',
-          'As planilhas vão para Projetos e podem gerar pedido técnico. A demanda não volta mais de coluna.'),
-      if (demanda.desfecho != DemandaDesfecho.orcamento)
-        (DemandaDesfecho.orcamento, Icons.request_quote_outlined, 'Só orçamento',
-            'Fica guardado como orçamento. Se o cliente aprovar, vira projeto com um clique.'),
-      (DemandaDesfecho.desistencia, Icons.block, 'Cliente desistiu',
-          'Encerra a demanda: as planilhas são canceladas e a demanda é arquivada.'),
-    ];
-
-    return CadastroDialog(
-      icon: Icons.flag_outlined,
-      titulo: 'Desfecho da demanda D-${demanda.codigo}',
-      largura: 560,
-      onSalvar: () async {
-        if (_escolha == null) {
-          NotificationService.showNegative('Escolha o desfecho', 'Selecione uma das opções.',
-              position: NotificationPosition.bottom);
-          return;
-        }
-        final navigator = Navigator.of(context);
-        if (await demandaCtrl.definirDesfecho(demanda, _escolha!, _motivo.text)) {
-          navigator.pop();
-        }
-      },
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            '${demanda.obraNome} • ${demanda.etapaProjeto}\n'
-            '${planilhas.length} planilha(s)${planilhas.isEmpty ? '' : ' • ${_formatarPeso(peso)}'}',
-            style: AppCss.minimumRegular.setSize(12.5).setColor(AppColors.neutralDark),
-          ),
-          if (planilhas.isEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              'Sem planilha: só é possível encerrar como desistência. Crie uma planilha para liberar como projeto ou orçamento.',
-              style: AppCss.minimumRegular.setSize(12).setColor(AppColors.statusAtencao),
-            ),
-          ],
-          const SizedBox(height: 14),
-          for (final (valor, icone, titulo, texto) in opcoes) ...[
-            _opcao(valor, icone, titulo, texto, habilitada: planilhas.isNotEmpty || valor == DemandaDesfecho.desistencia),
-            const SizedBox(height: 8),
-          ],
-          const SizedBox(height: 6),
-          TextField(
-            controller: _motivo,
-            maxLines: 2,
-            decoration: InputDecoration(
-              labelText: _escolha == DemandaDesfecho.desistencia ? 'Motivo da desistência (obrigatório)' : 'Observação (opcional)',
-            ),
+          IconButton(
+            tooltip: 'Fechar',
+            style: IconButton.styleFrom(backgroundColor: Colors.transparent),
+            onPressed: () => Navigator.pop(context),
+            icon: Icon(Icons.close, color: AppColors.neutralMedium),
           ),
         ],
       ),
     );
   }
 
-  Widget _opcao(DemandaDesfecho valor, IconData icone, String titulo, String texto, {required bool habilitada}) {
-    final selecionada = _escolha == valor;
-    final cor = _corDesfecho(valor);
-    return Opacity(
-      opacity: habilitada ? 1 : 0.45,
-      child: InkWell(
-        onTap: habilitada ? () => setState(() => _escolha = valor) : null,
-        borderRadius: BorderRadius.circular(10),
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: selecionada ? cor.withValues(alpha: 0.08) : Colors.white,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: selecionada ? cor : AppColors.neutralLight, width: selecionada ? 1.5 : 1),
+  /// Linha da etapa: marcar (se livre), detalhamento que a cobre, renomear/remover
+  Widget _linhaEtapa(
+    DemandaEtapaModel e,
+    List<DetalhamentoModel> detalhamentos,
+  ) {
+    final det = detalhamentos
+        .where((d) => d.id == e.detalhamentoId)
+        .firstOrNull;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.neutralLight),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 32,
+            child: e.temDetalhamento
+                ? Icon(
+                    Icons.check_circle,
+                    size: 18,
+                    color: AppColors.statusPronto,
+                  )
+                : Checkbox(
+                    value: _marcadas.contains(e.id),
+                    activeColor: AppColors.primaryMain,
+                    onChanged: (v) => setState(
+                      () => v == true
+                          ? _marcadas.add(e.id)
+                          : _marcadas.remove(e.id),
+                    ),
+                  ),
           ),
-          child: Row(
-            children: [
-              Icon(icone, color: cor),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(titulo, style: AppCss.minimumBold.setSize(14)),
-                    const SizedBox(height: 2),
-                    Text(texto, style: AppCss.minimumRegular.setSize(12).setColor(AppColors.neutralMedium)),
-                  ],
+          Expanded(
+            child: Text(e.nome, style: AppCss.minimumBold.setSize(13.5)),
+          ),
+          // Em qual detalhamento está (pode mudar: detalhamento ganha/perde etapas)
+          PopupMenuButton<String>(
+            tooltip: 'Mudar o detalhamento desta etapa',
+            color: Colors.white,
+            position: PopupMenuPosition.under,
+            onSelected: (v) =>
+                demandaCtrl.vincularEtapa(e, v.isEmpty ? null : v),
+            itemBuilder: (_) => [
+              for (final d in detalhamentos)
+                PopupMenuItem(
+                  value: d.id,
+                  child: Text('Detalhamento ${d.codigo}'),
                 ),
-              ),
-              Icon(selecionada ? Icons.radio_button_checked : Icons.radio_button_off,
-                  color: selecionada ? cor : AppColors.neutralMedium),
+              const PopupMenuItem(value: '', child: Text('Sem detalhamento')),
             ],
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: det != null
+                    ? AppColors.statusPronto.withValues(alpha: 0.08)
+                    : AppColors.neutralLightest,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    det != null
+                        ? 'Detalhamento ${det.codigo}'
+                        : 'Sem detalhamento',
+                    style: AppCss.minimumBold
+                        .setSize(11.5)
+                        .setColor(
+                          det != null
+                              ? AppColors.statusPronto
+                              : AppColors.neutralMedium,
+                        ),
+                  ),
+                  Icon(
+                    Icons.arrow_drop_down,
+                    size: 16,
+                    color: AppColors.neutralMedium,
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
+          CadastroMenu([
+            CadastroAcao(Icons.edit_outlined, 'Renomear', () => _renomear(e)),
+            CadastroAcao(
+              Icons.delete_outline,
+              'Remover etapa',
+              () => _remover(e),
+              destrutiva: true,
+            ),
+          ]),
+        ],
       ),
     );
   }
-}
 
-// ── Projeto: cancelar (desistência) e converter orçamento ───────────────────
+  Widget _linhaDetalhamento(
+    BuildContext context,
+    DetalhamentoModel d,
+    DemandaModel demanda,
+  ) {
+    final etapas = demanda.etapas
+        .where((e) => e.detalhamentoId == d.id)
+        .map((e) => e.nome)
+        .toList();
+    final kg = d.pesoCalculado(BackendClient.bitolas.data);
+    return CadastroLinha(
+      onTap: () => push(context, DetalhamentoCreatePage(detalhamento: d)),
+      leading: Container(
+        width: 40,
+        height: 40,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: AppColors.neutralLightest,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          '${d.codigo}',
+          style: AppCss.smallBold.setColor(AppColors.neutralDark),
+        ),
+      ),
+      titulo: etapas.isEmpty
+          ? (d.descricao.isNotEmpty ? d.descricao : 'Detalhamento ${d.codigo}')
+          : etapas.join(' + '),
+      pares: [
+        ('Desenho', d.desenho),
+        ('Elementos', '${d.elementos.length}'),
+        ('Peso', d.elementos.isEmpty ? '' : _formatarPeso(kg)),
+        ('Responsável', d.funcionarioNome),
+      ],
+      trailing: Icon(
+        Icons.open_in_new,
+        size: 18,
+        color: AppColors.neutralMedium,
+      ),
+    );
+  }
 
-Future<void> _cancelarProjeto(BuildContext context, DetalhamentoModel det) async {
-  final abertos = BackendClient.pedidosTecnicos.data
-      .where((p) => p.detalhamentoId == det.id && p.isAberto)
-      .toList();
-  final motivo = TextEditingController();
-  await showDialog(
-    context: context,
-    builder: (ctx) => CadastroDialog(
-      icon: Icons.block,
-      titulo: 'Cancelar ${det.situacao == DetalhamentoSituacao.orcamento ? 'orçamento' : 'projeto'} ${det.codigo}',
-      largura: 500,
-      onSalvar: () async {
-        if (motivo.text.trim().isEmpty) {
-          NotificationService.showNegative('Informe o motivo', 'O motivo do cancelamento é obrigatório.',
-              position: NotificationPosition.bottom);
-          return;
-        }
-        try {
-          final n = await BackendClient.detalhamentos.cancelarProjeto(det.id, motivo.text.trim());
-          if (n > 0) await BackendClient.pedidosTecnicos.fetch();
-          NotificationService.showPositive(
-            'Cancelado',
-            n > 0 ? '${det.labelExibicao} e $n pedido(s) técnico(s) cancelados.' : '${det.labelExibicao} cancelado.',
-            position: NotificationPosition.bottom,
-          );
-          if (ctx.mounted) Navigator.pop(ctx);
-        } catch (e) {
-          NotificationService.showNegative('Não foi possível cancelar', mensagemErro(e),
-              position: NotificationPosition.bottom);
-        }
-      },
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text('${det.clienteNome} • ${det.descricao}', style: AppCss.minimumBold.setSize(13)),
-          const SizedBox(height: 10),
-          if (abertos.isNotEmpty)
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppColors.statusCritico.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                'Atenção: ${abertos.length} pedido(s) técnico(s) aberto(s) também serão cancelados: '
-                '${abertos.map((p) => p.identificador.isNotEmpty ? p.identificador : 'PT ${p.codigo}').join(', ')}.',
-                style: AppCss.minimumRegular.setSize(12.5).setColor(AppColors.statusCritico),
-              ),
-            ),
-          if (abertos.isNotEmpty) const SizedBox(height: 10),
-          Text('O cancelamento não pode ser desfeito. O projeto continua consultável em "Cancelados".',
-              style: AppCss.minimumRegular.setSize(12).setColor(AppColors.neutralMedium)),
-          const SizedBox(height: 12),
-          TextField(
-            controller: motivo,
-            autofocus: true,
-            maxLines: 2,
-            decoration: const InputDecoration(labelText: 'Motivo (obrigatório)', hintText: 'Ex.: cliente fechou com outro fornecedor'),
+  Future<void> _renomear(DemandaEtapaModel e) async {
+    final ctrl = TextEditingController(text: e.nome);
+    final nome = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: const Text('Renomear etapa'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          onSubmitted: (v) => Navigator.pop(ctx, v),
+        ),
+        actions: [
+          OutlinedButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text),
+            child: const Text('Salvar'),
           ),
         ],
       ),
-    ),
-  );
-}
+    );
+    if (nome != null) await demandaCtrl.renomearEtapa(e, nome);
+  }
 
-Future<void> _converterOrcamento(BuildContext context, DetalhamentoModel det) async {
-  final ok = await showDialog<bool>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      backgroundColor: Colors.white,
-      title: Text('Converter em projeto?', style: AppCss.largeBold),
-      content: Text(
-        'O orçamento ${det.labelExibicao} vira projeto e passa a poder gerar pedido técnico. '
-        'Isso não pode ser desfeito.',
-      ),
-      actions: [
-        OutlinedButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Voltar')),
-        FilledButton(
-          style: FilledButton.styleFrom(backgroundColor: AppColors.statusPronto),
-          onPressed: () => Navigator.pop(ctx, true),
-          child: const Text('Converter'),
-        ),
-      ],
-    ),
-  );
-  if (ok != true) return;
-  try {
-    await BackendClient.detalhamentos.converterOrcamentoEmProjeto(det.id);
-    await BackendClient.demandas.fetch();
-    NotificationService.showPositive('Convertido em projeto', '${det.labelExibicao} já pode gerar pedido técnico.',
-        position: NotificationPosition.bottom);
-  } catch (e) {
-    NotificationService.showNegative('Não foi possível converter', mensagemErro(e), position: NotificationPosition.bottom);
+  Future<void> _remover(DemandaEtapaModel e) async {
+    if (await showConfirmDialog(
+      'Remover etapa?',
+      e.temDetalhamento
+          ? 'A etapa "${e.nome}" sai da demanda e do detalhamento. O detalhamento e o que já foi lançado nele continuam.'
+          : 'A etapa "${e.nome}" será removida da demanda.',
+    )) {
+      await demandaCtrl.removerEtapa(e);
+    }
   }
 }
 
@@ -462,6 +502,22 @@ Future<void> _converterOrcamento(BuildContext context, DetalhamentoModel det) as
 class _HistoricoDemanda extends StatelessWidget {
   final String demandaId;
   const _HistoricoDemanda({required this.demandaId});
+
+  String _descricao(DemandaEvento e) {
+    if (e.tipo == 'etapa_vinculo') {
+      String cod(String? id) =>
+          BackendClient.detalhamentos.data
+              .where((d) => d.id == id)
+              .map((d) => '${d.codigo}')
+              .firstOrNull ??
+          '?';
+      if (e.para == null || e.para!.isEmpty) {
+        return 'Etapa ${e.motivo} saiu do detalhamento ${cod(e.de)}';
+      }
+      return 'Etapa ${e.motivo} → detalhamento ${cod(e.para)}';
+    }
+    return e.descricao;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -472,12 +528,24 @@ class _HistoricoDemanda extends StatelessWidget {
         if (snap.connectionState != ConnectionState.done) {
           return const Padding(
             padding: EdgeInsets.all(12),
-            child: Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))),
+            child: Center(
+              child: SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
           );
         }
-        final eventos = (snap.data ?? const <DemandaEvento>[]).reversed.toList();
+        final eventos = (snap.data ?? const <DemandaEvento>[]).reversed
+            .toList();
         if (eventos.isEmpty) {
-          return Text('Sem registros ainda.', style: AppCss.minimumRegular.setSize(12).setColor(AppColors.neutralMedium));
+          return Text(
+            'Sem registros ainda.',
+            style: AppCss.minimumRegular
+                .setSize(12)
+                .setColor(AppColors.neutralMedium),
+          );
         }
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -492,18 +560,33 @@ class _HistoricoDemanda extends StatelessWidget {
                       margin: const EdgeInsets.only(top: 5),
                       width: 7,
                       height: 7,
-                      decoration: BoxDecoration(color: AppColors.neutralMedium, shape: BoxShape.circle),
+                      decoration: BoxDecoration(
+                        color: AppColors.neutralMedium,
+                        shape: BoxShape.circle,
+                      ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(e.descricao, style: AppCss.minimumBold.setSize(12.5)),
-                          if (e.motivo.isNotEmpty)
-                            Text(e.motivo, style: AppCss.minimumRegular.setSize(12).setColor(AppColors.neutralDark)),
-                          Text('${fmt.format(e.criadoEm)} • ${e.usuarioNome}',
-                              style: AppCss.minimumRegular.setSize(11).setColor(AppColors.neutralMedium)),
+                          Text(
+                            _descricao(e),
+                            style: AppCss.minimumBold.setSize(12.5),
+                          ),
+                          if (e.motivo.isNotEmpty && e.tipo != 'etapa_vinculo')
+                            Text(
+                              e.motivo,
+                              style: AppCss.minimumRegular
+                                  .setSize(12)
+                                  .setColor(AppColors.neutralDark),
+                            ),
+                          Text(
+                            '${fmt.format(e.criadoEm)} • ${e.usuarioNome}',
+                            style: AppCss.minimumRegular
+                                .setSize(11)
+                                .setColor(AppColors.neutralMedium),
+                          ),
                         ],
                       ),
                     ),

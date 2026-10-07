@@ -1,4 +1,5 @@
 import 'package:acoplan/app/core/client/backend_client.dart';
+import 'package:acoplan/app/modules/dashboard/demanda_controller.dart';
 import 'package:acoplan/app/core/client/models/cliente_model.dart';
 import 'package:acoplan/app/core/client/models/pedido_tecnico_model.dart';
 import 'package:acoplan/app/core/client/models/detalhamento_model.dart';
@@ -427,8 +428,8 @@ class _PedidoTecnicoCreatePageState
         .where((p) =>
             p.clienteId == _clienteSel!.id &&
             p.obraId == _obraSel!.id &&
-            // Só projeto liberado gera pedido (planejamento/orçamento/cancelado não)
-            p.podeEmitirPedido)
+            // Pedido técnico só com a demanda em Finalizado / Liberado
+            demandaCtrl.detalhamentoLiberadoParaPedido(p))
         .toList();
     if (_detalhamentoSel != null && !list.any((d) => d.id == _detalhamentoSel!.id)) {
       list.insert(0, _detalhamentoSel!);

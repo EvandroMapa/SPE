@@ -88,8 +88,14 @@ class DemandaModel {
   final String desfechoPor;
   final String motivoDesfecho;
 
-  /// Virou projeto: não muda mais de coluna (só arquivar).
-  bool get travada => desfecho == DemandaDesfecho.projeto;
+  /// Desfecho/trava da migração 04 não são mais usados (ver migração 05).
+  bool get travada => false;
+
+  /// Etapas (partes) da demanda: Sapatas, Vigas baldrame...
+  final List<DemandaEtapaModel> etapas;
+
+  /// Pedido técnico só pode ser emitido com a demanda nesta coluna.
+  bool get liberadaParaPedido => etapa == DemandaEtapa.finalizadoLiberado;
 
   DemandaModel({
     required this.id,
@@ -116,6 +122,7 @@ class DemandaModel {
     this.desfechoEm,
     this.desfechoPor = '',
     this.motivoDesfecho = '',
+    this.etapas = const [],
   });
 
   bool get temDetalhamento => detalhamentoId != null && detalhamentoId!.isNotEmpty;
@@ -167,6 +174,7 @@ class DemandaModel {
       desfechoEm: desfechoEm,
       desfechoPor: desfechoPor,
       motivoDesfecho: motivoDesfecho,
+      etapas: etapas,
     );
   }
 
@@ -207,6 +215,10 @@ class DemandaModel {
       desfechoEm: DateTime.tryParse(map['desfecho_em']?.toString() ?? ''),
       desfechoPor: map['desfecho_por']?.toString() ?? '',
       motivoDesfecho: map['motivo_desfecho']?.toString() ?? '',
+      etapas: (List<Map<String, dynamic>>.from(map['demanda_etapas'] as List? ?? const [])
+              .map(DemandaEtapaModel.fromMap)
+              .toList()
+            ..sort((a, b) => a.ordem.compareTo(b.ordem))),
     );
   }
 
@@ -299,8 +311,43 @@ class DemandaEvento {
         return 'Orçamento convertido em projeto';
       case 'cancelada':
         return 'Projeto cancelado';
+      case 'etapa_criada':
+        return 'Etapa criada: ${para ?? ''}';
+      case 'etapa_removida':
+        return 'Etapa removida: ${de ?? ''}';
+      case 'etapa_vinculo':
+        return para == null || para!.isEmpty
+            ? 'Etapa $motivo saiu do detalhamento'
+            : 'Etapa $motivo vinculada a detalhamento';
       default:
         return tipo;
     }
   }
+}
+
+/// Etapa (parte) de uma demanda. Pode estar coberta por um detalhamento.
+class DemandaEtapaModel {
+  final String id;
+  final String demandaId;
+  final String nome;
+  final int ordem;
+  final String? detalhamentoId;
+
+  const DemandaEtapaModel({
+    required this.id,
+    required this.demandaId,
+    required this.nome,
+    this.ordem = 0,
+    this.detalhamentoId,
+  });
+
+  bool get temDetalhamento => detalhamentoId != null && detalhamentoId!.isNotEmpty;
+
+  factory DemandaEtapaModel.fromMap(Map<String, dynamic> m) => DemandaEtapaModel(
+        id: m['id']?.toString() ?? '',
+        demandaId: m['demanda_id']?.toString() ?? '',
+        nome: m['nome']?.toString() ?? '',
+        ordem: int.tryParse(m['ordem']?.toString() ?? '0') ?? 0,
+        detalhamentoId: m['detalhamento_id']?.toString(),
+      );
 }

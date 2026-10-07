@@ -393,7 +393,7 @@ class _DemandaFormDialogState extends State<_DemandaFormDialog> {
                 TextFormField(
                   controller: _etapaProjetoCtrl,
                   decoration: InputDecoration(
-                    labelText: 'Etapa do Projeto / Pavimento',
+                    labelText: 'Escopo da demanda (ex.: estrutura completa)',
                     hintText: 'Ex: 1º Pavimento Tipo - Vigas e Lajes, Fundações...',
                     prefixIcon: const Icon(Icons.layers_outlined, size: 16),
                     border: OutlineInputBorder(

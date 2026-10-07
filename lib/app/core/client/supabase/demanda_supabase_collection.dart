@@ -30,7 +30,7 @@ class DemandaSupabaseCollection {
     try {
       final response = await SupabaseService.client
           .from(name)
-          .select()
+          .select('*, demanda_etapas(*)')
           .order('ordem', ascending: true);
       final rows = List<Map<String, dynamic>>.from(response);
       final items = rows.map((r) => DemandaModel.fromSupabaseMap(r)).toList();
@@ -45,17 +45,15 @@ class DemandaSupabaseCollection {
   Future<void> listen() async {
     if (_isListen) return;
     _isListen = true;
+    void agendar(PostgresChangePayload _) {
+      _debounce?.cancel();
+      _debounce = Timer(const Duration(milliseconds: 500), fetch);
+    }
+
     SupabaseService.client
         .channel('spe-demandas')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: name,
-          callback: (_) {
-            _debounce?.cancel();
-            _debounce = Timer(const Duration(milliseconds: 500), fetch);
-          },
-        )
+        .onPostgresChanges(event: PostgresChangeEvent.all, schema: 'public', table: name, callback: agendar)
+        .onPostgresChanges(event: PostgresChangeEvent.all, schema: 'public', table: 'demanda_etapas', callback: agendar)
         .subscribe();
   }
 
@@ -101,6 +99,24 @@ class DemandaSupabaseCollection {
     dataStream.add(data
         .map((d) => ordemPorId.containsKey(d.id) ? d.copyWith(ordem: ordemPorId[d.id]) : d)
         .toList());
+  }
+
+  // ── Etapas da demanda ─────────────────────────────────
+  Future<void> adicionarEtapa(String demandaId, String nome, int ordem) async {
+    await SupabaseService.client
+        .from('demanda_etapas')
+        .insert({'demanda_id': demandaId, 'nome': nome, 'ordem': ordem});
+    await fetch();
+  }
+
+  Future<void> atualizarEtapa(String etapaId, Map<String, dynamic> campos) async {
+    await SupabaseService.client.from('demanda_etapas').update(campos).eq('id', etapaId);
+    await fetch();
+  }
+
+  Future<void> removerEtapa(String etapaId) async {
+    await SupabaseService.client.from('demanda_etapas').delete().eq('id', etapaId);
+    await fetch();
   }
 
   /// Desfecho da demanda em Finalizado (projeto, orçamento ou desistência).

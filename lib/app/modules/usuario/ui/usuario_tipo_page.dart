@@ -6,6 +6,7 @@ import 'package:acoplan/app/core/components/cadastro/cadastro_lista.dart';
 import 'package:acoplan/app/core/components/empty_data.dart';
 import 'package:acoplan/app/core/components/stream_out.dart';
 import 'package:acoplan/app/core/dialogs/confirm_dialog.dart';
+import 'package:acoplan/app/core/enums/app_module.dart';
 import 'package:acoplan/app/core/utils/app_colors.dart';
 import 'package:acoplan/app/core/utils/app_css.dart';
 import 'package:acoplan/app/core/utils/global_resource.dart';
@@ -82,10 +83,35 @@ class _UsuarioTipoPageState extends State<UsuarioTipoPage> {
           titulo: form.isEdit ? 'Editar perfil' : 'Novo perfil',
           largura: 480,
           onSalvar: () => usuarioTipoCtrl.onConfirm(dialogContext),
-          child: TextField(
-            controller: form.nome,
-            autofocus: true,
-            decoration: const InputDecoration(labelText: 'Nome do perfil', hintText: 'Ex.: Detalhista'),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: form.nome,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: 'Nome do perfil', hintText: 'Ex.: Detalhista'),
+              ),
+              const SizedBox(height: 18),
+              const CadastroSubtitulo('Áreas que este perfil enxerga'),
+              for (final area in AppArea.values)
+                CadastroOpcao(
+                  titulo: area.label,
+                  explicacao: area.descricao,
+                  valor: form.modulos == null || form.modulos!.contains(area.name),
+                  onChanged: (v) {
+                    final atual = form.modulos ?? AppArea.values.map((a) => a.name).toList();
+                    form.modulos = v
+                        ? {...atual, area.name}.toList()
+                        : atual.where((n) => n != area.name).toList();
+                    usuarioTipoCtrl.formStream.update();
+                  },
+                ),
+              const SizedBox(height: 4),
+              Text(
+                'O perfil Administrador sempre enxerga tudo.',
+                style: AppCss.minimumRegular.setSize(11.5).setColor(AppColors.neutralMedium),
+              ),
+            ],
           ),
         ),
       ),

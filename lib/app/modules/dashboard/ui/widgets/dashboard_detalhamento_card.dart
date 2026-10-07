@@ -15,8 +15,6 @@ class _DashboardDetalhamentoCard extends StatelessWidget {
   final VoidCallback? onExcluir;
   final void Function(PedidoTecnicoModel) onAbrirPedido;
   final VoidCallback? onGerarPedido;
-  final VoidCallback? onConverter;
-  final VoidCallback? onCancelar;
   final VoidCallback onArquivar;
 
   /// Demanda de origem (ex: "D-12"), se veio do Kanban
@@ -34,8 +32,6 @@ class _DashboardDetalhamentoCard extends StatelessWidget {
     this.onExcluir,
     required this.onAbrirPedido,
     this.onGerarPedido,
-    this.onConverter,
-    this.onCancelar,
     required this.onArquivar,
     this.origem,
   });
@@ -136,10 +132,14 @@ class _DashboardDetalhamentoCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      _SeloCiclo(
-                        detalhamento.situacao.label,
-                        _corSituacao(detalhamento.situacao),
-                      ),
+                      // Coluna da demanda no Kanban (o fluxo do detalhamento)
+                      if (demandaCtrl.demandaDoDetalhamento(detalhamento)
+                          case final dem?)
+                        _SeloCiclo(
+                          dem.etapa.label,
+                          _corEtapaKanban(dem.etapa),
+                          icon: dem.liberadaParaPedido ? Icons.lock_open : null,
+                        ),
                       if (origem != null) ...[
                         Tooltip(
                           message: 'Veio da demanda $origem',
@@ -390,16 +390,10 @@ class _DashboardDetalhamentoCard extends StatelessWidget {
                         ),
                       CadastroAcao(
                         Icons.edit_outlined,
-                        'Editar projeto',
+                        'Editar detalhamento',
                         onEditar,
                       ),
                     ],
-                    if (onConverter != null)
-                      CadastroAcao(
-                        Icons.task_alt,
-                        'Converter em projeto',
-                        onConverter!,
-                      ),
                     CadastroAcao(
                       detalhamento.isArquivado
                           ? Icons.unarchive_outlined
@@ -407,17 +401,10 @@ class _DashboardDetalhamentoCard extends StatelessWidget {
                       detalhamento.isArquivado ? 'Desarquivar' : 'Arquivar',
                       onArquivar,
                     ),
-                    if (onCancelar != null)
-                      CadastroAcao(
-                        Icons.block,
-                        'Cancelar (cliente desistiu)',
-                        onCancelar!,
-                        destrutiva: true,
-                      ),
                     if (onExcluir != null)
                       CadastroAcao(
                         Icons.delete_outline,
-                        'Excluir projeto',
+                        'Excluir detalhamento',
                         onExcluir!,
                         destrutiva: true,
                       ),

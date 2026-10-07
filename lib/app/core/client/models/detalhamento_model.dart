@@ -56,8 +56,6 @@ class DetalhamentoModel {
   final String canceladoPor;
   final String motivoCancelamento;
 
-  /// Só projeto liberado pode gerar pedido técnico.
-  bool get podeEmitirPedido => situacao == DetalhamentoSituacao.projeto && !isArquivado;
 
   DetalhamentoModel({
     required this.id,

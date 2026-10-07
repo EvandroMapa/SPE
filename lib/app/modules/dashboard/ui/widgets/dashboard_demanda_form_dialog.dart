@@ -266,20 +266,9 @@ class _DemandaFormDialogState extends State<_DemandaFormDialog> {
 
                 // Cliente (Seleção ou Digitação)
                 if (clientes.isNotEmpty) ...[
-                  DropdownButtonFormField<ClienteModel>(
-                    decoration: InputDecoration(
-                      labelText: 'Cliente',
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                      isDense: true,
-                    ),
-                    initialValue: _clienteSelecionado,
-                    items: clientes.map((c) {
-                      return DropdownMenuItem(
-                        value: c,
-                        child: Text(c.nome, overflow: TextOverflow.ellipsis),
-                      );
-                    }).toList(),
+                  ClienteBuscaField(
+                    clientes: clientes,
+                    selecionado: _clienteSelecionado,
                     onChanged: (val) {
                       setState(() {
                         _clienteSelecionado = val;

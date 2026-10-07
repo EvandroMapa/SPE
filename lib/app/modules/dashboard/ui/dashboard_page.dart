@@ -6,6 +6,7 @@ import 'package:acoplan/app/core/client/models/pedido_tecnico_model.dart';
 import 'package:acoplan/app/core/components/app_scaffold.dart';
 import 'package:acoplan/app/core/components/cadastro/cadastro_form.dart';
 import 'package:acoplan/app/core/components/cadastro/cadastro_lista.dart';
+import 'package:acoplan/app/core/components/cliente_busca_field.dart';
 import 'package:acoplan/app/core/dialogs/confirm_dialog.dart';
 import 'package:acoplan/app/core/services/notification_service.dart';
 import 'package:acoplan/app/core/utils/app_colors.dart';

@@ -11,6 +11,7 @@ import 'package:acoplan/app/core/client/models/bitola_model.dart';
 import 'package:acoplan/app/core/client/models/usuario_model.dart';
 import 'package:acoplan/app/core/client/models/trecho_variavel_config.dart';
 import 'package:acoplan/app/core/components/app_drop_down.dart';
+import 'package:acoplan/app/core/components/cliente_busca_field.dart';
 import 'package:acoplan/app/core/components/app_field.dart';
 import 'package:acoplan/app/core/components/app_scaffold.dart';
 import 'package:acoplan/app/core/components/stream_out.dart';
@@ -1005,9 +1006,8 @@ class _DetalhamentoCreatePageState extends State<DetalhamentoCreatePage> with Fo
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             AppField(label: 'Detalhamento', controllerObj: TextEditingController(text: form.codigo.toString()), isDisable: true),
             const SizedBox(height: 16),
-            AppDropDown<ClienteModel?>(label: 'Cliente', item: form.clienteSelecionado, itens: clientes,
-              itemLabel: (e) => e?.nome ?? 'Selecione um cliente',
-              onSelect: (e) { form.clienteSelecionado = e; form.obraSelecionada = null; detalhamentoCtrl.formStream.update(); }),
+            ClienteBuscaField(clientes: clientes, selecionado: form.clienteSelecionado, rotuloAcima: true, obrigatorio: true,
+              onChanged: (e) { form.clienteSelecionado = e; form.obraSelecionada = null; detalhamentoCtrl.formStream.update(); }),
             const SizedBox(height: 16),
             AppDropDown<ObraModel?>(label: 'Obra', item: form.obraSelecionada, itens: obras,
               itemLabel: (e) => e?.descricao ?? 'Selecione uma obra',

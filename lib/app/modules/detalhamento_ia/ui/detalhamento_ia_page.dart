@@ -1,6 +1,7 @@
 import 'package:acoplan/app/core/client/backend_client.dart';
 import 'package:acoplan/app/core/client/models/cliente_model.dart';
 import 'package:acoplan/app/core/components/app_drop_down.dart';
+import 'package:acoplan/app/core/components/cliente_busca_field.dart';
 import 'package:acoplan/app/core/components/app_scaffold.dart';
 import 'package:acoplan/app/core/components/stream_out.dart';
 import 'package:acoplan/app/core/services/notification_service.dart';
@@ -101,12 +102,12 @@ class _DetalhamentoIaPageState extends State<DetalhamentoIaPage> {
                       Text('Vínculo', style: AppCss.mediumBold.setColor(const Color(0xFF1E293B)).setSize(13)),
                       const SizedBox(width: 16),
                       Expanded(
-                        child: AppDropDown<ClienteModel?>(
-                          label: 'Cliente',
-                          item: state.clienteSelecionado,
-                          itens: BackendClient.clientes.data,
-                          itemLabel: (e) => e?.nome ?? 'Selecione',
-                          onSelect: detalhamentoIaCtrl.setCliente,
+                        child: ClienteBuscaField(
+                          clientes: BackendClient.clientes.data,
+                          selecionado: state.clienteSelecionado,
+                          rotuloAcima: true,
+                          obrigatorio: true,
+                          onChanged: detalhamentoIaCtrl.setCliente,
                         ),
                       ),
                       const SizedBox(width: 12),

@@ -320,6 +320,21 @@ class DemandaController {
     if (index == -1) return false;
     final d = list[index];
 
+    // Finalizar exige conteúdo: ao menos um elemento com ao menos uma posição
+    // nos detalhamentos da demanda
+    if (novaEtapa == DemandaEtapa.finalizadoLiberado && d.etapa != DemandaEtapa.finalizadoLiberado) {
+      final temConteudo = obterDetalhamentosDaDemanda(d)
+          .any((det) => det.elementos.any((el) => el.posicoes.isNotEmpty));
+      if (!temConteudo) {
+        NotificationService.showNegative(
+          'Demanda sem detalhamento preenchido',
+          'Para finalizar, a demanda precisa de ao menos um elemento com ao menos uma posição.',
+          position: NotificationPosition.bottom,
+        );
+        return false;
+      }
+    }
+
     if (d.etapa == DemandaEtapa.finalizadoLiberado && novaEtapa != DemandaEtapa.finalizadoLiberado) {
       final idsDet = obterDetalhamentosDaDemanda(d).map((e) => e.id).toSet();
       final pedidos = BackendClient.pedidosTecnicos.data

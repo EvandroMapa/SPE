@@ -13,6 +13,7 @@ import 'package:acoplan/app/core/utils/app_colors.dart';
 import 'package:acoplan/app/core/utils/app_css.dart';
 import 'package:acoplan/app/core/utils/global_resource.dart';
 import 'package:acoplan/app/modules/dashboard/demanda_controller.dart';
+import 'package:acoplan/app/modules/dashboard/ui/demanda_etapa_cor.dart';
 import 'package:acoplan/app/modules/dashboard/models/demanda_model.dart';
 import 'package:acoplan/app/modules/detalhamento/detalhamento_controller.dart';
 import 'package:acoplan/app/modules/detalhamento/detalhamento_view_model.dart';

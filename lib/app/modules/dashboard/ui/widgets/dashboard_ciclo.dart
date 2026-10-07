@@ -11,19 +11,7 @@ String _formatarPeso(double kg) => kg >= 1000
     ? '${NumberFormat('#,##0.00', 'pt_BR').format(kg / 1000)} t'
     : '${NumberFormat('#,##0.0', 'pt_BR').format(kg)} kg';
 
-Color _corEtapaKanban(DemandaEtapa e) {
-  switch (e) {
-    case DemandaEtapa.aguardandoFila:
-      return AppColors.statusAguardando;
-    case DemandaEtapa.emProducao:
-      return AppColors.statusProduzindo;
-    case DemandaEtapa.aguardandoCorrecao:
-    case DemandaEtapa.corrigindo:
-      return AppColors.statusAtencao;
-    case DemandaEtapa.finalizadoLiberado:
-      return AppColors.statusPronto;
-  }
-}
+Color _corEtapaKanban(DemandaEtapa e) => e.cor;
 
 /// Selo pequeno e colorido
 class _SeloCiclo extends StatelessWidget {

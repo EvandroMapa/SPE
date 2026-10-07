@@ -4,6 +4,9 @@ import 'package:acoplan/app/core/client/models/cliente_model.dart';
 import 'package:acoplan/app/core/client/models/pedido_tecnico_model.dart';
 import 'package:acoplan/app/core/client/models/detalhamento_model.dart';
 import 'package:acoplan/app/core/components/app_drop_down.dart';
+import 'package:acoplan/app/core/components/cliente_busca_field.dart';
+import 'package:acoplan/app/modules/dashboard/models/demanda_model.dart';
+import 'package:acoplan/app/modules/dashboard/ui/demanda_etapa_cor.dart';
 import 'package:acoplan/app/core/components/app_scaffold.dart';
 import 'package:acoplan/app/core/components/stream_out.dart';
 import 'package:acoplan/app/core/services/notification_service.dart';
@@ -116,7 +119,7 @@ class _PedidoTecnicoCreatePageState
         _detalhamentoSel = det;
         _sel = _Sec.elementos; // Abre direto nos elementos
       } else if (_clienteSel != null && _obraSel != null) {
-        final dets = _detalhamentosDaObra;
+        final dets = _detalhamentosDaObra.where(demandaCtrl.detalhamentoLiberadoParaPedido).toList();
         if (dets.length == 1) {
           _detalhamentoSel = dets.first;
           _sel = _Sec.elementos;
@@ -424,13 +427,19 @@ class _PedidoTecnicoCreatePageState
 
   List<DetalhamentoModel> get _detalhamentosDaObra {
     if (_clienteSel == null || _obraSel == null) return [];
+    // Todos os detalhamentos da obra (ou do cliente, sem obra vinculada).
+    // Os que não estão liberados aparecem bloqueados, com a etapa da demanda.
     final list = BackendClient.detalhamentos.data
         .where((p) =>
+            !p.isArquivado &&
             p.clienteId == _clienteSel!.id &&
-            p.obraId == _obraSel!.id &&
-            // Pedido técnico só com a demanda em Finalizado / Liberado
-            demandaCtrl.detalhamentoLiberadoParaPedido(p))
-        .toList();
+            (p.obraId == _obraSel!.id || p.obraId.isEmpty))
+        .toList()
+      ..sort((a, b) {
+        final la = demandaCtrl.detalhamentoLiberadoParaPedido(a) ? 0 : 1;
+        final lb = demandaCtrl.detalhamentoLiberadoParaPedido(b) ? 0 : 1;
+        return la != lb ? la.compareTo(lb) : b.codigo.compareTo(a.codigo);
+      });
     if (_detalhamentoSel != null && !list.any((d) => d.id == _detalhamentoSel!.id)) {
       list.insert(0, _detalhamentoSel!);
     }
@@ -925,13 +934,13 @@ class _PedidoTecnicoCreatePageState
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Cliente
-              AppDropDown<ClienteModel?>(
-                label: 'Cliente',
-                item: _clienteSel,
-                itens: clientes,
-                disable: form.isEdit,
-                itemLabel: (e) => e?.nome ?? 'Selecione um cliente',
-                onSelect: (e) => setState(() {
+              ClienteBuscaField(
+                clientes: clientes,
+                selecionado: _clienteSel,
+                rotuloAcima: true,
+                obrigatorio: true,
+                desabilitado: form.isEdit,
+                onChanged: (e) => setState(() {
                   _clienteSel = e;
                   _obraSel = null;
                   _detalhamentoSel = null;
@@ -954,18 +963,7 @@ class _PedidoTecnicoCreatePageState
               ),
               const SizedBox(height: 16),
               // Planilha
-              AppDropDown<DetalhamentoModel?>(
-                label: 'Detalhamento',
-                item: _detalhamentoSel,
-                itens: detalhamentos,
-                disable: form.isEdit,
-                itemLabel: (e) =>
-                    e != null ? e.labelExibicao : 'Selecione um detalhamento',
-                onSelect: (e) => setState(() {
-                  _detalhamentoSel = e;
-                  _elementosSelecionados.clear();
-                }),
-              ),
+              _listaDetalhamentos(detalhamentos, form),
               const SizedBox(height: 16),
               // Tipo de Serviço (CD ou CDA)
               Column(
@@ -1052,6 +1050,143 @@ class _PedidoTecnicoCreatePageState
           ),
         ),
       ],
+    );
+  }
+
+  /// Detalhamentos da obra com a etapa em que a demanda está. Só os de
+  /// demanda em Finalizado / Liberado podem gerar pedido; os demais
+  /// aparecem bloqueados, com o aviso.
+  Widget _listaDetalhamentos(List<DetalhamentoModel> detalhamentos, PedidoTecnicoCreateModel form) {
+    Widget rotulo() => Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Text('Detalhamento:*', style: AppCss.smallBold),
+        );
+    Widget aviso(String texto) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          rotulo(),
+          Text(texto, style: AppCss.minimumRegular.setSize(12.5).setColor(AppColors.neutralMedium)),
+        ]);
+    if (_clienteSel == null || _obraSel == null) return aviso('Escolha o cliente e a obra para ver os detalhamentos.');
+    if (detalhamentos.isEmpty) return aviso('Nenhum detalhamento para esta obra.');
+
+    final bloqueados = detalhamentos.where((d) => !demandaCtrl.detalhamentoLiberadoParaPedido(d)).length;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        rotulo(),
+        Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.neutralLight),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            children: [
+              for (final (i, d) in detalhamentos.indexed) ...[
+                if (i > 0) Divider(height: 1, color: AppColors.neutralLight),
+                _opcaoDetalhamento(d, form),
+              ],
+            ],
+          ),
+        ),
+        if (bloqueados > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Row(
+              children: [
+                Icon(Icons.lock_outline, size: 14, color: AppColors.statusAtencao),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Pedido técnico só pode ser emitido com a demanda em Finalizado / Liberado.',
+                    style: AppCss.minimumRegular.setSize(11.5).setColor(AppColors.neutralDark),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _opcaoDetalhamento(DetalhamentoModel d, PedidoTecnicoCreateModel form) {
+    final demanda = demandaCtrl.demandaDoDetalhamento(d);
+    final liberado = demandaCtrl.detalhamentoLiberadoParaPedido(d);
+    final selecionado = _detalhamentoSel?.id == d.id;
+    final etapaTexto = demanda?.etapa.label ?? 'Sem demanda';
+    final etapaCor = demanda?.etapa.cor ?? AppColors.neutralMedium;
+    final detalhes = [
+      if (demanda != null) 'D-${demanda.codigo}',
+      if (d.pavimento.isNotEmpty) d.pavimento,
+      '${d.elementos.length} elemento(s)',
+    ].join(' • ');
+
+    VoidCallback? aoTocar;
+    if (!form.isEdit) {
+      aoTocar = liberado
+          ? () => setState(() {
+                _detalhamentoSel = d;
+                _elementosSelecionados.clear();
+              })
+          : () => NotificationService.showPending(
+                'Detalhamento ${d.codigo} não liberado',
+                'A demanda está em "$etapaTexto". Mova para Finalizado / Liberado para emitir o pedido.',
+                position: NotificationPosition.bottom,
+              );
+    }
+
+    return InkWell(
+      onTap: aoTocar,
+      child: Container(
+        color: selecionado ? AppColors.brandSoft : null,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            Icon(
+              selecionado ? Icons.radio_button_checked : (liberado ? Icons.radio_button_unchecked : Icons.lock_outline),
+              size: 18,
+              color: selecionado ? AppColors.brand : (liberado ? AppColors.neutralDark : AppColors.neutralMedium),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    d.labelExibicao,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppCss.mediumBold.setSize(13.5).setColor(liberado ? AppColors.black : AppColors.neutralMedium),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    detalhes,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppCss.minimumRegular.setSize(11.5).setColor(AppColors.neutralMedium),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: etapaCor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: etapaCor.withValues(alpha: 0.35)),
+                ),
+                child: Text(
+                  etapaTexto,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppCss.minimumBold.setSize(11).setColor(etapaCor),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

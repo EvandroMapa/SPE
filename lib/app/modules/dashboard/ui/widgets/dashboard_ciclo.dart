@@ -498,7 +498,9 @@ class _EtapasDialogState extends State<_EtapasDialog> {
 }
 
 // ── Histórico ───────────────────────────────────────────────────────────────
+// Fora dos detalhes da demanda por enquanto; vai ganhar um lugar próprio.
 
+// ignore: unused_element
 class _HistoricoDemanda extends StatelessWidget {
   final String demandaId;
   const _HistoricoDemanda({required this.demandaId});

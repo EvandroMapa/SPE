@@ -370,13 +370,6 @@ class _DemandaDetalhesDialog extends StatelessWidget {
               // Etapas e detalhamentos da demanda
               const SizedBox(height: 16),
               _SecaoEtapas(demandaId: demanda.id),
-
-              // Histórico completo (quem fez o quê e quando)
-              const SizedBox(height: 12),
-              Text('HISTÓRICO',
-                  style: AppCss.minimumBold.setSize(11).setColor(const Color(0xFF64748B)).setLetterSpacing(0.8)),
-              const SizedBox(height: 8),
-              _HistoricoDemanda(demandaId: demanda.id),
             ],
           ),
         ),

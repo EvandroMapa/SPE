@@ -117,77 +117,19 @@ class _DemandaFormDialogState extends State<_DemandaFormDialog> {
 
   Future<void> _selecionarPasta() async {
     try {
-      // 1. No Desktop (Windows nativo): abre diálogo nativo de seleção de pasta
-      if (!kIsWeb) {
-        final String? selectedDirectory =
-            await FilePicker.getDirectoryPath(
-          dialogTitle: 'Selecione a pasta do projeto',
-        );
-
-        if (selectedDirectory == null || selectedDirectory.trim().isEmpty) return;
-
-        setState(() {
-          _caminhoPastaRedeCtrl.text = selectedDirectory.trim();
-        });
-
-        NotificationService.showPositive(
-          'Pasta Selecionada',
-          selectedDirectory.trim(),
-          position: NotificationPosition.bottom,
-        );
-        return;
-      }
-
-      // 2. No Web (onde o navegador restringe o path absoluto por segurança do sandbox):
-      final FilePickerResult? result = await FilePicker.pickFiles(
-        dialogTitle: 'Selecione qualquer arquivo dentro da pasta do projeto',
-        type: FileType.any,
-        allowMultiple: false,
+      // Só no app desktop (Windows): diálogo nativo de seleção de pasta
+      final String? selectedDirectory = await FilePicker.getDirectoryPath(
+        dialogTitle: 'Selecione a pasta do projeto',
       );
-
-      if (result == null || result.files.isEmpty) return;
-
-      final PlatformFile file = result.files.single;
-
-      if (file.path != null && file.path!.trim().isNotEmpty) {
-        final fullPath = file.path!.trim();
-        final ultimoSeparador = fullPath.lastIndexOf(RegExp(r'[\\/]'));
-        final pasta = ultimoSeparador > 0
-            ? fullPath.substring(0, ultimoSeparador)
-            : fullPath;
-
-        setState(() {
-          _caminhoPastaRedeCtrl.text = pasta;
-        });
-
-        NotificationService.showPositive(
-          'Pasta Selecionada',
-          pasta,
-          position: NotificationPosition.bottom,
-        );
-        return;
-      }
-
-      String valorFinal = file.name;
-      try {
-        final data = await Clipboard.getData(Clipboard.kTextPlain);
-        final text = (data?.text?.replaceAll('"', '') ?? '').trim();
-        final bool pareceCaminho = text.contains('\\') ||
-            text.contains('/') ||
-            (text.length >= 2 && text[1] == ':') ||
-            text.startsWith(r'\\');
-        if (pareceCaminho) {
-          valorFinal = text;
-        }
-      } catch (_) {}
+      if (selectedDirectory == null || selectedDirectory.trim().isEmpty) return;
 
       setState(() {
-        _caminhoPastaRedeCtrl.text = valorFinal;
+        _caminhoPastaRedeCtrl.text = selectedDirectory.trim();
       });
 
       NotificationService.showPositive(
-        'Arquivo / Pasta Selecionado',
-        valorFinal,
+        'Pasta Selecionada',
+        selectedDirectory.trim(),
         position: NotificationPosition.bottom,
       );
     } catch (e) {
@@ -439,9 +381,11 @@ class _DemandaFormDialogState extends State<_DemandaFormDialog> {
                     SizedBox(
                       height: 48,
                       child: ElevatedButton.icon(
-                        onPressed: _selecionarPasta,
-                        icon: const Icon(Icons.folder_open_rounded, size: 16),
-                        label: const Text('Navegar Pasta'),
+                        // No navegador não existe seletor de pasta com caminho:
+                        // o caminho vem da área de transferência.
+                        onPressed: kIsWeb ? _colarCaminhoClipboard : _selecionarPasta,
+                        icon: Icon(kIsWeb ? Icons.content_paste_rounded : Icons.folder_open_rounded, size: 16),
+                        label: Text(kIsWeb ? 'Colar caminho' : 'Navegar Pasta'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF0F172A),
                           foregroundColor: Colors.white,
@@ -459,6 +403,15 @@ class _DemandaFormDialogState extends State<_DemandaFormDialog> {
                     ),
                   ],
                 ),
+                if (kIsWeb)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6, left: 4),
+                    child: Text(
+                      'No Explorador de Arquivos, clique na pasta e tecle Ctrl+Shift+C '
+                      '(Copiar como caminho). Depois clique em "Colar caminho".',
+                      style: AppCss.minimumRegular.setSize(11).setColor(const Color(0xFF64748B)),
+                    ),
+                  ),
                 const SizedBox(height: 12),
 
                 // Solicitante Comercial e Prioridade

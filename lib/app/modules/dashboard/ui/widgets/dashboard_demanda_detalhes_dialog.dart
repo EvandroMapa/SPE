@@ -369,29 +369,7 @@ class _DemandaDetalhesDialog extends StatelessWidget {
 
               // Etapas e detalhamentos da demanda
               const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text('ETAPAS E DETALHAMENTOS',
-                        style: AppCss.minimumBold.setSize(11).setColor(const Color(0xFF64748B)).setLetterSpacing(0.8)),
-                  ),
-                  TextButton.icon(
-                    style: TextButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      foregroundColor: AppColors.statusProduzindo,
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                    ),
-                    onPressed: () => _abrirEtapasDemanda(context, demanda),
-                    icon: const Icon(Icons.checklist, size: 16),
-                    label: Text(
-                      demanda.etapas.isEmpty
-                          ? 'Definir etapas'
-                          : '${demanda.etapas.length} etapa(s) • ${demandaCtrl.obterDetalhamentosDaDemanda(demanda).length} detalhamento(s)',
-                      style: AppCss.minimumBold.setSize(12).setColor(AppColors.statusProduzindo),
-                    ),
-                  ),
-                ],
-              ),
+              _SecaoEtapas(demandaId: demanda.id),
 
               // Histórico completo (quem fez o quê e quando)
               const SizedBox(height: 12),
@@ -402,6 +380,111 @@ class _DemandaDetalhesDialog extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Etapas da demanda com o detalhamento que cobre cada uma. Acompanha as
+/// alterações feitas na janela de etapas sem precisar reabrir os detalhes.
+class _SecaoEtapas extends StatelessWidget {
+  final String demandaId;
+
+  const _SecaoEtapas({required this.demandaId});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<DemandaModel>>(
+      stream: demandaCtrl.demandasStream.listen,
+      builder: (context, _) => StreamBuilder<List<DetalhamentoModel>>(
+        stream: BackendClient.detalhamentos.dataStream.listen,
+        builder: (context, _) {
+          final demanda = demandaCtrl.demandas.where((d) => d.id == demandaId).firstOrNull;
+          if (demanda == null) return const SizedBox.shrink();
+          final etapas = [...demanda.etapas]..sort((a, b) => a.ordem.compareTo(b.ordem));
+          final dets = demandaCtrl.obterDetalhamentosDaDemanda(demanda);
+          final cobertas = etapas.where((e) => e.temDetalhamento).length;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      etapas.isEmpty
+                          ? 'ETAPAS E DETALHAMENTOS'
+                          : 'ETAPAS ($cobertas/${etapas.length} em detalhamento • ${dets.length} detalhamento(s))',
+                      style: AppCss.minimumBold.setSize(11).setColor(const Color(0xFF64748B)).setLetterSpacing(0.8),
+                    ),
+                  ),
+                  TextButton.icon(
+                    style: TextButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      foregroundColor: AppColors.statusProduzindo,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                    ),
+                    onPressed: () => _abrirEtapasDemanda(context, demanda),
+                    icon: Icon(etapas.isEmpty ? Icons.checklist : Icons.edit_outlined, size: 16),
+                    label: Text(
+                      etapas.isEmpty ? 'Definir etapas' : 'Gerenciar',
+                      style: AppCss.minimumBold.setSize(12).setColor(AppColors.statusProduzindo),
+                    ),
+                  ),
+                ],
+              ),
+              if (etapas.isEmpty)
+                Text(
+                  'Nenhuma etapa definida. Divida a demanda em partes (ex.: Sapatas, Vigas 0) para detalhar.',
+                  style: AppCss.minimumRegular.setSize(12).setColor(AppColors.neutralMedium),
+                )
+              else
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    children: [
+                      for (final (i, e) in etapas.indexed) ...[
+                        if (i > 0) const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                        _linhaEtapa(e, dets),
+                      ],
+                    ],
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _linhaEtapa(DemandaEtapaModel etapa, List<DetalhamentoModel> dets) {
+    final det = dets.where((d) => d.id == etapa.detalhamentoId).firstOrNull;
+    final cor = det != null ? AppColors.statusPronto : AppColors.neutralMedium;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        children: [
+          Icon(det != null ? Icons.check_circle : Icons.radio_button_unchecked, size: 16, color: cor),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              etapa.nome,
+              overflow: TextOverflow.ellipsis,
+              style: AppCss.minimumBold.setSize(13).setColor(AppColors.black),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              det != null ? 'Detalhamento ${det.codigo}' : 'Sem detalhamento',
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+              style: AppCss.minimumRegular.setSize(12).setColor(cor),
+            ),
+          ),
+        ],
       ),
     );
   }
